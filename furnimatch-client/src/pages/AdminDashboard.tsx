@@ -5,18 +5,21 @@ const AdminDashboard = () => {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterRole, setFilterRole] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
   const [deleteConfirmModal, setDeleteConfirmModal] = useState<{ isOpen: boolean; userId: number | null }>({ isOpen: false, userId: null });
   const [alertModal, setAlertModal] = useState<{ isOpen: boolean; message: string; type: 'success' | 'error' }>({ isOpen: false, message: '', type: 'success' });
 
   useEffect(() => {
     fetchUsers();
+    setCurrentPage(1);
   }, [filterRole]);
 
   const fetchUsers = async () => {
     setLoading(true);
     try {
       const response = await api.get(`/admin/users?role=${filterRole}`);
-      setUsers(response.data);
+      setUsers(response.data.filter((u: any) => u.roleName !== 'ADMIN'));
     } catch (error) {
       console.error('Error fetching users:', error);
     } finally {
@@ -58,10 +61,13 @@ const AdminDashboard = () => {
     }
   };
 
+  const totalPages = Math.ceil(users.length / itemsPerPage);
+  const currentUsers = users.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Quản Trị Hệ Thống</h1>
+        <h1 className="text-3xl font-bold text-gray-900">Quản lý người dùng</h1>
         <select
           value={filterRole}
           onChange={(e) => setFilterRole(e.target.value)}
@@ -90,7 +96,7 @@ const AdminDashboard = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {users.map((user) => (
+                {currentUsers.map((user) => (
                   <tr key={user.userId}>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">{user.fullName}</div>
@@ -140,6 +146,29 @@ const AdminDashboard = () => {
                 )}
               </tbody>
             </table>
+            
+            {/* Pagination Controls */}
+            {totalPages > 0 && (
+              <div className="px-6 py-4 flex items-center justify-center gap-6 border-t border-gray-200 bg-gray-50">
+                <button 
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Trước
+                </button>
+                <span className="text-sm font-medium text-gray-700">
+                  {currentPage} / {totalPages}
+                </span>
+                <button 
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Sau
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
