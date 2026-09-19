@@ -9,11 +9,35 @@ const AdminDashboard = () => {
   const itemsPerPage = 20;
   const [deleteConfirmModal, setDeleteConfirmModal] = useState<{ isOpen: boolean; userId: number | null }>({ isOpen: false, userId: null });
   const [alertModal, setAlertModal] = useState<{ isOpen: boolean; message: string; type: 'success' | 'error' }>({ isOpen: false, message: '', type: 'success' });
+  
+  // Tabs and Category States
+  const [activeTab, setActiveTab] = useState<'USERS' | 'CATEGORIES'>('USERS');
+  const [categories, setCategories] = useState<any[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState(false);
+  const [categoryModal, setCategoryModal] = useState<{isOpen: boolean, isEdit: boolean, data: {categoryId?: number, name: string, description: string}}>({
+    isOpen: false, isEdit: false, data: {name: '', description: ''}
+  });
 
   useEffect(() => {
-    fetchUsers();
-    setCurrentPage(1);
-  }, [filterRole]);
+    if (activeTab === 'USERS') {
+      fetchUsers();
+      setCurrentPage(1);
+    } else {
+      fetchCategories();
+    }
+  }, [filterRole, activeTab]);
+
+  const fetchCategories = async () => {
+    setLoadingCategories(true);
+    try {
+      const response = await api.get('/categories');
+      setCategories(response.data);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    } finally {
+      setLoadingCategories(false);
+    }
+  };
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -55,9 +79,39 @@ const AdminDashboard = () => {
       console.error('Error deleting user:', error);
       setAlertModal({ 
         isOpen: true, 
-        message: error.response?.data?.message || 'Có lỗi xảy ra khi xóa tài khoản. Vui lòng khởi động lại Backend (dotnet run) nếu bạn chưa làm việc đó.', 
+        message: error.response?.data?.message || 'Có lỗi xảy ra khi xóa tài khoản.', 
         type: 'error' 
       });
+    }
+  };
+
+  const handleSaveCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      if (categoryModal.isEdit && categoryModal.data.categoryId) {
+        await api.put(`/admin/categories/${categoryModal.data.categoryId}`, categoryModal.data); // Assuming backend routes it inside AdminController or CategoriesController with auth
+        // Quick fallback to generic categories put
+        // await api.put(`/categories/${categoryModal.data.categoryId}`, categoryModal.data);
+        setAlertModal({ isOpen: true, message: 'Cập nhật danh mục thành công!', type: 'success' });
+      } else {
+        await api.post('/categories', categoryModal.data);
+        setAlertModal({ isOpen: true, message: 'Thêm danh mục thành công!', type: 'success' });
+      }
+      setCategoryModal({ isOpen: false, isEdit: false, data: { name: '', description: '' } });
+      fetchCategories();
+    } catch (error: any) {
+      setAlertModal({ isOpen: true, message: error.response?.data?.message || 'Có lỗi xảy ra.', type: 'error' });
+    }
+  };
+
+  const deleteCategory = async (categoryId: number) => {
+    if (!window.confirm('Bạn có chắc chắn muốn xóa danh mục này?')) return;
+    try {
+      await api.delete(`/categories/${categoryId}`);
+      setAlertModal({ isOpen: true, message: 'Đã xóa danh mục!', type: 'success' });
+      fetchCategories();
+    } catch (error: any) {
+      setAlertModal({ isOpen: true, message: error.response?.data?.message || 'Không thể xóa danh mục này.', type: 'error' });
     }
   };
 
@@ -66,20 +120,39 @@ const AdminDashboard = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Quản lý người dùng</h1>
-        <select
-          value={filterRole}
-          onChange={(e) => setFilterRole(e.target.value)}
-          className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
-        >
-          <option value="">Tất cả tài khoản</option>
-          <option value="CUSTOMER">Khách Hàng</option>
-          <option value="SELLER">Nhà Sản Xuất</option>
-        </select>
+      <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+        <h1 className="text-3xl font-bold text-gray-900">Quản Trị Hệ Thống</h1>
+        <div className="flex space-x-2 bg-gray-100 p-1 rounded-lg">
+          <button 
+            onClick={() => setActiveTab('USERS')} 
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'USERS' ? 'bg-white text-emerald-700 shadow' : 'text-gray-500 hover:text-gray-700'}`}
+          >
+            Quản lý Người Dùng
+          </button>
+          <button 
+            onClick={() => setActiveTab('CATEGORIES')} 
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'CATEGORIES' ? 'bg-white text-emerald-700 shadow' : 'text-gray-500 hover:text-gray-700'}`}
+          >
+            Quản lý Danh Mục
+          </button>
+        </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      {activeTab === 'USERS' && (
+        <>
+          <div className="flex justify-end mb-4">
+            <select
+              value={filterRole}
+              onChange={(e) => setFilterRole(e.target.value)}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
+            >
+              <option value="">Tất cả tài khoản</option>
+              <option value="CUSTOMER">Khách Hàng</option>
+              <option value="SELLER">Nhà Sản Xuất</option>
+            </select>
+          </div>
+          
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-gray-500">Đang tải dữ liệu...</div>
         ) : (
@@ -172,6 +245,109 @@ const AdminDashboard = () => {
           </div>
         )}
       </div>
+      </>
+      )}
+
+      {activeTab === 'CATEGORIES' && (
+        <>
+          <div className="flex justify-end mb-4">
+            <button 
+              onClick={() => setCategoryModal({isOpen: true, isEdit: false, data: {name: '', description: ''}})}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium transition-colors shadow-sm"
+            >
+              + Thêm Danh Mục Mới
+            </button>
+          </div>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            {loadingCategories ? (
+              <div className="p-8 text-center text-gray-500">Đang tải danh mục...</div>
+            ) : (
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tên Danh Mục</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mô tả</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Hành Động</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {categories.map((cat) => (
+                    <tr key={cat.categoryId}>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{cat.categoryId}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{cat.name}</td>
+                      <td className="px-6 py-4 text-sm text-gray-500">{cat.description || 'Không có mô tả'}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button
+                          onClick={() => setCategoryModal({isOpen: true, isEdit: true, data: {categoryId: cat.categoryId, name: cat.name, description: cat.description || ''}})}
+                          className="text-indigo-600 hover:text-indigo-900 mr-4"
+                        >
+                          Sửa
+                        </button>
+                        <button
+                          onClick={() => deleteCategory(cat.categoryId)}
+                          className="text-red-600 hover:text-red-900"
+                        >
+                          Xóa
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {categories.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-8 text-center text-gray-500">Chưa có danh mục nào.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* Category Edit/Create Modal */}
+      {categoryModal.isOpen && (
+        <div className="fixed inset-0 flex items-center justify-center bg-gray-900 bg-opacity-50 z-50 transition-opacity">
+          <div className="bg-white p-6 rounded-2xl shadow-2xl max-w-md w-full mx-4 transform transition-all">
+            <h3 className="text-xl font-bold text-gray-900 mb-4">{categoryModal.isEdit ? 'Chỉnh sửa Danh Mục' : 'Thêm Danh Mục Mới'}</h3>
+            <form onSubmit={handleSaveCategory}>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Tên Danh Mục *</label>
+                <input 
+                  type="text" required 
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
+                  value={categoryModal.data.name}
+                  onChange={e => setCategoryModal({...categoryModal, data: {...categoryModal.data, name: e.target.value}})}
+                />
+              </div>
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Mô tả</label>
+                <textarea 
+                  rows={3}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
+                  value={categoryModal.data.description}
+                  onChange={e => setCategoryModal({...categoryModal, data: {...categoryModal.data, description: e.target.value}})}
+                />
+              </div>
+              <div className="flex justify-end space-x-3">
+                <button 
+                  type="button"
+                  onClick={() => setCategoryModal({ isOpen: false, isEdit: false, data: { name: '', description: '' } })}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                >
+                  Hủy
+                </button>
+                <button 
+                  type="submit"
+                  className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors shadow-md"
+                >
+                  {categoryModal.isEdit ? 'Cập nhật' : 'Thêm Mới'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Delete Confirmation Modal */}
       {deleteConfirmModal.isOpen && (

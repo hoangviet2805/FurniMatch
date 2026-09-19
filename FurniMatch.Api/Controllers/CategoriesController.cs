@@ -43,5 +43,37 @@ namespace FurniMatch.Api.Controllers
 
             return CreatedAtAction(nameof(GetCategories), new { id = category.CategoryId }, category);
         }
+
+        [Authorize(Roles = "ADMIN")]
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateCategory(int id, [FromBody] CategoryDto dto)
+        {
+            var category = await _context.Categories.FindAsync(id);
+            if (category == null) return NotFound();
+
+            category.Name = dto.Name;
+            category.Description = dto.Description;
+
+            await _context.SaveChangesAsync();
+            return Ok(category);
+        }
+
+        [Authorize(Roles = "ADMIN")]
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteCategory(int id)
+        {
+            var category = await _context.Categories.Include(c => c.Products).FirstOrDefaultAsync(c => c.CategoryId == id);
+            if (category == null) return NotFound();
+
+            if (category.Products.Any())
+            {
+                return BadRequest(new { message = "Không thể xóa danh mục này vì đang có sản phẩm thuộc danh mục." });
+            }
+
+            _context.Categories.Remove(category);
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Đã xóa danh mục thành công." });
+        }
     }
 }

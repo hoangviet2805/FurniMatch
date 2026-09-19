@@ -20,6 +20,7 @@ namespace FurniMatch.Api.Data
         public DbSet<EContract> EContracts { get; set; }
         public DbSet<EscrowWallet> EscrowWallets { get; set; }
         public DbSet<EscrowTransaction> EscrowTransactions { get; set; }
+        public DbSet<ProductImage> ProductImages { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -55,6 +56,13 @@ namespace FurniMatch.Api.Data
                 .WithMany(u => u.Products)
                 .HasForeignKey(p => p.SellerId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // Product - ProductImage
+            modelBuilder.Entity<ProductImage>()
+                .HasOne(pi => pi.Product)
+                .WithMany(p => p.ProductImages)
+                .HasForeignKey(pi => pi.ProductId)
+                .OnDelete(DeleteBehavior.Cascade);
 
             // ProductVariant
             modelBuilder.Entity<ProductVariant>()
