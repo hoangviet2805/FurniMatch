@@ -24,6 +24,7 @@ const Register = () => {
     ward: '',
     addressDetail: ''
   });
+  const [documents, setDocuments] = useState<File[]>([]);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -66,16 +67,51 @@ const Register = () => {
     setFormData(prev => ({ ...prev, [name]: val }));
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const filesArray = Array.from(e.target.files);
+      if (filesArray.length > 10) {
+        setError('Bạn chỉ có thể chọn tối đa 10 ảnh.');
+        return;
+      }
+      setDocuments(filesArray);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
     try {
-      await api.post('/auth/register', formData);
+      const data = new FormData();
+      Object.entries(formData).forEach(([key, value]) => {
+        if (value !== null && value !== undefined && value !== '') {
+          data.append(key, value.toString());
+        }
+      });
+      
+      if (formData.roleName === 'SELLER') {
+        documents.forEach((doc) => {
+          data.append('Documents', doc);
+        });
+      }
+
+      await api.post('/auth/register', data, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
       setStep(2);
     } catch (err: any) {
-      setError(err.response?.data || 'Có lỗi xảy ra khi đăng ký.');
+      const respData = err.response?.data;
+      if (respData?.message) {
+        setError(respData.message);
+      } else if (typeof respData === 'string') {
+        setError(respData);
+      } else {
+        setError('Có lỗi xảy ra khi đăng ký.');
+      }
     } finally {
       setLoading(false);
     }
@@ -309,6 +345,26 @@ const Register = () => {
                   <label className="ml-2 block text-sm text-gray-900">
                     Hỗ trợ may đo kích thước riêng theo yêu cầu?
                   </label>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Tải lên Căn cước công dân và Giấy phép kinh doanh (Tối đa 10 ảnh)
+                  </label>
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    onChange={handleFileChange}
+                    className="block w-full text-sm text-gray-500
+                      file:mr-4 file:py-2 file:px-4
+                      file:rounded-md file:border-0
+                      file:text-sm file:font-semibold
+                      file:bg-emerald-50 file:text-emerald-700
+                      hover:file:bg-emerald-100"
+                  />
+                  {documents.length > 0 && (
+                    <p className="mt-2 text-sm text-gray-600">Đã chọn {documents.length} ảnh.</p>
+                  )}
                 </div>
               </div>
             )}

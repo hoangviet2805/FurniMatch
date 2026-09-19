@@ -11,12 +11,20 @@ const AdminDashboard = () => {
   const [alertModal, setAlertModal] = useState<{ isOpen: boolean; message: string; type: 'success' | 'error' }>({ isOpen: false, message: '', type: 'success' });
   
   // Tabs and Category States
-  const [activeTab, setActiveTab] = useState<'USERS' | 'CATEGORIES' | 'BANNERS'>('USERS');
+  const [activeTab, setActiveTab] = useState<'USERS' | 'PENDING_SELLERS' | 'CATEGORIES' | 'BANNERS'>('USERS');
   const [categories, setCategories] = useState<any[]>([]);
   const [banners, setBanners] = useState<any[]>([]);
+  const [pendingSellers, setPendingSellers] = useState<any[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
   const [categoryModal, setCategoryModal] = useState<{isOpen: boolean, isEdit: boolean, data: {categoryId?: number, name: string, description: string}}>({
     isOpen: false, isEdit: false, data: {name: '', description: ''}
+  });
+
+  const [rejectModal, setRejectModal] = useState<{isOpen: boolean, userId: number | null, reason: string}>({
+    isOpen: false, userId: null, reason: ''
+  });
+  const [imageModal, setImageModal] = useState<{isOpen: boolean, images: string[], currentIndex: number}>({
+    isOpen: false, images: [], currentIndex: 0
   });
 
   useEffect(() => {
@@ -27,6 +35,8 @@ const AdminDashboard = () => {
       fetchCategories();
     } else if (activeTab === 'BANNERS') {
       fetchBanners();
+    } else if (activeTab === 'PENDING_SELLERS') {
+      fetchPendingSellers();
     }
   }, [filterRole, activeTab]);
 
@@ -75,6 +85,46 @@ const AdminDashboard = () => {
     } catch (error) {
       console.error('Error updating status:', error);
       setAlertModal({ isOpen: true, message: 'Có lỗi xảy ra khi cập nhật trạng thái.', type: 'error' });
+    }
+  };
+
+  const fetchPendingSellers = async () => {
+    setLoading(true);
+    try {
+      const response = await api.get('/admin/pending-sellers');
+      setPendingSellers(response.data);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const approveSeller = async (id: number) => {
+    if (!window.confirm('Bạn có chắc chắn muốn duyệt nhà sản xuất này?')) return;
+    try {
+      await api.post(`/admin/approve-seller/${id}`);
+      setAlertModal({ isOpen: true, message: 'Đã duyệt nhà sản xuất thành công!', type: 'success' });
+      fetchPendingSellers();
+    } catch (error: any) {
+      setAlertModal({ isOpen: true, message: error.response?.data?.message || 'Có lỗi xảy ra', type: 'error' });
+    }
+  };
+
+  const submitRejectSeller = async () => {
+    if (!rejectModal.userId) return;
+    if (!rejectModal.reason.trim()) {
+      alert('Vui lòng nhập lý do từ chối');
+      return;
+    }
+    
+    try {
+      await api.post(`/admin/reject-seller/${rejectModal.userId}`, { reason: rejectModal.reason });
+      setAlertModal({ isOpen: true, message: 'Đã từ chối nhà sản xuất!', type: 'success' });
+      setRejectModal({ isOpen: false, userId: null, reason: '' });
+      fetchPendingSellers();
+    } catch (error: any) {
+      setAlertModal({ isOpen: true, message: error.response?.data?.message || 'Có lỗi xảy ra', type: 'error' });
     }
   };
 
@@ -188,6 +238,12 @@ const AdminDashboard = () => {
             className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'USERS' ? 'bg-white text-emerald-700 shadow' : 'text-gray-500 hover:text-gray-700'}`}
           >
             Quản lý Người Dùng
+          </button>
+          <button 
+            onClick={() => setActiveTab('PENDING_SELLERS')} 
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'PENDING_SELLERS' ? 'bg-white text-emerald-700 shadow' : 'text-gray-500 hover:text-gray-700'}`}
+          >
+            Duyệt Nhà Sản Xuất
           </button>
           <button 
             onClick={() => setActiveTab('CATEGORIES')} 
@@ -312,6 +368,78 @@ const AdminDashboard = () => {
         )}
       </div>
       </>
+      )}
+
+      {activeTab === 'PENDING_SELLERS' && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          {loading ? (
+            <div className="p-8 text-center text-gray-500">Đang tải dữ liệu...</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Họ Tên / Shop</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Liên Hệ</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ngày Đăng Ký</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tài Liệu (CCCD/GPKD)</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Hành Động</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {pendingSellers.map((seller) => (
+                    <tr key={seller.userId}>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">{seller.fullName}</div>
+                        <div className="text-sm text-gray-500">Xưởng: {seller.shopName}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <div>{seller.email}</div>
+                        <div>{seller.phone}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {new Date(seller.createdAt).toLocaleDateString('vi-VN')}
+                      </td>
+                      <td className="px-6 py-4">
+                        {seller.documents && seller.documents.length > 0 ? (
+                          <button
+                            onClick={() => setImageModal({ isOpen: true, images: seller.documents, currentIndex: 0 })}
+                            className="text-emerald-600 hover:text-emerald-900 text-sm font-medium underline"
+                          >
+                            Xem {seller.documents.length} ảnh
+                          </button>
+                        ) : (
+                          <span className="text-sm text-gray-400">Không có</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button
+                          onClick={() => approveSeller(seller.userId)}
+                          className="text-green-600 hover:text-green-900 mr-4 font-bold"
+                        >
+                          Duyệt
+                        </button>
+                        <button
+                          onClick={() => setRejectModal({ isOpen: true, userId: seller.userId, reason: '' })}
+                          className="text-red-600 hover:text-red-900 font-bold"
+                        >
+                          Từ Chối
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {pendingSellers.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                        Không có yêu cầu đăng ký nào đang chờ duyệt.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       )}
 
       {activeTab === 'BANNERS' && (
@@ -465,53 +593,125 @@ const AdminDashboard = () => {
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
+      {/* Delete User Confirm Modal */}
       {deleteConfirmModal.isOpen && (
-        <div className="fixed inset-0 flex items-center justify-center bg-gray-900 bg-opacity-50 z-50 transition-opacity">
-          <div className="bg-white p-6 rounded-2xl shadow-2xl max-w-sm w-full mx-4 transform transition-all">
-            <h3 className="text-xl font-bold text-gray-900 mb-4">Xác nhận xóa</h3>
-            <p className="text-gray-600 mb-6">
-              Bạn có chắc chắn muốn xóa tài khoản này khỏi hệ thống không? 
-              Tài khoản sẽ bị xóa hoàn toàn, tuy nhiên người dùng vẫn có thể dùng email đó để đăng ký lại từ đầu.
-            </p>
-            <div className="flex justify-end space-x-3">
-              <button 
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Xóa Tài Khoản</h3>
+            <p className="text-gray-600 mb-6">Bạn có chắc chắn muốn xóa tài khoản này? Hành động này không thể hoàn tác.</p>
+            <div className="flex justify-end gap-3">
+              <button
                 onClick={() => setDeleteConfirmModal({ isOpen: false, userId: null })}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors"
               >
                 Hủy
               </button>
-              <button 
+              <button
                 onClick={deleteUser}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors shadow-md"
+                className="px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-lg font-medium transition-colors"
               >
-                Xác nhận Xóa
+                Xóa
               </button>
             </div>
           </div>
         </div>
       )}
 
+      {/* Reject Seller Modal */}
+      {rejectModal.isOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Từ chối đơn đăng ký</h3>
+            <textarea
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 mb-4"
+              rows={4}
+              placeholder="Nhập lý do từ chối (sẽ được gửi qua email cho người đăng ký)..."
+              value={rejectModal.reason}
+              onChange={e => setRejectModal(prev => ({ ...prev, reason: e.target.value }))}
+            />
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setRejectModal({ isOpen: false, userId: null, reason: '' })}
+                className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={submitRejectSeller}
+                className="px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-lg font-medium transition-colors"
+              >
+                Từ Chối
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image Viewer Modal */}
+      {imageModal.isOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-90 flex flex-col items-center justify-center z-[60]">
+          <button 
+            onClick={() => setImageModal({ isOpen: false, images: [], currentIndex: 0 })}
+            className="absolute top-4 right-4 text-white hover:text-gray-300 p-2"
+          >
+            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+          </button>
+          
+          <div className="relative w-full max-w-4xl max-h-[80vh] flex justify-center px-12">
+            <img 
+              src={`http://localhost:5234${imageModal.images[imageModal.currentIndex]}`} 
+              alt="Document" 
+              className="max-w-full max-h-[80vh] object-contain"
+            />
+            
+            {imageModal.images.length > 1 && (
+              <>
+                <button
+                  onClick={() => setImageModal(prev => ({ ...prev, currentIndex: prev.currentIndex === 0 ? prev.images.length - 1 : prev.currentIndex - 1 }))}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 text-white hover:text-emerald-400 bg-black bg-opacity-50 rounded-full p-2"
+                >
+                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
+                </button>
+                <button
+                  onClick={() => setImageModal(prev => ({ ...prev, currentIndex: prev.currentIndex === prev.images.length - 1 ? 0 : prev.currentIndex + 1 }))}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:text-emerald-400 bg-black bg-opacity-50 rounded-full p-2"
+                >
+                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
+                </button>
+              </>
+            )}
+          </div>
+          
+          {imageModal.images.length > 1 && (
+            <div className="text-white mt-4 text-lg font-medium">
+              Ảnh {imageModal.currentIndex + 1} / {imageModal.images.length}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Alert Modal */}
       {alertModal.isOpen && (
-        <div className="fixed inset-0 flex items-center justify-center bg-gray-900 bg-opacity-50 z-50 transition-opacity">
-          <div className="bg-white p-6 rounded-2xl shadow-2xl max-w-sm w-full mx-4 flex flex-col items-center transform transition-all">
-            <div className={`mx-auto flex items-center justify-center h-16 w-16 rounded-full mb-4 ${alertModal.type === 'success' ? 'bg-green-100' : 'bg-red-100'}`}>
-              {alertModal.type === 'success' ? (
-                <svg className="h-10 w-10 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6 text-center">
+            {alertModal.type === 'success' ? (
+              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
+                <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
                 </svg>
-              ) : (
-                <svg className="h-10 w-10 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              </div>
+            ) : (
+              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+                <svg className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
                 </svg>
-              )}
-            </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-2">{alertModal.type === 'success' ? 'Thành công!' : 'Lỗi'}</h3>
-            <p className="text-sm text-gray-500 text-center mb-6">{alertModal.message}</p>
+              </div>
+            )}
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Thông báo</h3>
+            <p className="text-gray-600 mb-6">{alertModal.message}</p>
             <button
-              onClick={() => setAlertModal({ isOpen: false, message: '', type: 'success' })}
-              className="w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none transition-colors shadow-md"
+              onClick={() => setAlertModal({ ...alertModal, isOpen: false })}
+              className="w-full px-4 py-2 text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg font-medium transition-colors"
             >
               Đóng
             </button>

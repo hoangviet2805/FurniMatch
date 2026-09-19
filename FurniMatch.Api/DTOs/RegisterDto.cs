@@ -1,4 +1,6 @@
 using System.ComponentModel.DataAnnotations;
+using System.Collections.Generic;
+using Microsoft.AspNetCore.Http;
 
 namespace FurniMatch.Api.DTOs
 {
@@ -32,5 +34,7 @@ namespace FurniMatch.Api.DTOs
         public string? District { get; set; }
         public string? Ward { get; set; }
         public string? AddressDetail { get; set; }
+
+        public List<IFormFile>? Documents { get; set; }
     }
 }

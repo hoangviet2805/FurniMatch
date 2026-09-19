@@ -1,14 +1,28 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import api from '../utils/api';
 
 const Products = () => {
-  const [products, setProducts] = useState([]);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const categoryIdParam = searchParams.get('categoryId');
+  
+  const [products, setProducts] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Fetch categories for sidebar
+    api.get('/categories')
+      .then(res => setCategories(res.data))
+      .catch(err => console.error('Error fetching categories:', err));
+  }, []);
+
+  useEffect(() => {
     const fetchProducts = async () => {
+      setLoading(true);
       try {
-        const response = await api.get('/products');
+        const url = categoryIdParam ? `/products?categoryId=${categoryIdParam}` : '/products';
+        const response = await api.get(url);
         setProducts(response.data);
       } catch (err) {
         console.error('Error fetching products:', err);
@@ -17,39 +31,106 @@ const Products = () => {
       }
     };
     fetchProducts();
-  }, []);
+  }, [categoryIdParam]);
 
-  if (loading) return <div className="text-center py-20">Đang tải sản phẩm...</div>;
+  const handleCategoryClick = (id: number | null) => {
+    if (id === null) {
+      searchParams.delete('categoryId');
+    } else {
+      searchParams.set('categoryId', id.toString());
+    }
+    setSearchParams(searchParams);
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-      <h1 className="text-3xl font-bold text-gray-900 mb-8">Danh sách Sản phẩm</h1>
-      
-      {products.length === 0 ? (
-        <div className="text-center text-gray-500 py-10 bg-white rounded-lg shadow-sm border border-gray-100">
-          Chưa có sản phẩm nào.
+      <div className="flex flex-col md:flex-row gap-8">
+        
+        {/* Sidebar */}
+        <div className="w-full md:w-64 shrink-0">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 sticky top-24">
+            <h2 className="text-lg font-bold text-gray-900 mb-4 border-b pb-2">Danh Mục</h2>
+            <ul className="space-y-2">
+              <li>
+                <button 
+                  onClick={() => handleCategoryClick(null)}
+                  className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${!categoryIdParam ? 'bg-emerald-50 text-emerald-700 font-semibold' : 'text-gray-600 hover:bg-gray-50 hover:text-emerald-600'}`}
+                >
+                  Tất cả sản phẩm
+                </button>
+              </li>
+              {categories.map(cat => (
+                <li key={cat.categoryId}>
+                  <button 
+                    onClick={() => handleCategoryClick(cat.categoryId)}
+                    className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${categoryIdParam === cat.categoryId.toString() ? 'bg-emerald-50 text-emerald-700 font-semibold' : 'text-gray-600 hover:bg-gray-50 hover:text-emerald-600'}`}
+                  >
+                    {cat.name}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
-          {products.map((product: any) => (
-            <div key={product.productId} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
-              <div className="h-48 bg-gray-200 flex items-center justify-center text-gray-400">
-                Hình Ảnh
-              </div>
-              <div className="p-5">
-                <h3 className="text-lg font-semibold text-gray-900 truncate">{product.name}</h3>
-                <p className="text-gray-500 text-sm mt-1 line-clamp-2">{product.description}</p>
-                <div className="mt-4 flex items-center justify-between">
-                  <span className="text-emerald-600 font-bold">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(product.price)}</span>
-                  {product.customSizeSupported && (
-                    <span className="text-xs bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full">May đo</span>
-                  )}
-                </div>
-              </div>
+
+        {/* Product Grid */}
+        <div className="flex-1">
+          <div className="flex justify-between items-end mb-6">
+            <h1 className="text-3xl font-bold text-gray-900">
+              {categoryIdParam 
+                ? categories.find(c => c.categoryId.toString() === categoryIdParam)?.name || 'Danh sách Sản phẩm' 
+                : 'Tất cả Sản phẩm'}
+            </h1>
+            <span className="text-gray-500 text-sm">{products.length} sản phẩm</span>
+          </div>
+          
+          {loading ? (
+            <div className="text-center py-20 text-gray-500">Đang tải sản phẩm...</div>
+          ) : products.length === 0 ? (
+            <div className="text-center text-gray-500 py-16 bg-white rounded-xl shadow-sm border border-gray-100">
+              <div className="text-4xl mb-4">🪑</div>
+              <p>Chưa có sản phẩm nào trong danh mục này.</p>
             </div>
-          ))}
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {products.map((product: any) => (
+                <div key={product.productId} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow group cursor-pointer flex flex-col">
+                  <div className="h-48 bg-gray-100 relative overflow-hidden shrink-0">
+                    {product.productImages && product.productImages.length > 0 ? (
+                      <img 
+                        src={product.productImages[0].imageUrl.startsWith('http') ? product.productImages[0].imageUrl : `http://localhost:5234${product.productImages[0].imageUrl}`} 
+                        alt={product.name} 
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-gray-400">Không có ảnh</div>
+                    )}
+                    {product.customSizeSupported && (
+                      <div className="absolute top-2 right-2 bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded shadow-sm">
+                        May đo
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-4 flex flex-col flex-1">
+                    <div className="text-xs text-gray-500 mb-1 flex items-center gap-1">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m3-4h1m-1 4h1m-5 8h8" /></svg>
+                      {product.seller?.shopName || 'Nhà sản xuất'}
+                    </div>
+                    <h3 className="text-sm font-semibold text-gray-900 line-clamp-2 flex-1 group-hover:text-emerald-600 transition-colors">{product.name}</h3>
+                    <div className="mt-3 flex items-end justify-between">
+                      <div className="text-emerald-600 font-bold text-lg">
+                        {product.productVariants && product.productVariants.length > 0 
+                          ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Math.min(...product.productVariants.map((v: any) => v.price)))
+                          : 'Liên hệ'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 };

@@ -39,6 +39,7 @@ namespace FurniMatch.Api.Controllers
                 .Include(p => p.Category)
                 .Include(p => p.Seller)
                 .Include(p => p.ProductVariants)
+                .Include(p => p.ProductImages)
                 .Where(p => p.Status == "ACTIVE");
 
             if (categoryId.HasValue)

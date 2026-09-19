@@ -12,6 +12,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using FurniMatch.Api.Services;
+using Microsoft.AspNetCore.Hosting;
 using BC = BCrypt.Net.BCrypt;
 
 namespace FurniMatch.Api.Controllers
@@ -23,16 +24,18 @@ namespace FurniMatch.Api.Controllers
         private readonly FurniMatchDbContext _context;
         private readonly IConfiguration _configuration;
         private readonly IEmailService _emailService;
+        private readonly IWebHostEnvironment _env;
 
-        public AuthController(FurniMatchDbContext context, IConfiguration configuration, IEmailService emailService)
+        public AuthController(FurniMatchDbContext context, IConfiguration configuration, IEmailService emailService, IWebHostEnvironment env)
         {
             _context = context;
             _configuration = configuration;
             _emailService = emailService;
+            _env = env;
         }
 
         [HttpPost("register")]
-        public async Task<IActionResult> Register([FromBody] RegisterDto dto)
+        public async Task<IActionResult> Register([FromForm] RegisterDto dto)
         {
             var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.Email == dto.Email);
             if (existingUser != null)
@@ -84,6 +87,43 @@ namespace FurniMatch.Api.Controllers
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
 
+            // Save uploaded documents for SELLER
+            if (dto.RoleName.ToUpper() == "SELLER" && dto.Documents != null && dto.Documents.Count > 0)
+            {
+                if (dto.Documents.Count > 10)
+                {
+                    return BadRequest(new { message = "Bạn chỉ có thể tải lên tối đa 10 ảnh." });
+                }
+
+                var uploadsFolder = Path.Combine(_env.WebRootPath, "uploads", "seller-docs");
+                if (!Directory.Exists(uploadsFolder))
+                {
+                    Directory.CreateDirectory(uploadsFolder);
+                }
+
+                foreach (var file in dto.Documents)
+                {
+                    if (file.Length > 0)
+                    {
+                        var uniqueFileName = Guid.NewGuid().ToString() + "_" + file.FileName;
+                        var filePath = Path.Combine(uploadsFolder, uniqueFileName);
+
+                        using (var fileStream = new FileStream(filePath, FileMode.Create))
+                        {
+                            await file.CopyToAsync(fileStream);
+                        }
+
+                        var sellerDoc = new SellerDocument
+                        {
+                            UserId = user.UserId,
+                            ImageUrl = $"/uploads/seller-docs/{uniqueFileName}"
+                        };
+                        _context.SellerDocuments.Add(sellerDoc);
+                    }
+                }
+                await _context.SaveChangesAsync();
+            }
+
             var emailBody = $@"
                 <h2>Xác thực tài khoản FurniMatch</h2>
                 <p>Cảm ơn bạn đã đăng ký tài khoản. Mã xác nhận của bạn là:</p>
@@ -106,7 +146,9 @@ namespace FurniMatch.Api.Controllers
         [HttpPost("verify-registration")]
         public async Task<IActionResult> VerifyRegistration([FromBody] VerifyRegistrationDto dto)
         {
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == dto.Email && u.Status == "PENDING");
+            var user = await _context.Users
+                .Include(u => u.Role)
+                .FirstOrDefaultAsync(u => u.Email == dto.Email && u.Status == "PENDING");
             if (user == null)
             {
                 return BadRequest(new { message = "Không tìm thấy yêu cầu đăng ký cho email này hoặc tài khoản đã được kích hoạt." });
@@ -118,11 +160,23 @@ namespace FurniMatch.Api.Controllers
             }
 
             // Kích hoạt tài khoản
-            user.Status = "ACTIVE";
+            if (user.Role?.RoleName == "SELLER")
+            {
+                user.Status = "PENDING_APPROVAL";
+            }
+            else
+            {
+                user.Status = "ACTIVE";
+            }
             user.ResetPasswordToken = null;
             user.ResetPasswordTokenExpiry = null;
 
             await _context.SaveChangesAsync();
+
+            if (user.Status == "PENDING_APPROVAL")
+            {
+                return Ok(new { message = "Xác thực email thành công! Đơn đăng ký nhà sản xuất của bạn đang chờ Admin phê duyệt." });
+            }
 
             return Ok(new { message = "Xác thực tài khoản thành công! Bạn có thể đăng nhập ngay bây giờ." });
         }
@@ -139,9 +193,17 @@ namespace FurniMatch.Api.Controllers
                 return Unauthorized("Invalid email or password.");
             }
 
+            if (user.Status == "PENDING_APPROVAL")
+            {
+                return Unauthorized(new { message = "Đơn đăng ký của bạn đang chờ kiểm duyệt viên xét duyệt." });
+            }
+            if (user.Status == "REJECTED")
+            {
+                return Unauthorized(new { message = "Đơn đăng ký của bạn đã bị từ chối. Vui lòng kiểm tra email để biết lý do và liên hệ hỗ trợ." });
+            }
             if (user.Status != "ACTIVE")
             {
-                return Unauthorized($"Account is {user.Status}.");
+                return Unauthorized(new { message = $"Tài khoản của bạn đang ở trạng thái {user.Status}." });
             }
 
             var token = GenerateJwtToken(user);

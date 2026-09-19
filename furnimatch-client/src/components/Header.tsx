@@ -35,7 +35,7 @@ const Header = () => {
             </Link>
             {user?.role !== 'SELLER' && (
               <Link to="/products" className="text-gray-700 hover:text-emerald-600 px-3 py-2 text-sm font-medium transition-colors">
-                Danh mục sản Phẩm
+                Danh Mục
               </Link>
             )}
             

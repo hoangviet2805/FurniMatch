@@ -50,5 +50,6 @@ namespace FurniMatch.Api.Models
         public ICollection<Product> Products { get; set; } = new List<Product>();
         public ICollection<QuotationRequest> QuotationRequests { get; set; } = new List<QuotationRequest>();
         public ICollection<Quotation> Quotations { get; set; } = new List<Quotation>();
+        public ICollection<SellerDocument> SellerDocuments { get; set; } = new List<SellerDocument>();
     }
 }

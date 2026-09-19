@@ -28,7 +28,14 @@ const Login = () => {
         window.location.reload();
       }, 1500);
     } catch (err: any) {
-      setError(err.response?.data || 'Đăng nhập thất bại. Vui lòng kiểm tra lại.');
+      const respData = err.response?.data;
+      if (respData?.message) {
+        setError(respData.message);
+      } else if (typeof respData === 'string') {
+        setError(respData);
+      } else {
+        setError('Đăng nhập thất bại. Vui lòng kiểm tra lại.');
+      }
     } finally {
       setLoading(false);
     }
