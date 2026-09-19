@@ -63,7 +63,7 @@ const Home = () => {
       {banners.length > 0 && (
         <section className="bg-white pb-8">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="w-full relative aspect-[16/9] sm:aspect-[21/9] lg:aspect-[3/1] rounded-2xl overflow-hidden shadow-md">
+            <div className="w-full relative aspect-[16/9] sm:aspect-[21/9] lg:aspect-[21/9] rounded-2xl overflow-hidden shadow-md bg-gray-100">
               {banners.map((banner, index) => (
               <div
                 key={banner.bannerId}
