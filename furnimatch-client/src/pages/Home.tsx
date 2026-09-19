@@ -1,15 +1,32 @@
 import { Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
+import api from '../utils/api';
 
 const Home = () => {
   const [user, setUser] = useState<any>(null);
+  const [banners, setBanners] = useState<any[]>([]);
+  const [currentSlide, setCurrentSlide] = useState(0);
 
   useEffect(() => {
     const userStr = localStorage.getItem('user');
     if (userStr) {
       setUser(JSON.parse(userStr));
     }
+
+    // Fetch banners
+    api.get('/banners').then(res => {
+      setBanners(res.data);
+    }).catch(err => console.error('Error fetching banners:', err));
   }, []);
+
+  // Handle 3s auto slide
+  useEffect(() => {
+    if (banners.length === 0) return;
+    const timer = setInterval(() => {
+      setCurrentSlide(prev => (prev + 1) % banners.length);
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [banners.length]);
 
   return (
     <div className="flex flex-col">
@@ -41,6 +58,46 @@ const Home = () => {
           </div>
         </div>
       </section>
+
+      {/* Banner Slider Section */}
+      {banners.length > 0 && (
+        <section className="bg-white pb-8">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="w-full relative aspect-[16/9] sm:aspect-[21/9] lg:aspect-[3/1] rounded-2xl overflow-hidden shadow-md">
+              {banners.map((banner, index) => (
+              <div
+                key={banner.bannerId}
+                className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${
+                  index === currentSlide ? 'opacity-100' : 'opacity-0'
+                }`}
+              >
+                <img
+                  src={banner.imageUrl.startsWith('http') ? banner.imageUrl : `http://localhost:5234${banner.imageUrl}`}
+                  alt={`Banner ${index + 1}`}
+                  className="w-full h-full object-cover"
+                />
+                {/* Optional dark overlay for better text readability if we add text later */}
+                <div className="absolute inset-0 bg-black/10"></div>
+              </div>
+            ))}
+            
+            {/* Dots */}
+            <div className="absolute bottom-6 left-0 right-0 flex justify-center space-x-3">
+              {banners.map((_, index) => (
+                <button
+                  key={index}
+                  onClick={() => setCurrentSlide(index)}
+                  className={`w-3 h-3 rounded-full transition-colors ${
+                    index === currentSlide ? 'bg-emerald-600' : 'bg-white/60 hover:bg-white'
+                  }`}
+                  aria-label={`Go to slide ${index + 1}`}
+                />
+              ))}
+            </div>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Featured Categories (Placeholder) */}
       <section className="py-16 bg-white">

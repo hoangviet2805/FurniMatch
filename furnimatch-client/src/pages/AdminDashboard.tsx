@@ -11,8 +11,9 @@ const AdminDashboard = () => {
   const [alertModal, setAlertModal] = useState<{ isOpen: boolean; message: string; type: 'success' | 'error' }>({ isOpen: false, message: '', type: 'success' });
   
   // Tabs and Category States
-  const [activeTab, setActiveTab] = useState<'USERS' | 'CATEGORIES'>('USERS');
+  const [activeTab, setActiveTab] = useState<'USERS' | 'CATEGORIES' | 'BANNERS'>('USERS');
   const [categories, setCategories] = useState<any[]>([]);
+  const [banners, setBanners] = useState<any[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
   const [categoryModal, setCategoryModal] = useState<{isOpen: boolean, isEdit: boolean, data: {categoryId?: number, name: string, description: string}}>({
     isOpen: false, isEdit: false, data: {name: '', description: ''}
@@ -22,8 +23,10 @@ const AdminDashboard = () => {
     if (activeTab === 'USERS') {
       fetchUsers();
       setCurrentPage(1);
-    } else {
+    } else if (activeTab === 'CATEGORIES') {
       fetchCategories();
+    } else if (activeTab === 'BANNERS') {
+      fetchBanners();
     }
   }, [filterRole, activeTab]);
 
@@ -46,6 +49,19 @@ const AdminDashboard = () => {
       setUsers(response.data.filter((u: any) => u.roleName !== 'ADMIN'));
     } catch (error) {
       console.error('Error fetching users:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchBanners = async () => {
+    setLoading(true);
+    try {
+      const response = await api.get('/banners');
+      setBanners(response.data);
+    } catch (error) {
+      console.error(error);
+      setAlertModal({ isOpen: true, message: 'Lỗi tải danh sách banner', type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -115,6 +131,50 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const files = Array.from(e.target.files);
+    
+    if (banners.length + files.length > 10) {
+      setAlertModal({ isOpen: true, message: 'Chỉ được tải lên tối đa 10 ảnh banner!', type: 'error' });
+      return;
+    }
+
+    const formData = new FormData();
+    files.forEach(f => formData.append('images', f));
+
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5234/api/banners', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Lỗi tải ảnh');
+      }
+      setAlertModal({ isOpen: true, message: 'Tải ảnh banner thành công!', type: 'success' });
+      fetchBanners();
+    } catch (error: any) {
+      setAlertModal({ isOpen: true, message: error.message || 'Lỗi tải ảnh lên', type: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteBanner = async (id: number) => {
+    if (!window.confirm('Bạn có chắc chắn muốn xóa ảnh banner này?')) return;
+    try {
+      await api.delete(`/banners/${id}`);
+      setAlertModal({ isOpen: true, message: 'Đã xóa ảnh banner!', type: 'success' });
+      fetchBanners();
+    } catch (error: any) {
+      setAlertModal({ isOpen: true, message: error.response?.data?.message || 'Không thể xóa banner.', type: 'error' });
+    }
+  };
+
   const totalPages = Math.ceil(users.length / itemsPerPage);
   const currentUsers = users.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
@@ -134,6 +194,12 @@ const AdminDashboard = () => {
             className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'CATEGORIES' ? 'bg-white text-emerald-700 shadow' : 'text-gray-500 hover:text-gray-700'}`}
           >
             Quản lý Danh Mục
+          </button>
+          <button 
+            onClick={() => setActiveTab('BANNERS')} 
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'BANNERS' ? 'bg-white text-emerald-700 shadow' : 'text-gray-500 hover:text-gray-700'}`}
+          >
+            Quản lý Slide Trang Chủ
           </button>
         </div>
       </div>
@@ -246,6 +312,56 @@ const AdminDashboard = () => {
         )}
       </div>
       </>
+      )}
+
+      {activeTab === 'BANNERS' && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <div className="flex justify-between items-center mb-6">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">Hình ảnh Slide Trang chủ</h2>
+              <p className="text-sm text-gray-500 mt-1">Quản lý tối đa 10 ảnh sẽ chạy ngoài trang chủ. Tỉ lệ khuyên dùng 16:9 hoặc 21:9.</p>
+            </div>
+            <div>
+              <label className="cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium transition-colors shadow-sm inline-block">
+                + Tải Ảnh Lên
+                <input type="file" multiple accept="image/*" className="hidden" onChange={handleBannerUpload} disabled={loading} />
+              </label>
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="p-8 text-center text-gray-500">Đang xử lý...</div>
+          ) : banners.length === 0 ? (
+            <div className="p-12 text-center border-2 border-dashed border-gray-200 rounded-xl">
+              <div className="text-4xl mb-4">🖼️</div>
+              <p className="text-gray-500">Chưa có hình ảnh nào. Hãy tải ảnh lên để hiện thị ngoài trang chủ.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {banners.map((banner, index) => (
+                <div key={banner.bannerId} className="relative group rounded-xl overflow-hidden shadow-sm border border-gray-200 bg-gray-50">
+                  <div className="absolute top-2 left-2 bg-black bg-opacity-50 text-white w-8 h-8 flex items-center justify-center rounded-full font-bold z-10">
+                    {index + 1}
+                  </div>
+                  <button 
+                    onClick={() => handleDeleteBanner(banner.bannerId)}
+                    className="absolute top-2 right-2 bg-red-500 text-white w-8 h-8 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10 hover:bg-red-600"
+                    title="Xóa ảnh này"
+                  >
+                    &times;
+                  </button>
+                  <div className="aspect-[21/9] w-full">
+                    <img 
+                      src={banner.imageUrl.startsWith('http') ? banner.imageUrl : `http://localhost:5234${banner.imageUrl}`} 
+                      alt={`Banner ${index + 1}`} 
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       {activeTab === 'CATEGORIES' && (

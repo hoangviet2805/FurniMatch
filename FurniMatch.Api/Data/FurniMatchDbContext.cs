@@ -17,6 +17,7 @@ namespace FurniMatch.Api.Data
         public DbSet<QuotationRequest> QuotationRequests { get; set; }
         public DbSet<Quotation> Quotations { get; set; }
         public DbSet<Notification> Notifications { get; set; }
+        public DbSet<Banner> Banners { get; set; }
         public DbSet<EContract> EContracts { get; set; }
         public DbSet<EscrowWallet> EscrowWallets { get; set; }
         public DbSet<EscrowTransaction> EscrowTransactions { get; set; }
