@@ -28,18 +28,6 @@ const AdminDashboard = () => {
     isOpen: false, images: [], currentIndex: 0
   });
 
-  useEffect(() => {
-    if (activeTab === 'USERS') {
-      fetchUsers();
-      setCurrentPage(1);
-    } else if (activeTab === 'CATEGORIES') {
-      fetchCategories();
-    } else if (activeTab === 'BANNERS') {
-      fetchBanners();
-    } else if (activeTab === 'PENDING_SELLERS') {
-      fetchPendingSellers();
-    }
-  }, [filterRole, activeTab]);
 
   const fetchCategories = async () => {
     setLoadingCategories(true);
@@ -100,6 +88,19 @@ const AdminDashboard = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (activeTab === 'USERS') {
+      fetchUsers();
+      setCurrentPage(1);
+    } else if (activeTab === 'CATEGORIES') {
+      fetchCategories();
+    } else if (activeTab === 'BANNERS') {
+      fetchBanners();
+    } else if (activeTab === 'PENDING_SELLERS') {
+      fetchPendingSellers();
+    }
+  }, [filterRole, activeTab]);
 
   const approveSeller = async (id: number) => {
     if (!window.confirm('Bạn có chắc chắn muốn duyệt nhà sản xuất này?')) return;
