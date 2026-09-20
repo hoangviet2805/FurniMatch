@@ -24,6 +24,20 @@ const ManageProducts = () => {
   // Product Details Modal State
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
 
+  // Edit Product State
+  const [editingProduct, setEditingProduct] = useState<any>(null);
+  const [editingFormData, setEditingFormData] = useState({
+    name: '',
+    categoryId: 1,
+    description: '',
+    customSizeSupported: false
+  });
+  const [editingVariants, setEditingVariants] = useState<any[]>([]);
+  const [editingExistingImages, setEditingExistingImages] = useState<any[]>([]);
+  const [editingExistingThumbnailUrl, setEditingExistingThumbnailUrl] = useState<string | null>(null);
+  const [editingNewThumbnailImage, setEditingNewThumbnailImage] = useState<{file: File, preview: string} | null>(null);
+  const [editingNewAdditionalImages, setEditingNewAdditionalImages] = useState<{file: File, preview: string}[]>([]);
+
   useEffect(() => {
     fetchProducts();
   }, []);
@@ -159,6 +173,72 @@ const ManageProducts = () => {
     } catch (err: any) {
       console.error(err.response || err);
       setAlertInfo({isOpen: true, message: 'Lỗi khi thêm sản phẩm.', type: 'error'});
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProduct) return;
+    if (!editingExistingThumbnailUrl && !editingNewThumbnailImage) return setAlertInfo({isOpen: true, message: 'Vui lòng chọn ảnh đại diện cho sản phẩm.', type: 'error'});
+
+    setSubmitting(true);
+    try {
+      const form = new FormData();
+      form.append('name', editingFormData.name);
+      form.append('categoryId', editingFormData.categoryId.toString());
+      form.append('description', editingFormData.description);
+      form.append('customSizeSupported', editingFormData.customSizeSupported ? 'true' : 'false');
+
+      form.append('variantsJson', JSON.stringify(editingVariants.map(v => ({
+        sizeName: v.sizeName,
+        width: Number(v.width),
+        height: Number(v.height),
+        length: Number(v.length),
+        price: Number(v.price),
+        productionDays: Number(v.productionDays)
+      }))));
+
+      // Append ExistingImagesJson
+      form.append('existingImagesJson', JSON.stringify(editingExistingImages.map(img => img.imageUrl)));
+
+      if (!editingNewThumbnailImage && editingExistingThumbnailUrl) {
+        form.append('thumbnailImageUrl', editingExistingThumbnailUrl);
+      }
+
+      let newIndexCounter = 0;
+      if (editingNewThumbnailImage) {
+        form.append('newImages', editingNewThumbnailImage.file);
+        form.append('newThumbnailIndex', newIndexCounter.toString());
+        newIndexCounter++;
+      }
+
+      editingNewAdditionalImages.forEach(img => {
+        form.append('newImages', img.file);
+        newIndexCounter++;
+      });
+
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:5234/api/products/${editingProduct.productId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: form
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Lỗi từ server');
+      }
+
+      setAlertInfo({isOpen: true, message: 'Cập nhật sản phẩm thành công!', type: 'success'});
+      setEditingProduct(null);
+      fetchProducts();
+    } catch (err: any) {
+      console.error(err.response || err);
+      setAlertInfo({isOpen: true, message: 'Lỗi khi cập nhật sản phẩm.', type: 'error'});
     } finally {
       setSubmitting(false);
     }
@@ -397,6 +477,33 @@ const ManageProducts = () => {
                       {product.status === 'ACTIVE' ? 'Tạm Dừng' : 'Kích Hoạt'}
                     </button>
                     <button 
+                      onClick={() => {
+                        setEditingProduct(product);
+                        setEditingFormData({
+                          name: product.name,
+                          categoryId: product.categoryId,
+                          description: product.description || '',
+                          customSizeSupported: product.customSizeSupported || false
+                        });
+                        setEditingVariants(product.productVariants || []);
+                        const allImages = product.productImages || [];
+                        const existingThumb = allImages.find((i:any) => i.isThumbnail);
+                        const existingOthers = allImages.filter((i:any) => !i.isThumbnail);
+                        setEditingExistingThumbnailUrl(existingThumb ? existingThumb.imageUrl : null);
+                        setEditingExistingImages(existingOthers);
+                        setEditingNewThumbnailImage(null);
+                        setEditingNewAdditionalImages([]);
+
+                        // Fetch categories if not already loaded
+                        if (categories.length === 0) {
+                          api.get('/categories').then(res => setCategories(res.data));
+                        }
+                      }}
+                      className="text-blue-600 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded-md transition-colors"
+                    >
+                      Sửa
+                    </button>
+                    <button 
                       onClick={() => handleDelete(product.productId)}
                       className="text-red-600 hover:text-red-900 bg-red-50 hover:bg-red-100 px-3 py-1 rounded-md transition-colors"
                     >
@@ -426,6 +533,229 @@ const ManageProducts = () => {
             >
               Đóng
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Product Modal */}
+      {editingProduct && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+              <h3 className="text-xl font-bold text-gray-900">Sửa Thông Tin Sản Phẩm</h3>
+              <button onClick={() => setEditingProduct(null)} className="text-gray-400 hover:text-gray-600 text-2xl font-bold">&times;</button>
+            </div>
+            <div className="p-6">
+              <form onSubmit={handleEditSubmit} className="space-y-4 max-h-[80vh] overflow-y-auto pr-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Tên sản phẩm *</label>
+                    <input
+                      name="name"
+                      required
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
+                      value={editingFormData.name}
+                      onChange={(e) => setEditingFormData({...editingFormData, name: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Danh mục *</label>
+                    <select
+                      name="categoryId"
+                      required
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
+                      value={editingFormData.categoryId}
+                      onChange={(e) => setEditingFormData({...editingFormData, categoryId: parseInt(e.target.value)})}
+                    >
+                      {categories.map(c => (
+                        <option key={c.categoryId} value={c.categoryId}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Mô tả</label>
+                  <textarea
+                    name="description"
+                    rows={4}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
+                    value={editingFormData.description}
+                    onChange={(e) => setEditingFormData({...editingFormData, description: e.target.value})}
+                  />
+                </div>
+                <div className="flex items-center gap-2 mb-4">
+                  <input 
+                    type="checkbox" 
+                    id="customSizeEdit"
+                    checked={editingFormData.customSizeSupported}
+                    onChange={(e) => setEditingFormData({...editingFormData, customSizeSupported: e.target.checked})}
+                    className="h-4 w-4 text-emerald-600 focus:ring-emerald-500 border-gray-300 rounded"
+                  />
+                  <label htmlFor="customSizeEdit" className="text-sm font-medium text-gray-700">Nhận đóng theo kích thước yêu cầu</label>
+                </div>
+                
+                {/* Variants Edit Section */}
+                <div className="mt-8">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900 border-b pb-1">Cấu hình kích thước & Giá</h3>
+                    <button type="button" onClick={() => setEditingVariants([...editingVariants, { id: Date.now(), sizeName: '', width: '', height: '', length: '', price: '', productionDays: '' }])} className="text-sm bg-emerald-100 text-emerald-700 px-3 py-1.5 rounded-md font-medium hover:bg-emerald-200">
+                      + Thêm kích thước
+                    </button>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-gray-50 text-gray-600 text-sm">
+                          <th className="p-2 border">Tên phân loại (VD: 60x90cm) *</th>
+                          <th className="p-2 border">Kích thước D x R x C (cm)</th>
+                          <th className="p-2 border">Giá bán (VNĐ) *</th>
+                          <th className="p-2 border">T.gian thi công (Ngày)*</th>
+                          <th className="p-2 border text-center">Hành động</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {editingVariants.map((v, index) => (
+                          <tr key={index} className="border-b">
+                            <td className="p-2 border">
+                              <input required placeholder="VD: Tranh khổ lớn" className="w-full p-2 border rounded" value={v.sizeName || ''} onChange={(e) => {
+                                const newVariants = [...editingVariants];
+                                newVariants[index] = { ...newVariants[index], sizeName: e.target.value };
+                                setEditingVariants(newVariants);
+                              }} />
+                            </td>
+                            <td className="p-2 border flex space-x-1">
+                              <input placeholder="Dài" className="w-16 p-2 border rounded" value={v.length || ''} onChange={(e) => {
+                                const newVariants = [...editingVariants];
+                                newVariants[index] = { ...newVariants[index], length: e.target.value };
+                                setEditingVariants(newVariants);
+                              }} />
+                              <input placeholder="Rộng" className="w-16 p-2 border rounded" value={v.width || ''} onChange={(e) => {
+                                const newVariants = [...editingVariants];
+                                newVariants[index] = { ...newVariants[index], width: e.target.value };
+                                setEditingVariants(newVariants);
+                              }} />
+                              <input placeholder="Cao" className="w-16 p-2 border rounded" value={v.height || ''} onChange={(e) => {
+                                const newVariants = [...editingVariants];
+                                newVariants[index] = { ...newVariants[index], height: e.target.value };
+                                setEditingVariants(newVariants);
+                              }} />
+                            </td>
+                            <td className="p-2 border">
+                              <input type="number" required placeholder="1000000" className="w-full p-2 border rounded" value={v.price || ''} onChange={(e) => {
+                                const newVariants = [...editingVariants];
+                                newVariants[index] = { ...newVariants[index], price: e.target.value };
+                                setEditingVariants(newVariants);
+                              }} />
+                            </td>
+                            <td className="p-2 border">
+                              <input type="number" required placeholder="5" className="w-full p-2 border rounded" value={v.productionDays || ''} onChange={(e) => {
+                                const newVariants = [...editingVariants];
+                                newVariants[index] = { ...newVariants[index], productionDays: e.target.value };
+                                setEditingVariants(newVariants);
+                              }} />
+                            </td>
+                            <td className="p-2 border text-center">
+                              <button type="button" onClick={() => {
+                                if (editingVariants.length <= 1) return alert('Sản phẩm phải có ít nhất 1 kích thước.');
+                                setEditingVariants(editingVariants.filter((_, i) => i !== index));
+                              }} className="text-red-500 hover:text-red-700 font-bold p-2">✕</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Images Edit Section */}
+                <div className="mt-8 border-t pt-6">
+                  <h3 className="text-lg font-semibold text-gray-900 border-b pb-1 mb-4">Hình ảnh sản phẩm</h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    
+                    {/* Thumbnail Edit */}
+                    <div className="col-span-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Ảnh Đại Diện (Bắt buộc) *</label>
+                      {editingNewThumbnailImage ? (
+                        <div className="relative border-2 border-emerald-500 rounded-lg overflow-hidden h-40 shadow-md">
+                          <img src={editingNewThumbnailImage.preview} alt="New Thumbnail preview" className="w-full h-full object-cover" />
+                          <button type="button" onClick={() => setEditingNewThumbnailImage(null)} className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600">✕</button>
+                          <div className="absolute bottom-0 left-0 right-0 bg-emerald-500 text-white text-xs py-1 text-center font-semibold">Ảnh mới</div>
+                        </div>
+                      ) : editingExistingThumbnailUrl ? (
+                        <div className="relative border-2 border-emerald-500 rounded-lg overflow-hidden h-40 shadow-md">
+                          <img src={`http://localhost:5234${editingExistingThumbnailUrl}`} alt="Existing Thumbnail" className="w-full h-full object-cover opacity-80" />
+                          <button type="button" onClick={() => setEditingExistingThumbnailUrl(null)} className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600">✕</button>
+                          <div className="absolute bottom-0 left-0 right-0 bg-gray-800 text-white text-xs py-1 text-center font-semibold">Ảnh hiện tại</div>
+                        </div>
+                      ) : (
+                        <label className="border-2 border-dashed border-gray-300 rounded-lg h-40 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 hover:border-emerald-500 transition-colors">
+                          <span className="text-3xl text-gray-400">+</span>
+                          <span className="text-sm text-gray-500 mt-2 font-medium">Tải ảnh đại diện</span>
+                          <input type="file" accept="image/*" className="hidden" onChange={(e) => {
+                            if (e.target.files && e.target.files[0]) {
+                              const file = e.target.files[0];
+                              setEditingNewThumbnailImage({ file, preview: URL.createObjectURL(file) });
+                            }
+                          }} />
+                        </label>
+                      )}
+                    </div>
+
+                    {/* Additional Images Edit */}
+                    <div className="col-span-1 md:col-span-3">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Ảnh Phụ (Tối đa 9 ảnh)</label>
+                      <div className="flex flex-wrap gap-4">
+                        
+                        {/* Existing Images */}
+                        {editingExistingImages.map((img, index) => (
+                          <div key={index} className="relative w-24 h-24 border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+                            <img src={`http://localhost:5234${img.imageUrl}`} alt="Existing Additional" className="w-full h-full object-cover opacity-80" />
+                            <button type="button" onClick={() => setEditingExistingImages(editingExistingImages.filter((_, i) => i !== index))} className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600">✕</button>
+                            <div className="absolute bottom-0 left-0 right-0 bg-gray-800 bg-opacity-75 text-white text-[10px] py-0.5 text-center">Cũ</div>
+                          </div>
+                        ))}
+
+                        {/* New Images */}
+                        {editingNewAdditionalImages.map((img, index) => (
+                          <div key={`new-${index}`} className="relative w-24 h-24 border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+                            <img src={img.preview} alt="New Additional" className="w-full h-full object-cover" />
+                            <button type="button" onClick={() => setEditingNewAdditionalImages(editingNewAdditionalImages.filter((_, i) => i !== index))} className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600">✕</button>
+                            <div className="absolute bottom-0 left-0 right-0 bg-emerald-500 text-white text-[10px] py-0.5 text-center">Mới</div>
+                          </div>
+                        ))}
+
+                        {/* Add Button */}
+                        {(editingExistingImages.length + editingNewAdditionalImages.length < 9) && (
+                          <label className="w-24 h-24 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 hover:border-emerald-500 transition-colors">
+                            <span className="text-2xl text-gray-400">+</span>
+                            <span className="text-xs text-gray-500 mt-1">Thêm ảnh</span>
+                            <input type="file" multiple accept="image/*" className="hidden" onChange={(e) => {
+                              if (e.target.files) {
+                                const newFiles = Array.from(e.target.files);
+                                if (editingExistingImages.length + editingNewAdditionalImages.length + newFiles.length > 9) {
+                                  return alert('Chỉ được chọn tối đa 9 ảnh phụ!');
+                                }
+                                const newImages = newFiles.map(file => ({ file, preview: URL.createObjectURL(file) }));
+                                setEditingNewAdditionalImages([...editingNewAdditionalImages, ...newImages]);
+                              }
+                            }} />
+                          </label>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex justify-end gap-3 mt-6 border-t pt-4">
+                  <button type="button" onClick={() => setEditingProduct(null)} className="px-4 py-2 border rounded-lg text-gray-700 hover:bg-gray-50">Hủy</button>
+                  <button type="submit" disabled={submitting} className="px-6 py-2 bg-emerald-600 text-white font-medium rounded-lg hover:bg-emerald-700 disabled:bg-gray-400">
+                    {submitting ? 'Đang lưu...' : 'Lưu Thay Đổi'}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}

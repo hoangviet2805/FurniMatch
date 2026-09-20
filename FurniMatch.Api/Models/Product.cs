@@ -27,9 +27,9 @@ namespace FurniMatch.Api.Models
         public bool CustomSizeSupported { get; set; }
 
         // Bổ sung cho tính năng Không gian 3D
-        public int? Length { get; set; }
-        public int? Width { get; set; }
-        public int? Height { get; set; }
+        public double? Length { get; set; }
+        public double? Width { get; set; }
+        public double? Height { get; set; }
 
         public string Status { get; set; } = "ACTIVE";
 

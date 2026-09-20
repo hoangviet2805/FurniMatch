@@ -31,6 +31,8 @@ namespace FurniMatch.Api.Models
         // For Seller Profile
         public string? ShopName { get; set; }
         public string? ShopDescription { get; set; }
+        public string? AvatarUrl { get; set; }
+        public string? CoverUrl { get; set; }
         public bool IsCustomSizeSupported { get; set; } = false;
 
         public string Status { get; set; } = "ACTIVE"; // ACTIVE, PENDING, BANNED

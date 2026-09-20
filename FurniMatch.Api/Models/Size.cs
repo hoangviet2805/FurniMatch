@@ -11,8 +11,8 @@ namespace FurniMatch.Api.Models
         [MaxLength(100)]
         public string Name { get; set; } = string.Empty;
 
-        public int Width { get; set; }
-        public int Height { get; set; }
+        public double Width { get; set; }
+        public double Height { get; set; }
         public bool IsStandard { get; set; } = true;
 
         public ICollection<ProductVariant> ProductVariants { get; set; } = new List<ProductVariant>();

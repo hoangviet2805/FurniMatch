@@ -9,9 +9,9 @@ namespace FurniMatch.Api.DTOs
         public string? ProductType { get; set; }
         public string? Pattern { get; set; }
 
-        public int Length { get; set; }
-        public int Width { get; set; }
-        public int Height { get; set; }
+        public double Length { get; set; }
+        public double Width { get; set; }
+        public double Height { get; set; }
 
         public string? Material { get; set; }
         public string? FrameType { get; set; }

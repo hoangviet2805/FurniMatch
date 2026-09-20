@@ -175,6 +175,146 @@ namespace FurniMatch.Api.Controllers
         }
 
         [Authorize(Roles = "SELLER")]
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateProduct(int id, [FromForm] UpdateProductRequest request)
+        {
+            var sellerId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var product = await _context.Products
+                .Include(p => p.ProductVariants)
+                .Include(p => p.ProductImages)
+                .FirstOrDefaultAsync(p => p.ProductId == id && p.SellerId == sellerId);
+
+            if (product == null)
+            {
+                return NotFound(new { message = "Không tìm thấy sản phẩm hoặc bạn không có quyền sửa." });
+            }
+
+            product.Name = request.Name;
+            product.Description = request.Description;
+            product.CategoryId = request.CategoryId;
+            product.CustomSizeSupported = request.CustomSizeSupported;
+            product.UpdatedAt = DateTime.UtcNow;
+
+            // Handle variants
+            if (!string.IsNullOrEmpty(request.VariantsJson))
+            {
+                try
+                {
+                    var variantDtos = JsonSerializer.Deserialize<List<ProductVariantDto>>(request.VariantsJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    if (variantDtos != null)
+                    {
+                        // Remove existing variants
+                        _context.ProductVariants.RemoveRange(product.ProductVariants);
+                        
+                        // Add new variants
+                        foreach (var v in variantDtos)
+                        {
+                            _context.ProductVariants.Add(new ProductVariant
+                            {
+                                ProductId = product.ProductId,
+                                SizeName = v.SizeName,
+                                Width = v.Width,
+                                Height = v.Height,
+                                Length = v.Length,
+                                Price = v.Price,
+                                ProductionDays = v.ProductionDays
+                            });
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    return BadRequest(new { message = "Lỗi parse JSON các biến thể (variants).", error = ex.Message });
+                }
+            }
+
+            // Handle existing images
+            List<string> existingImagesToKeep = new List<string>();
+            if (!string.IsNullOrEmpty(request.ExistingImagesJson))
+            {
+                try
+                {
+                    existingImagesToKeep = JsonSerializer.Deserialize<List<string>>(request.ExistingImagesJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<string>();
+                }
+                catch { }
+            }
+
+            var webRoot = _env.WebRootPath ?? Path.Combine(_env.ContentRootPath, "wwwroot");
+            var uploadsFolder = Path.Combine(webRoot, "uploads", "products");
+
+            // Remove images that are not in existingImagesToKeep
+            var imagesToRemove = product.ProductImages.Where(img => !existingImagesToKeep.Contains(img.ImageUrl)).ToList();
+            foreach (var img in imagesToRemove)
+            {
+                var filePath = Path.Combine(webRoot, img.ImageUrl.TrimStart('/'));
+                if (System.IO.File.Exists(filePath))
+                {
+                    System.IO.File.Delete(filePath);
+                }
+                _context.ProductImages.Remove(img);
+            }
+
+            // Reset IsThumbnail for all remaining
+            foreach (var img in product.ProductImages)
+            {
+                img.IsThumbnail = false;
+                if (img.ImageUrl == request.ThumbnailImageUrl)
+                {
+                    img.IsThumbnail = true;
+                }
+            }
+
+            // Handle new images
+            if (request.NewImages != null && request.NewImages.Any())
+            {
+                if (!Directory.Exists(uploadsFolder))
+                {
+                    Directory.CreateDirectory(uploadsFolder);
+                }
+
+                int newIndex = 0;
+                int currentMaxOrder = product.ProductImages.Any() ? product.ProductImages.Max(i => i.DisplayOrder) : -1;
+
+                foreach (var file in request.NewImages)
+                {
+                    if (file.Length > 0)
+                    {
+                        var uniqueFileName = Guid.NewGuid().ToString() + "_" + file.FileName;
+                        var filePath = Path.Combine(uploadsFolder, uniqueFileName);
+
+                        using (var fileStream = new FileStream(filePath, FileMode.Create))
+                        {
+                            await file.CopyToAsync(fileStream);
+                        }
+
+                        bool isThumb = request.NewThumbnailIndex.HasValue && request.NewThumbnailIndex.Value == newIndex;
+
+                        var productImage = new ProductImage
+                        {
+                            ProductId = product.ProductId,
+                            ImageUrl = $"/uploads/products/{uniqueFileName}",
+                            IsThumbnail = isThumb,
+                            DisplayOrder = currentMaxOrder + 1 + newIndex
+                        };
+                        _context.ProductImages.Add(productImage);
+                        
+                        if (isThumb) {
+                            // If this is the new thumbnail, ensure others are false
+                            foreach (var img in product.ProductImages) img.IsThumbnail = false;
+                            productImage.IsThumbnail = true;
+                        }
+
+                        newIndex++;
+                    }
+                }
+            }
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Cập nhật sản phẩm thành công", productId = product.ProductId });
+        }
+
+        [Authorize(Roles = "SELLER")]
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteProduct(int id)
         {

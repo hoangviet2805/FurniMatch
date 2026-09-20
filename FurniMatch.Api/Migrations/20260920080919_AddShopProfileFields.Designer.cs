@@ -4,6 +4,7 @@ using FurniMatch.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace FurniMatch.Api.Migrations
 {
     [DbContext(typeof(FurniMatchDbContext))]
-    partial class FurniMatchDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260920080919_AddShopProfileFields")]
+    partial class AddShopProfileFields
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -253,11 +256,11 @@ namespace FurniMatch.Api.Migrations
                     b.Property<string>("Description")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<double?>("Height")
-                        .HasColumnType("float");
+                    b.Property<int?>("Height")
+                        .HasColumnType("int");
 
-                    b.Property<double?>("Length")
-                        .HasColumnType("float");
+                    b.Property<int?>("Length")
+                        .HasColumnType("int");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -280,8 +283,8 @@ namespace FurniMatch.Api.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<double?>("Width")
-                        .HasColumnType("float");
+                    b.Property<int?>("Width")
+                        .HasColumnType("int");
 
                     b.HasKey("ProductId");
 
@@ -340,11 +343,11 @@ namespace FurniMatch.Api.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
-                    b.Property<double?>("Height")
-                        .HasColumnType("float");
+                    b.Property<int?>("Height")
+                        .HasColumnType("int");
 
-                    b.Property<double?>("Length")
-                        .HasColumnType("float");
+                    b.Property<int?>("Length")
+                        .HasColumnType("int");
 
                     b.Property<int?>("MaterialId")
                         .HasColumnType("int");
@@ -368,8 +371,8 @@ namespace FurniMatch.Api.Migrations
                     b.Property<int>("Stock")
                         .HasColumnType("int");
 
-                    b.Property<double?>("Width")
-                        .HasColumnType("float");
+                    b.Property<int?>("Width")
+                        .HasColumnType("int");
 
                     b.HasKey("VariantId");
 
@@ -461,11 +464,11 @@ namespace FurniMatch.Api.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
-                    b.Property<double>("Height")
-                        .HasColumnType("float");
+                    b.Property<int>("Height")
+                        .HasColumnType("int");
 
-                    b.Property<double>("Length")
-                        .HasColumnType("float");
+                    b.Property<int>("Length")
+                        .HasColumnType("int");
 
                     b.Property<string>("Material")
                         .HasMaxLength(100)
@@ -486,8 +489,8 @@ namespace FurniMatch.Api.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<double>("Width")
-                        .HasColumnType("float");
+                    b.Property<int>("Width")
+                        .HasColumnType("int");
 
                     b.HasKey("QuotationRequestId");
 
@@ -550,8 +553,8 @@ namespace FurniMatch.Api.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("SizeId"));
 
-                    b.Property<double>("Height")
-                        .HasColumnType("float");
+                    b.Property<int>("Height")
+                        .HasColumnType("int");
 
                     b.Property<bool>("IsStandard")
                         .HasColumnType("bit");
@@ -561,8 +564,8 @@ namespace FurniMatch.Api.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
-                    b.Property<double>("Width")
-                        .HasColumnType("float");
+                    b.Property<int>("Width")
+                        .HasColumnType("int");
 
                     b.HasKey("SizeId");
 

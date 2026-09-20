@@ -12,6 +12,8 @@ namespace FurniMatch.Api.DTOs
         // Fields for Seller
         public string? ShopName { get; set; }
         public string? ShopDescription { get; set; }
+        public string? AvatarUrl { get; set; }
+        public string? CoverUrl { get; set; }
         public bool IsCustomSizeSupported { get; set; }
 
         // Geolocation

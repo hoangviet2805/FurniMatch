@@ -10,6 +10,7 @@ import SellerDashboard from './pages/SellerDashboard';
 import ManageProducts from './pages/ManageProducts';
 import Profile from './pages/Profile';
 import ForgotPassword from './pages/ForgotPassword';
+import Shop from './pages/Shop';
 
 function App() {
   return (
@@ -28,6 +29,7 @@ function App() {
             <Route path="/seller/products" element={<ManageProducts />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/shop/:id" element={<Shop />} />
           </Routes>
         </main>
         

@@ -19,9 +19,9 @@ namespace FurniMatch.Api.Models
         [MaxLength(100)]
         public string? SizeName { get; set; }
 
-        public int? Width { get; set; }
-        public int? Height { get; set; }
-        public int? Length { get; set; }
+        public double? Width { get; set; }
+        public double? Height { get; set; }
+        public double? Length { get; set; }
 
         public int ProductionDays { get; set; }
 

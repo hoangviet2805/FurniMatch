@@ -268,10 +268,25 @@ namespace FurniMatch.Api.Controllers
                 return NotFound("User not found.");
             }
 
+            // Sanitize ShopName and ShopDescription
+            if (!string.IsNullOrEmpty(dto.ShopName) || !string.IsNullOrEmpty(dto.ShopDescription))
+            {
+                var phoneRegex = new System.Text.RegularExpressions.Regex(@"\b\d{8,12}\b");
+                var urlRegex = new System.Text.RegularExpressions.Regex(@"(https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|www\.[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9]+\.[^\s]{2,}|www\.[a-zA-Z0-9]+\.[^\s]{2,})", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                
+                if ((!string.IsNullOrEmpty(dto.ShopName) && (phoneRegex.IsMatch(dto.ShopName) || urlRegex.IsMatch(dto.ShopName))) ||
+                    (!string.IsNullOrEmpty(dto.ShopDescription) && (phoneRegex.IsMatch(dto.ShopDescription) || urlRegex.IsMatch(dto.ShopDescription))))
+                {
+                    return BadRequest("Không được phép nhập thông tin liên hệ cá nhân (số điện thoại, link website) vào Tên Shop hoặc Mô tả Shop.");
+                }
+            }
+
             user.FullName = dto.FullName;
             user.Phone = dto.Phone;
             user.ShopName = dto.ShopName;
             user.ShopDescription = dto.ShopDescription;
+            user.AvatarUrl = dto.AvatarUrl;
+            user.CoverUrl = dto.CoverUrl;
             user.IsCustomSizeSupported = dto.IsCustomSizeSupported;
             user.Latitude = dto.Latitude;
             user.Longitude = dto.Longitude;
@@ -293,6 +308,8 @@ namespace FurniMatch.Api.Controllers
                     user.Phone,
                     user.ShopName,
                     user.ShopDescription,
+                    user.AvatarUrl,
+                    user.CoverUrl,
                     user.IsCustomSizeSupported,
                     user.Latitude,
                     user.Longitude,

@@ -23,3 +23,7 @@ api.interceptors.request.use(
 export default api;
 
 export const verifyRegistration = (data: { email: string; code: string }) => api.post('/auth/verify-registration', data);
+
+export const getShopInfo = (sellerId: string) => api.get(`/shops/${sellerId}`);
+export const getShopProducts = (sellerId: string) => api.get(`/shops/${sellerId}/products`);
+export const updateProduct = (id: number, data: any) => api.put(`/products/${id}`, data);
