@@ -1,12 +1,14 @@
 import { Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import api from '../utils/api';
+import { getRecentlyViewedIds } from '../utils/comparison';
 
 const Home = () => {
   const [user, setUser] = useState<any>(null);
   const [banners, setBanners] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [latestProducts, setLatestProducts] = useState<any[]>([]);
+  const [recentProducts, setRecentProducts] = useState<any[]>([]);
   const [currentSlide, setCurrentSlide] = useState(0);
 
   useEffect(() => {
@@ -30,6 +32,8 @@ const Home = () => {
       // Sort by productId descending to get latest and take 8
       const sorted = res.data.sort((a: any, b: any) => b.productId - a.productId).slice(0, 8);
       setLatestProducts(sorted);
+      const viewedIds = getRecentlyViewedIds();
+      setRecentProducts(viewedIds.map(id => res.data.find((product: any) => product.productId === id)).filter(Boolean).slice(0, 4));
     }).catch(err => console.error('Error fetching products:', err));
   }, []);
 
@@ -137,7 +141,7 @@ const Home = () => {
             <h2 className="text-3xl font-bold text-gray-900 mb-8 text-center">Sản Phẩm Mới Nhất</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
               {latestProducts.map((product) => (
-                <Link to={`/products`} key={product.productId} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow group block">
+                <Link to={`/products/${product.productId}`} key={product.productId} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow group block">
                   <div className="h-48 bg-gray-100 relative overflow-hidden">
                     {product.productImages && product.productImages.length > 0 ? (
                       <img src={product.productImages[0].imageUrl.startsWith('http') ? product.productImages[0].imageUrl : `http://localhost:5234${product.productImages[0].imageUrl}`} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
@@ -161,6 +165,17 @@ const Home = () => {
               <Link to="/products" className="inline-block px-8 py-3 bg-white border-2 border-emerald-600 text-emerald-600 font-semibold rounded-lg hover:bg-emerald-50 transition-colors">
                 Xem Tất Cả Sản Phẩm
               </Link>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {recentProducts.length > 0 && (
+        <section className="py-12 bg-gray-50">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between mb-6"><h2 className="text-2xl font-bold text-gray-900">Bạn vừa xem</h2><Link to="/products" className="text-sm font-medium text-emerald-600">Xem thêm sản phẩm</Link></div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {recentProducts.map(product => <Link to={`/products/${product.productId}`} key={product.productId} className="bg-white rounded-xl overflow-hidden border border-gray-100 hover:shadow-md transition-shadow group"><div className="h-32 sm:h-40 bg-gray-100">{product.productImages?.[0] ? <img src={product.productImages[0].imageUrl.startsWith('http') ? product.productImages[0].imageUrl : `http://localhost:5234${product.productImages[0].imageUrl}`} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" /> : <div className="h-full flex items-center justify-center text-gray-400 text-xs">Không có ảnh</div>}</div><div className="p-3"><p className="font-semibold text-sm text-gray-900 truncate">{product.name}</p><p className="mt-1 text-sm font-bold text-emerald-600">{product.productVariants?.length ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Math.min(...product.productVariants.map((variant: any) => variant.price))) : 'Liên hệ'}</p></div></Link>)}
             </div>
           </div>
         </section>

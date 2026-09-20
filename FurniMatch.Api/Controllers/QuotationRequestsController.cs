@@ -116,6 +116,7 @@ namespace FurniMatch.Api.Controllers
                     .Where(qr => qr.CustomerId == userId)
                     .Include(qr => qr.Category)
                     .Include(qr => qr.Quotations)
+                    .ThenInclude(q => q.Seller)
                     .ToListAsync();
                 return Ok(requests);
             }

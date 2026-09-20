@@ -1,9 +1,9 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import api from '../utils/api';
 
 const RequestQuotation = () => {
-  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [formData, setFormData] = useState({
     categoryId: 1, // Default, would be dynamic
     productType: '',
@@ -14,16 +14,31 @@ const RequestQuotation = () => {
     quantity: 1,
     description: '',
     radiusKm: 50, // Default 50km
+    budgetMin: 0,
+    budgetMax: 0,
   });
   const [loading, setLoading] = useState(false);
+  const [sourceProduct, setSourceProduct] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+
+  useEffect(() => {
+    const productId = searchParams.get('productId');
+    if (!productId) return;
+    api.get(`/products/${productId}`).then(response => {
+      const product = response.data;
+      const variant = product.productVariants?.[0];
+      const price = product.productVariants?.length ? Math.min(...product.productVariants.map((item: any) => item.price)) : product.price || 0;
+      setFormData(current => ({ ...current, categoryId: product.categoryId || current.categoryId, productType: product.name || '', length: variant?.length || product.length || 0, width: variant?.width || product.width || 0, height: variant?.height || product.height || 0, description: `Tôi muốn đặt làm theo mẫu “${product.name}”. ${product.description || ''}`, budgetMin: price, budgetMax: price ? Math.round(price * 1.15) : 0 }));
+      setSourceProduct(product.name);
+    }).catch(() => setSourceProduct('Không thể tải thông tin mẫu đã chọn.'));
+  }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      await api.post('/quotationrequests', formData);
-      alert('Đã gửi yêu cầu khảo giá thành công!');
-      navigate('/quotations');
+      const response = await api.post('/quotationrequests', formData);
+      setSuccessMessage(response.data.message || 'Đã gửi yêu cầu khảo giá thành công!');
     } catch (err) {
       console.error(err);
       alert('Có lỗi xảy ra, vui lòng đăng nhập trước khi gửi yêu cầu.');
@@ -34,7 +49,7 @@ const RequestQuotation = () => {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    const isNumberField = ['categoryId', 'length', 'width', 'height', 'quantity', 'radiusKm'].includes(name);
+    const isNumberField = ['categoryId', 'length', 'width', 'height', 'quantity', 'radiusKm', 'budgetMin', 'budgetMax'].includes(name);
     setFormData(prev => ({ ...prev, [name]: isNumberField ? Number(value) : value }));
   };
 
@@ -42,6 +57,8 @@ const RequestQuotation = () => {
     <div className="max-w-3xl mx-auto px-4 py-12">
       <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-100">
         <h2 className="text-2xl font-bold text-gray-900 mb-6">Tạo Yêu Cầu Khảo Giá Kích Thước Riêng</h2>
+        {successMessage && <div className="mb-6 rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-800">✓ {successMessage}</div>}
+        {sourceProduct && <div className="mb-6 rounded-lg bg-emerald-50 border border-emerald-100 px-4 py-3 text-sm text-emerald-800">Đang điền sẵn yêu cầu theo mẫu: <strong>{sourceProduct}</strong>. Bạn vẫn có thể điều chỉnh mọi thông tin bên dưới.</div>}
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
@@ -51,6 +68,7 @@ const RequestQuotation = () => {
                 required
                 placeholder="VD: Tủ bếp, Bàn làm việc"
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
+                value={formData.productType}
                 onChange={handleChange}
               />
             </div>
@@ -61,6 +79,7 @@ const RequestQuotation = () => {
                 required
                 placeholder="VD: Gỗ Sồi, Gỗ Công Nghiệp"
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
+                value={formData.length || ''}
                 onChange={handleChange}
               />
             </div>
@@ -71,6 +90,7 @@ const RequestQuotation = () => {
                 type="number"
                 required
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
+                value={formData.width || ''}
                 onChange={handleChange}
               />
             </div>
@@ -81,6 +101,7 @@ const RequestQuotation = () => {
                 type="number"
                 required
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
+                value={formData.height || ''}
                 onChange={handleChange}
               />
             </div>
@@ -108,6 +129,11 @@ const RequestQuotation = () => {
             </div>
           </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div><label className="block text-sm font-medium text-gray-700 mb-1">Ngân sách dự kiến từ (VNĐ)</label><input name="budgetMin" type="number" min="0" value={formData.budgetMin || ''} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500" onChange={handleChange} /></div>
+            <div><label className="block text-sm font-medium text-gray-700 mb-1">Ngân sách tối đa (VNĐ)</label><input name="budgetMax" type="number" min="0" value={formData.budgetMax || ''} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500" onChange={handleChange} /></div>
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Bán kính tìm kiếm Xưởng (Km): {formData.radiusKm} km
@@ -131,6 +157,7 @@ const RequestQuotation = () => {
               rows={4}
               placeholder="Mô tả thêm về yêu cầu của bạn, ví dụ: màu sắc sơn, phụ kiện đi kèm..."
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
+              value={formData.description}
               onChange={handleChange}
             />
           </div>

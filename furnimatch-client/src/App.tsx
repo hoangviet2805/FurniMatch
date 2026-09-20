@@ -11,6 +11,12 @@ import ManageProducts from './pages/ManageProducts';
 import Profile from './pages/Profile';
 import ForgotPassword from './pages/ForgotPassword';
 import Shop from './pages/Shop';
+import ProductDetail from './pages/ProductDetail';
+import Favorites from './pages/Favorites';
+import CompareProducts from './pages/CompareProducts';
+import InspirationBoard from './pages/InspirationBoard';
+import SpacePlanner from './pages/SpacePlanner';
+import MyRequests from './pages/MyRequests';
 
 function App() {
   return (
@@ -23,6 +29,12 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/products" element={<Products />} />
+            <Route path="/products/:id" element={<ProductDetail />} />
+            <Route path="/favorites" element={<Favorites />} />
+            <Route path="/compare" element={<CompareProducts />} />
+            <Route path="/inspiration" element={<InspirationBoard />} />
+            <Route path="/space-planner" element={<SpacePlanner />} />
+            <Route path="/my-requests" element={<MyRequests />} />
             <Route path="/request-quotation" element={<RequestQuotation />} />
             <Route path="/admin/dashboard" element={<AdminDashboard />} />
             <Route path="/seller/dashboard" element={<SellerDashboard />} />

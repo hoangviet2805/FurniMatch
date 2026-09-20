@@ -33,9 +33,13 @@ namespace FurniMatch.Api.Controllers
             [FromQuery] int? categoryId,
             [FromQuery] int? maxLength,
             [FromQuery] int? maxWidth,
-            [FromQuery] int? maxHeight)
+            [FromQuery] int? maxHeight,
+            [FromQuery] string? search,
+            [FromQuery] decimal? minPrice,
+            [FromQuery] decimal? maxPrice,
+            [FromQuery] string? sort)
         {
-            var query = _context.Products
+            IQueryable<Product> query = _context.Products
                 .Include(p => p.Category)
                 .Include(p => p.Seller)
                 .Include(p => p.ProductVariants)
@@ -62,8 +66,48 @@ namespace FurniMatch.Api.Controllers
                 query = query.Where(p => p.Height == null || p.Height <= maxHeight.Value);
             }
 
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var keyword = search.Trim().ToLower();
+                query = query.Where(p => p.Name.ToLower().Contains(keyword)
+                    || (p.Description != null && p.Description.ToLower().Contains(keyword))
+                    || (p.Seller != null && p.Seller.ShopName != null && p.Seller.ShopName.ToLower().Contains(keyword)));
+            }
+
+            if (minPrice.HasValue)
+            {
+                query = query.Where(p => p.ProductVariants.Any(v => v.Price >= minPrice.Value));
+            }
+            if (maxPrice.HasValue)
+            {
+                query = query.Where(p => p.ProductVariants.Any(v => v.Price <= maxPrice.Value));
+            }
+
+            query = sort?.ToLower() switch
+            {
+                "price-asc" => query.OrderBy(p => p.ProductVariants.Select(v => v.Price).DefaultIfEmpty(p.Price).Min()),
+                "price-desc" => query.OrderByDescending(p => p.ProductVariants.Select(v => v.Price).DefaultIfEmpty(p.Price).Min()),
+                "oldest" => query.OrderBy(p => p.CreatedAt),
+                _ => query.OrderByDescending(p => p.CreatedAt)
+            };
+
             var products = await query.ToListAsync();
             return Ok(products);
+        }
+
+        [HttpGet("{id:int}")]
+        public async Task<IActionResult> GetProduct(int id)
+        {
+            var product = await _context.Products
+                .Include(p => p.Category)
+                .Include(p => p.Seller)
+                .Include(p => p.ProductVariants)
+                .Include(p => p.ProductImages)
+                .FirstOrDefaultAsync(p => p.ProductId == id && p.Status == "ACTIVE");
+
+            return product == null
+                ? NotFound(new { message = "Không tìm thấy sản phẩm." })
+                : Ok(product);
         }
 
         [Authorize(Roles = "SELLER")]

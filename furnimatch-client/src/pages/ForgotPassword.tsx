@@ -63,7 +63,7 @@ const ForgotPassword = () => {
 
     setLoading(true);
     try {
-      const response = await api.post('/auth/reset-password', {
+      await api.post('/auth/reset-password', {
         email,
         code,
         newPassword
