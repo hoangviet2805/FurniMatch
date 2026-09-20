@@ -8,6 +8,7 @@ const AdminDashboard = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
   const [deleteConfirmModal, setDeleteConfirmModal] = useState<{ isOpen: boolean; userId: number | null }>({ isOpen: false, userId: null });
+  const [deleteCategoryModal, setDeleteCategoryModal] = useState<{ isOpen: boolean; categoryId: number | null }>({ isOpen: false, categoryId: null });
   const [alertModal, setAlertModal] = useState<{ isOpen: boolean; message: string; type: 'success' | 'error' }>({ isOpen: false, message: '', type: 'success' });
   
   // Tabs and Category States
@@ -155,9 +156,7 @@ const AdminDashboard = () => {
     e.preventDefault();
     try {
       if (categoryModal.isEdit && categoryModal.data.categoryId) {
-        await api.put(`/admin/categories/${categoryModal.data.categoryId}`, categoryModal.data); // Assuming backend routes it inside AdminController or CategoriesController with auth
-        // Quick fallback to generic categories put
-        // await api.put(`/categories/${categoryModal.data.categoryId}`, categoryModal.data);
+        await api.put(`/categories/${categoryModal.data.categoryId}`, categoryModal.data);
         setAlertModal({ isOpen: true, message: 'Cập nhật danh mục thành công!', type: 'success' });
       } else {
         await api.post('/categories', categoryModal.data);
@@ -170,8 +169,11 @@ const AdminDashboard = () => {
     }
   };
 
-  const deleteCategory = async (categoryId: number) => {
-    if (!window.confirm('Bạn có chắc chắn muốn xóa danh mục này?')) return;
+  const deleteCategory = async () => {
+    if (deleteCategoryModal.categoryId === null) return;
+    const categoryId = deleteCategoryModal.categoryId;
+    setDeleteCategoryModal({ isOpen: false, categoryId: null });
+
     try {
       await api.delete(`/categories/${categoryId}`);
       setAlertModal({ isOpen: true, message: 'Đã xóa danh mục!', type: 'success' });
@@ -529,7 +531,7 @@ const AdminDashboard = () => {
                           Sửa
                         </button>
                         <button
-                          onClick={() => deleteCategory(cat.categoryId)}
+                          onClick={() => setDeleteCategoryModal({ isOpen: true, categoryId: cat.categoryId })}
                           className="text-red-600 hover:text-red-900"
                         >
                           Xóa
@@ -608,6 +610,30 @@ const AdminDashboard = () => {
               </button>
               <button
                 onClick={deleteUser}
+                className="px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-lg font-medium transition-colors"
+              >
+                Xóa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Category Confirm Modal */}
+      {deleteCategoryModal.isOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Xóa Danh Mục</h3>
+            <p className="text-gray-600 mb-6">Bạn có chắc chắn muốn xóa danh mục này? Hành động này không thể hoàn tác.</p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setDeleteCategoryModal({ isOpen: false, categoryId: null })}
+                className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={deleteCategory}
                 className="px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-lg font-medium transition-colors"
               >
                 Xóa
