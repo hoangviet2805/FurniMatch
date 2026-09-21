@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import api from '../utils/api';
 
 const ManageProducts = () => {
-  const [products, setProducts] = useState([]);
+  const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
 
   // Create form state
   const [showForm, setShowForm] = useState(false);
@@ -458,7 +460,7 @@ const ManageProducts = () => {
                 </td>
               </tr>
             ) : (
-              products.map((product: any) => (
+              products.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE).map((product: any) => (
                 <tr key={product.productId} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{product.name}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -516,6 +518,28 @@ const ManageProducts = () => {
           </tbody>
         </table>
       </div>
+
+      {products.length > 0 && (
+        <div className="flex justify-center items-center gap-4 mt-8">
+          <button 
+            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+            disabled={currentPage === 1 || Math.ceil(products.length / ITEMS_PER_PAGE) <= 1}
+            className="px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:text-emerald-600 disabled:opacity-50 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed font-semibold shadow-sm transition-all"
+          >
+            Trước
+          </button>
+          <div className="flex items-center justify-center min-w-[80px] px-3 py-2 rounded-lg bg-gray-50 border border-gray-100 text-gray-700 font-medium">
+            {currentPage} / {Math.max(1, Math.ceil(products.length / ITEMS_PER_PAGE))}
+          </div>
+          <button 
+            onClick={() => setCurrentPage(p => Math.min(Math.ceil(products.length / ITEMS_PER_PAGE), p + 1))}
+            disabled={currentPage === Math.ceil(products.length / ITEMS_PER_PAGE) || Math.ceil(products.length / ITEMS_PER_PAGE) <= 1}
+            className="px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:text-emerald-600 disabled:opacity-50 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed font-semibold shadow-sm transition-all"
+          >
+            Sau
+          </button>
+        </div>
+      )}
       {/* Alert Modal */}
       {alertInfo.isOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-30 z-50 flex items-center justify-center p-4">

@@ -19,6 +19,8 @@ export default function SellerDashboard() {
   const [orders, setOrders] = useState<any[]>([]);
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
 
   const load = async () => {
     setLoading(true);
@@ -37,6 +39,7 @@ export default function SellerDashboard() {
 
   useEffect(() => {
     load();
+    setCurrentPage(1);
   }, [tab]);
 
   const update = async (id: number, status: string) => {
@@ -75,7 +78,7 @@ export default function SellerDashboard() {
               <p className="text-gray-500 font-medium">Chưa có đơn hàng nào.</p>
             </div>
           ) : (
-            orders.map(o => {
+            orders.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE).map(o => {
               let lines: any[] = [];
               try { lines = JSON.parse(o.itemsJson); } catch {}
               const StatusIcon = stateConfig[o.orderStatus]?.icon || Package;
@@ -158,7 +161,7 @@ export default function SellerDashboard() {
                           return (
                             <div key={i} className="flex gap-4">
                               <div className="h-16 w-16 shrink-0 rounded-lg border bg-white overflow-hidden">
-                                {imageUrl ? <img src={imageUrl} className="h-full w-full object-cover" alt="" /> : <Package className="h-full w-full p-4 text-gray-200" />}
+                                {imageUrl ? <img src={imageUrl.startsWith('http') ? imageUrl : `http://localhost:5234${imageUrl}`} className="h-full w-full object-cover" alt="" /> : <Package className="h-full w-full p-4 text-gray-200" />}
                               </div>
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm font-medium text-gray-900 truncate">{name}</p>
@@ -181,6 +184,28 @@ export default function SellerDashboard() {
                 </article>
               );
             })
+          )}
+
+          {orders.length > 0 && (
+            <div className="flex justify-center items-center gap-4 mt-8">
+              <button 
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1 || Math.ceil(orders.length / ITEMS_PER_PAGE) <= 1}
+                className="px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:text-emerald-600 disabled:opacity-50 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed font-semibold shadow-sm transition-all"
+              >
+                Trước
+              </button>
+              <div className="flex items-center justify-center min-w-[80px] px-3 py-2 rounded-lg bg-gray-50 border border-gray-100 text-gray-700 font-medium">
+                {currentPage} / {Math.max(1, Math.ceil(orders.length / ITEMS_PER_PAGE))}
+              </div>
+              <button 
+                onClick={() => setCurrentPage(p => Math.min(Math.ceil(orders.length / ITEMS_PER_PAGE), p + 1))}
+                disabled={currentPage === Math.ceil(orders.length / ITEMS_PER_PAGE) || Math.ceil(orders.length / ITEMS_PER_PAGE) <= 1}
+                className="px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:text-emerald-600 disabled:opacity-50 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed font-semibold shadow-sm transition-all"
+              >
+                Sau
+              </button>
+            </div>
           )}
         </div>
       ) : (

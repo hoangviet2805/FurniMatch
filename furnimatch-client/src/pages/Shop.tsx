@@ -32,6 +32,12 @@ const Shop: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 8;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedCategory]);
 
   useEffect(() => {
     const fetchShopData = async () => {
@@ -59,6 +65,8 @@ const Shop: React.FC = () => {
 
   if (loading) return <div className="text-center py-20 text-xl text-gray-600">Đang tải thông tin gian hàng...</div>;
   if (error || !shop) return <div className="text-center py-20 text-xl text-red-500">{error || 'Không tìm thấy gian hàng'}</div>;
+
+  const filteredProducts = products.filter(p => selectedCategory === '' || p.categoryName === selectedCategory);
 
   return (
     <div className="bg-gray-50 min-h-screen pb-12">
@@ -139,13 +147,13 @@ const Shop: React.FC = () => {
           )}
         </div>
         
-        {products.length === 0 ? (
+        {filteredProducts.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-lg shadow-sm">
-            <p className="text-gray-500 text-lg">Gian hàng này chưa có sản phẩm nào.</p>
+            <p className="text-gray-500 text-lg">Không tìm thấy sản phẩm nào.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {products.filter(p => selectedCategory === '' || p.categoryName === selectedCategory).map(product => (
+            {filteredProducts.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE).map(product => (
               <Link to={`/products/${product.productId}`} key={product.productId} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow group cursor-pointer flex flex-col">
                 <div className="h-48 bg-gray-100 relative overflow-hidden shrink-0">
                   {product.primaryImage ? (
@@ -172,6 +180,28 @@ const Shop: React.FC = () => {
                 </div>
               </Link>
             ))}
+          </div>
+        )}
+
+        {filteredProducts.length > 0 && (
+          <div className="flex justify-center items-center gap-4 mt-12">
+            <button 
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1 || Math.ceil(filteredProducts.length / ITEMS_PER_PAGE) <= 1}
+              className="px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:text-emerald-600 disabled:opacity-50 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed font-semibold shadow-sm transition-all"
+            >
+              Trước
+            </button>
+            <div className="flex items-center justify-center min-w-[80px] px-3 py-2 rounded-lg bg-gray-50 border border-gray-100 text-gray-700 font-medium">
+              {currentPage} / {Math.max(1, Math.ceil(filteredProducts.length / ITEMS_PER_PAGE))}
+            </div>
+            <button 
+              onClick={() => setCurrentPage(p => Math.min(Math.ceil(filteredProducts.length / ITEMS_PER_PAGE), p + 1))}
+              disabled={currentPage === Math.ceil(filteredProducts.length / ITEMS_PER_PAGE) || Math.ceil(filteredProducts.length / ITEMS_PER_PAGE) <= 1}
+              className="px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:text-emerald-600 disabled:opacity-50 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed font-semibold shadow-sm transition-all"
+            >
+              Sau
+            </button>
           </div>
         )}
       </div>
