@@ -4,6 +4,7 @@ using FurniMatch.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace FurniMatch.Api.Migrations
 {
     [DbContext(typeof(FurniMatchDbContext))]
-    partial class FurniMatchDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260921211115_AddFooterSetting")]
+    partial class AddFooterSetting
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

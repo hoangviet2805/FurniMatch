@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Header from './components/Header';
+import Footer from './components/Footer';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -47,10 +48,7 @@ function App() {
           </Routes>
         </main>
         
-        {/* Simple Footer */}
-        <footer className="bg-gray-800 text-white py-6 text-center">
-          <p>&copy; {new Date().getFullYear()} FurniMatch. All rights reserved.</p>
-        </footer>
+        <Footer />
       </div>
     </Router>
   );

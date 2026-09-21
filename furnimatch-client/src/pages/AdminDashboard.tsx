@@ -12,7 +12,7 @@ const AdminDashboard = () => {
   const [alertModal, setAlertModal] = useState<{ isOpen: boolean; message: string; type: 'success' | 'error' }>({ isOpen: false, message: '', type: 'success' });
   
   // Tabs and Category States
-  const [activeTab, setActiveTab] = useState<'USERS' | 'PENDING_SELLERS' | 'CATEGORIES' | 'BANNERS'>('USERS');
+  const [activeTab, setActiveTab] = useState<'USERS' | 'PENDING_SELLERS' | 'CATEGORIES' | 'BANNERS' | 'FOOTER'>('USERS');
   const [categories, setCategories] = useState<any[]>([]);
   const [banners, setBanners] = useState<any[]>([]);
   const [pendingSellers, setPendingSellers] = useState<any[]>([]);
@@ -28,6 +28,16 @@ const AdminDashboard = () => {
     isOpen: false, images: [], currentIndex: 0
   });
 
+  const [footerSetting, setFooterSetting] = useState({
+    description: '',
+    address: '',
+    phone: '',
+    email: '',
+    facebookLink: '',
+    instagramLink: '',
+    zaloLink: ''
+  });
+  const [loadingFooter, setLoadingFooter] = useState(false);
 
   const fetchCategories = async () => {
     setLoadingCategories(true);
@@ -88,6 +98,20 @@ const AdminDashboard = () => {
       setLoading(false);
     }
   };
+  const fetchFooterSetting = async () => {
+    setLoadingFooter(true);
+    try {
+      const response = await api.get('/footersettings');
+      if (response.data) {
+        setFooterSetting(response.data);
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoadingFooter(false);
+    }
+  };
+
   useEffect(() => {
     if (activeTab === 'USERS') {
       fetchUsers();
@@ -98,6 +122,8 @@ const AdminDashboard = () => {
       fetchBanners();
     } else if (activeTab === 'PENDING_SELLERS') {
       fetchPendingSellers();
+    } else if (activeTab === 'FOOTER') {
+      fetchFooterSetting();
     }
   }, [filterRole, activeTab]);
 
@@ -126,6 +152,16 @@ const AdminDashboard = () => {
       fetchPendingSellers();
     } catch (error: any) {
       setAlertModal({ isOpen: true, message: error.response?.data?.message || 'Có lỗi xảy ra', type: 'error' });
+    }
+  };
+
+  const handleSaveFooter = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await api.put('/footersettings', footerSetting);
+      setAlertModal({ isOpen: true, message: 'Cập nhật Footer thành công!', type: 'success' });
+    } catch (error: any) {
+      setAlertModal({ isOpen: true, message: error.response?.data?.message || 'Có lỗi xảy ra.', type: 'error' });
     }
   };
 
@@ -258,6 +294,12 @@ const AdminDashboard = () => {
             className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'BANNERS' ? 'bg-white text-emerald-700 shadow' : 'text-gray-500 hover:text-gray-700'}`}
           >
             Quản lý Slide Trang Chủ
+          </button>
+          <button 
+            onClick={() => setActiveTab('FOOTER')} 
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'FOOTER' ? 'bg-white text-emerald-700 shadow' : 'text-gray-500 hover:text-gray-700'}`}
+          >
+            ⚙️ Cấu hình Footer
           </button>
         </div>
       </div>
@@ -551,6 +593,88 @@ const AdminDashboard = () => {
             )}
           </div>
         </>
+      )}
+
+      {activeTab === 'FOOTER' && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 max-w-3xl mx-auto">
+          <h2 className="text-xl font-bold text-gray-900 mb-6">Cấu hình Footer</h2>
+          {loadingFooter ? (
+            <div className="text-center text-gray-500 py-8">Đang tải...</div>
+          ) : (
+            <form onSubmit={handleSaveFooter} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Mô tả về FurniMatch</label>
+                <textarea 
+                  rows={2}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
+                  value={footerSetting.description}
+                  onChange={e => setFooterSetting({...footerSetting, description: e.target.value})}
+                />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Địa chỉ</label>
+                  <input 
+                    type="text"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
+                    value={footerSetting.address}
+                    onChange={e => setFooterSetting({...footerSetting, address: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Số điện thoại</label>
+                  <input 
+                    type="text"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
+                    value={footerSetting.phone}
+                    onChange={e => setFooterSetting({...footerSetting, phone: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                  <input 
+                    type="text"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
+                    value={footerSetting.email}
+                    onChange={e => setFooterSetting({...footerSetting, email: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Link Facebook</label>
+                  <input 
+                    type="text"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
+                    value={footerSetting.facebookLink}
+                    onChange={e => setFooterSetting({...footerSetting, facebookLink: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Link Instagram</label>
+                  <input 
+                    type="text"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
+                    value={footerSetting.instagramLink}
+                    onChange={e => setFooterSetting({...footerSetting, instagramLink: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Link Zalo</label>
+                  <input 
+                    type="text"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
+                    value={footerSetting.zaloLink}
+                    onChange={e => setFooterSetting({...footerSetting, zaloLink: e.target.value})}
+                  />
+                </div>
+              </div>
+              <div className="mt-6 flex justify-end">
+                <button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-lg font-medium shadow-sm transition-colors">
+                  Lưu Thay Đổi
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
       )}
 
       {/* Category Edit/Create Modal */}
