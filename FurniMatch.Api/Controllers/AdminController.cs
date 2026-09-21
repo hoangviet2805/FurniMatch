@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using FurniMatch.Api.Services;
 using System.Collections.Generic;
 using System;
+using FurniMatch.Api.Models;
 
 namespace FurniMatch.Api.Controllers
 {
@@ -159,6 +160,24 @@ namespace FurniMatch.Api.Controllers
             catch { }
 
             return Ok(new { message = "Đã từ chối đơn đăng ký thành công." });
+        }
+
+        [HttpGet("payment-config")]
+        public async Task<IActionResult> GetPaymentConfig()
+        {
+            var config = await _context.PaymentQrConfigs.OrderByDescending(x => x.UpdatedAt).FirstOrDefaultAsync();
+            return Ok(config ?? new PaymentQrConfig());
+        }
+
+        [HttpPost("payment-config")]
+        public async Task<IActionResult> SavePaymentConfig([FromBody] PaymentQrConfig input)
+        {
+            var config = await _context.PaymentQrConfigs.OrderByDescending(x => x.UpdatedAt).FirstOrDefaultAsync();
+            if (config == null) { config = new PaymentQrConfig(); _context.PaymentQrConfigs.Add(config); }
+            config.PartnerCode = input.PartnerCode; config.AccessKey = input.AccessKey; config.SecretKey = input.SecretKey;
+            config.EndpointUrl = input.EndpointUrl; config.RedirectUrl = input.RedirectUrl; config.IpnUrl = input.IpnUrl;
+            config.PaymentTimeoutMinutes = Math.Clamp(input.PaymentTimeoutMinutes, 1, 120); config.IsActive = input.IsActive; config.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync(); return Ok(config);
         }
     }
 

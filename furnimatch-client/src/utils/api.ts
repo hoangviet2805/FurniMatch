@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { repairResponseText } from './text';
 
 const api = axios.create({
   baseURL: 'http://localhost:5234/api', // Adjust if your .NET port is different
@@ -19,6 +20,11 @@ api.interceptors.request.use(
     return Promise.reject(error);
   }
 );
+
+api.interceptors.response.use((response) => {
+  response.data = repairResponseText(response.data);
+  return response;
+});
 
 export default api;
 

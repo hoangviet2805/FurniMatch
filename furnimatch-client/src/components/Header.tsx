@@ -1,23 +1,32 @@
-import { Link, useNavigate } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import logoImg from '../assets/logo.png';
+import { cartCount } from '../utils/cart';
+
+type MenuItem = { to: string; label: string };
 
 const Header = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState<any>(null);
   const [comparisonCount, setComparisonCount] = useState(0);
+  const [cartItems, setCartItems] = useState(0);
 
   useEffect(() => {
-    const userStr = localStorage.getItem('user');
-    if (userStr) {
-      setUser(JSON.parse(userStr));
-    }
+    const savedUser = localStorage.getItem('user');
+    if (savedUser) setUser(JSON.parse(savedUser));
     const updateComparisonCount = () => {
-      try { setComparisonCount(JSON.parse(localStorage.getItem('comparisonProductIds') ?? '[]').length); } catch { setComparisonCount(0); }
+      try { setComparisonCount(JSON.parse(localStorage.getItem('comparisonProductIds') ?? '[]').length); }
+      catch { setComparisonCount(0); }
     };
+    const updateCartCount = () => setCartItems(cartCount());
     updateComparisonCount();
+    updateCartCount();
     window.addEventListener('comparison-changed', updateComparisonCount);
-    return () => window.removeEventListener('comparison-changed', updateComparisonCount);
+    window.addEventListener('cart-changed', updateCartCount);
+    return () => {
+      window.removeEventListener('comparison-changed', updateComparisonCount);
+      window.removeEventListener('cart-changed', updateCartCount);
+    };
   }, []);
 
   const handleLogout = () => {
@@ -27,97 +36,36 @@ const Header = () => {
     navigate('/login');
   };
 
-  return (
-    <header className="bg-white shadow-sm sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-20">
-          <div className="flex-shrink-0 flex items-center">
-            <Link to="/" className="flex items-center">
-              <img src={logoImg} alt="FurniMatch Logo" className="h-16 w-auto object-contain" />
-            </Link>
-          </div>
-          
-          <nav className="hidden md:flex space-x-8">
-            <Link to="/" className="text-gray-700 hover:text-emerald-600 px-3 py-2 text-sm font-medium transition-colors">
-              Trang Chủ
-            </Link>
-            {user?.role === 'SELLER' && (
-              <Link to={`/shop/${user.userId}`} className="text-gray-700 hover:text-emerald-600 px-3 py-2 text-sm font-medium transition-colors">
-                Gian Hàng Của Tôi
-              </Link>
-            )}
-            {user?.role !== 'SELLER' && (
-              <>
-                <Link to="/products" className="text-gray-700 hover:text-emerald-600 px-3 py-2 text-sm font-medium transition-colors">
-                  Danh Mục
-                </Link>
-                <Link to="/compare" className="text-gray-700 hover:text-emerald-600 px-3 py-2 text-sm font-medium transition-colors">
-                  So Sánh{comparisonCount ? ` (${comparisonCount})` : ''}
-                </Link>
-                <Link to="/inspiration" className="text-gray-700 hover:text-emerald-600 px-3 py-2 text-sm font-medium transition-colors">
-                  Cảm Hứng
-                </Link>
-                <Link to="/space-planner" className="text-gray-700 hover:text-emerald-600 px-3 py-2 text-sm font-medium transition-colors">
-                  Tính Không Gian
-                </Link>
-              </>
-            )}
-            
-            {user?.role === 'SELLER' && (
-              <>
-                <Link to="/seller/dashboard" className="text-gray-700 hover:text-emerald-600 px-3 py-2 text-sm font-medium transition-colors">
-                  Yêu Cầu Từ Khách (Báo Giá)
-                </Link>
-                <Link to="/seller/products" className="text-gray-700 hover:text-emerald-600 px-3 py-2 text-sm font-medium transition-colors">
-                  Quản Lý Sản Phẩm
-                </Link>
-              </>
-            )}
-            
-            {user?.role === 'CUSTOMER' && (
-              <>
-                <Link to="/favorites" className="text-gray-700 hover:text-emerald-600 px-3 py-2 text-sm font-medium transition-colors">
-                  Yêu Thích
-                </Link>
-                <Link to="/request-quotation" className="text-gray-700 hover:text-emerald-600 px-3 py-2 text-sm font-medium transition-colors">
-                  Yêu Cầu Khảo Giá
-                </Link>
-                <Link to="/my-requests" className="text-gray-700 hover:text-emerald-600 px-3 py-2 text-sm font-medium transition-colors">
-                  Yêu Cầu Của Tôi
-                </Link>
-              </>
-            )}
+  const menuItems = (): MenuItem[] => {
+    const common = [{ to: '/', label: 'Trang chủ' }];
+    if (user?.role === 'SELLER') return [...common, { to: `/shop/${user.userId}`, label: 'Gian hàng' }, { to: '/seller/dashboard', label: 'Báo giá' }, { to: '/seller/products', label: 'Sản phẩm' }];
+    if (user?.role === 'ADMIN') return [...common, { to: '/admin/dashboard', label: 'Quản trị hệ thống' }];
+    const browse = [{ to: '/products', label: 'Danh mục' }, { to: '/compare', label: `So sánh${comparisonCount ? ` (${comparisonCount})` : ''}` }, { to: '/space-planner', label: 'Tính không gian' }];
+    if (user?.role === 'CUSTOMER') return [...common, ...browse, { to: '/favorites', label: 'Yêu thích' }, { to: '/request-quotation', label: 'Yêu cầu báo giá' }, { to: '/my-requests', label: 'Yêu cầu của tôi' }, { to: '/orders', label: 'Đơn mua' }];
+    return [...common, ...browse];
+  };
 
-            {user?.role === 'ADMIN' && (
-              <Link to="/admin/dashboard" className="text-gray-700 hover:text-emerald-600 px-3 py-2 text-sm font-medium transition-colors">
-                Quản Trị Hệ Thống
-              </Link>
-            )}
-          </nav>
-          
-          <div className="flex items-center space-x-4">
-            {user ? (
-              <div className="flex items-center space-x-4">
-                <Link to="/profile" className="text-sm font-medium text-gray-700 hover:text-emerald-600 transition-colors">
-                  Xin chào, {user.fullName}
-                </Link>
-                <button
-                  onClick={handleLogout} className="text-red-600 hover:text-red-700 font-medium text-sm transition-colors">
-                  Đăng Xuất
-                </button>
-              </div>
-            ) : (
-              <>
-                <Link to="/login" className="text-gray-700 hover:text-emerald-600 font-medium text-sm transition-colors">
-                  Đăng Nhập
-                </Link>
-                <Link to="/register" className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-sm">
-                  Đăng Ký
-                </Link>
-              </>
-            )}
+  return (
+    <header className="sticky top-0 z-50 border-b border-emerald-100 bg-white/95 shadow-sm backdrop-blur">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="flex min-h-16 items-center justify-between gap-3 py-2">
+          <Link to="/" className="flex shrink-0 items-center" aria-label="FurniMatch - Trang chủ">
+            <img src={logoImg} alt="FurniMatch" className="h-12 w-auto object-contain sm:h-14" />
+          </Link>
+          <div className="flex items-center gap-2 sm:gap-3">
+            {user?.role !== 'SELLER' && <Link to="/checkout" className="rounded-full bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 transition hover:bg-emerald-100 sm:text-sm">🛒 <span className="hidden sm:inline">Giỏ hàng</span>{cartItems ? ` (${cartItems})` : ''}</Link>}
+            {user ? <>
+              <Link to="/profile" className="max-w-32 truncate rounded-full px-2 py-2 text-xs font-medium text-gray-700 hover:bg-gray-100 sm:max-w-48 sm:text-sm">{user.fullName}</Link>
+              <button onClick={handleLogout} className="rounded-full px-2 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 sm:text-sm">Đăng xuất</button>
+            </> : <>
+              <Link to="/login" className="rounded-full px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100 sm:text-sm">Đăng nhập</Link>
+              <Link to="/register" className="rounded-full bg-emerald-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 sm:px-4 sm:text-sm">Đăng ký</Link>
+            </>}
           </div>
         </div>
+        <nav aria-label="Điều hướng chính" className="-mx-4 flex gap-1 overflow-x-auto px-4 pb-2 [scrollbar-width:thin] sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+          {menuItems().map(item => <NavLink key={item.to} to={item.to} end={item.to === '/'} className={({ isActive }) => `shrink-0 rounded-full px-3 py-2 text-sm font-semibold transition ${isActive ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-600 hover:bg-emerald-50 hover:text-emerald-800'}`}>{item.label}</NavLink>)}
+        </nav>
       </div>
     </header>
   );

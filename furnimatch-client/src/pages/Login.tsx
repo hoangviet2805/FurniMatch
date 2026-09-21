@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 
 const Login = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -24,7 +25,8 @@ const Login = () => {
       
       setSuccess(true);
       setTimeout(() => {
-        navigate('/');
+        const redirect = new URLSearchParams(location.search).get('redirect');
+        navigate(redirect?.startsWith('/') ? redirect : '/');
         // Also force reload to update header state since we use simple localStorage read
         window.location.reload();
       }, 1500);

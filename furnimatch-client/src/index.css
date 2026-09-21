@@ -1,1 +1,11 @@
 @import "tailwindcss";
+
+/* A consistent system font stack prevents Vietnamese diacritics from falling
+   back to a mismatched font on product and checkout screens. */
+@theme {
+  --font-sans: "Segoe UI", "Noto Sans", Arial, sans-serif;
+}
+
+html {
+  font-family: "Segoe UI", "Noto Sans", Arial, sans-serif;
+}

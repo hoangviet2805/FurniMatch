@@ -12,7 +12,8 @@ const AdminDashboard = () => {
   const [alertModal, setAlertModal] = useState<{ isOpen: boolean; message: string; type: 'success' | 'error' }>({ isOpen: false, message: '', type: 'success' });
   
   // Tabs and Category States
-  const [activeTab, setActiveTab] = useState<'USERS' | 'PENDING_SELLERS' | 'CATEGORIES' | 'BANNERS'>('USERS');
+  const [activeTab, setActiveTab] = useState<'USERS' | 'PENDING_SELLERS' | 'CATEGORIES' | 'BANNERS' | 'MOMO'>('USERS');
+  const [momoConfig, setMomoConfig] = useState<any>({ partnerCode: 'MOMO', accessKey: '', secretKey: '', endpointUrl: 'https://test-payment.momo.vn/v2/gateway/api/create', redirectUrl: 'http://localhost:5174/orders', ipnUrl: '', paymentTimeoutMinutes: 30, isActive: true });
   const [categories, setCategories] = useState<any[]>([]);
   const [banners, setBanners] = useState<any[]>([]);
   const [pendingSellers, setPendingSellers] = useState<any[]>([]);
@@ -88,6 +89,8 @@ const AdminDashboard = () => {
       setLoading(false);
     }
   };
+  const fetchMomoConfig = async () => { try { setMomoConfig((await api.get('/admin/payment-config')).data); } catch { setAlertModal({ isOpen: true, message: 'Không thể tải cấu hình MoMo.', type: 'error' }); } };
+  const saveMomoConfig = async (event: React.FormEvent) => { event.preventDefault(); try { await api.post('/admin/payment-config', momoConfig); setAlertModal({ isOpen: true, message: 'Đã lưu cấu hình MoMo.', type: 'success' }); } catch (error: any) { setAlertModal({ isOpen: true, message: error.response?.data?.message || 'Không thể lưu cấu hình.', type: 'error' }); } };
 
   useEffect(() => {
     if (activeTab === 'USERS') {
@@ -99,6 +102,8 @@ const AdminDashboard = () => {
       fetchBanners();
     } else if (activeTab === 'PENDING_SELLERS') {
       fetchPendingSellers();
+    } else if (activeTab === 'MOMO') {
+      fetchMomoConfig();
     }
   }, [filterRole, activeTab]);
 
@@ -260,8 +265,11 @@ const AdminDashboard = () => {
           >
             Quản lý Slide Trang Chủ
           </button>
+          <button onClick={() => setActiveTab('MOMO')} className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'MOMO' ? 'bg-white text-emerald-700 shadow' : 'text-gray-500 hover:text-gray-700'}`}>Cấu hình MoMo</button>
         </div>
       </div>
+
+      {activeTab === 'MOMO' && <form onSubmit={saveMomoConfig} className="max-w-2xl rounded-xl border bg-white p-6"><h2 className="text-xl font-bold">⚙ Cấu hình MoMo Sandbox</h2><p className="mt-1 text-sm text-gray-500">IPN phải là URL public khi cần nhận webhook.</p><div className="mt-5 grid gap-4">{[['partnerCode','Partner Code'],['accessKey','Access Key'],['secretKey','Secret Key'],['endpointUrl','Endpoint URL'],['ipnUrl','IPN URL'],['redirectUrl','Redirect URL']].map(([key,label])=><label key={key} className="text-sm font-medium">{label}<input required type={key === 'secretKey' ? 'password' : 'text'} className="mt-1 w-full rounded-lg border p-3 font-normal" value={momoConfig[key] || ''} onChange={e=>setMomoConfig({...momoConfig,[key]:e.target.value})}/></label>)}<label className="text-sm font-medium">Thời hạn thanh toán (phút)<input required min="1" max="120" type="number" className="mt-1 w-full rounded-lg border p-3 font-normal" value={momoConfig.paymentTimeoutMinutes} onChange={e=>setMomoConfig({...momoConfig,paymentTimeoutMinutes:Number(e.target.value)})}/></label></div><button className="mt-6 rounded-lg bg-emerald-600 px-5 py-3 font-semibold text-white">Lưu cấu hình</button></form>}
 
       {activeTab === 'USERS' && (
         <>

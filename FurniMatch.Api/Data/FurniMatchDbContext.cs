@@ -23,6 +23,8 @@ namespace FurniMatch.Api.Data
         public DbSet<EscrowTransaction> EscrowTransactions { get; set; }
         public DbSet<ProductImage> ProductImages { get; set; }
         public DbSet<SellerDocument> SellerDocuments { get; set; }
+        public DbSet<Order> Orders { get; set; }
+        public DbSet<PaymentQrConfig> PaymentQrConfigs { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -108,6 +110,23 @@ namespace FurniMatch.Api.Data
                 .WithMany(u => u.Quotations)
                 .HasForeignKey(q => q.SellerId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // Order
+            modelBuilder.Entity<Order>()
+                .HasOne(o => o.Customer)
+                .WithMany()
+                .HasForeignKey(o => o.CustomerId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Order>()
+                .HasOne(o => o.Seller)
+                .WithMany()
+                .HasForeignKey(o => o.SellerId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Order>()
+                .HasIndex(o => o.OrderCode)
+                .IsUnique();
         }
     }
 }
