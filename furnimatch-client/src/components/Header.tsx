@@ -4,12 +4,19 @@ import { useState, useEffect } from 'react';
 const Header = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState<any>(null);
+  const [comparisonCount, setComparisonCount] = useState(0);
 
   useEffect(() => {
     const userStr = localStorage.getItem('user');
     if (userStr) {
       setUser(JSON.parse(userStr));
     }
+    const updateComparisonCount = () => {
+      try { setComparisonCount(JSON.parse(localStorage.getItem('comparisonProductIds') ?? '[]').length); } catch { setComparisonCount(0); }
+    };
+    updateComparisonCount();
+    window.addEventListener('comparison-changed', updateComparisonCount);
+    return () => window.removeEventListener('comparison-changed', updateComparisonCount);
   }, []);
 
   const handleLogout = () => {
@@ -39,9 +46,20 @@ const Header = () => {
               </Link>
             )}
             {user?.role !== 'SELLER' && (
-              <Link to="/products" className="text-gray-700 hover:text-emerald-600 px-3 py-2 text-sm font-medium transition-colors">
-                Danh Mục
-              </Link>
+              <>
+                <Link to="/products" className="text-gray-700 hover:text-emerald-600 px-3 py-2 text-sm font-medium transition-colors">
+                  Danh Mục
+                </Link>
+                <Link to="/compare" className="text-gray-700 hover:text-emerald-600 px-3 py-2 text-sm font-medium transition-colors">
+                  So Sánh{comparisonCount ? ` (${comparisonCount})` : ''}
+                </Link>
+                <Link to="/inspiration" className="text-gray-700 hover:text-emerald-600 px-3 py-2 text-sm font-medium transition-colors">
+                  Cảm Hứng
+                </Link>
+                <Link to="/space-planner" className="text-gray-700 hover:text-emerald-600 px-3 py-2 text-sm font-medium transition-colors">
+                  Tính Không Gian
+                </Link>
+              </>
             )}
             
             {user?.role === 'SELLER' && (
@@ -56,9 +74,17 @@ const Header = () => {
             )}
             
             {user?.role === 'CUSTOMER' && (
-              <Link to="/request-quotation" className="text-gray-700 hover:text-emerald-600 px-3 py-2 text-sm font-medium transition-colors">
-                Yêu Cầu Khảo Giá
-              </Link>
+              <>
+                <Link to="/favorites" className="text-gray-700 hover:text-emerald-600 px-3 py-2 text-sm font-medium transition-colors">
+                  Yêu Thích
+                </Link>
+                <Link to="/request-quotation" className="text-gray-700 hover:text-emerald-600 px-3 py-2 text-sm font-medium transition-colors">
+                  Yêu Cầu Khảo Giá
+                </Link>
+                <Link to="/my-requests" className="text-gray-700 hover:text-emerald-600 px-3 py-2 text-sm font-medium transition-colors">
+                  Yêu Cầu Của Tôi
+                </Link>
+              </>
             )}
 
             {user?.role === 'ADMIN' && (

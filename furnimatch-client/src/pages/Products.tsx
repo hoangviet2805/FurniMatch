@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import api from '../utils/api';
+import { isFavorite, toggleFavorite } from '../utils/favorites';
 
 const Products = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -9,6 +10,13 @@ const Products = () => {
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [keyword, setKeyword] = useState(searchParams.get('search') ?? '');
+  const [sort, setSort] = useState(searchParams.get('sort') ?? 'newest');
+  const [favorites, setFavorites] = useState<number[]>([]);
+
+  useEffect(() => {
+    setFavorites(JSON.parse(localStorage.getItem('favoriteProductIds') ?? '[]'));
+  }, []);
 
   useEffect(() => {
     // Fetch categories for sidebar
@@ -21,7 +29,11 @@ const Products = () => {
     const fetchProducts = async () => {
       setLoading(true);
       try {
-        const url = categoryIdParam ? `/products?categoryId=${categoryIdParam}` : '/products';
+        const params = new URLSearchParams();
+        if (categoryIdParam) params.set('categoryId', categoryIdParam);
+        if (keyword.trim()) params.set('search', keyword.trim());
+        if (sort !== 'newest') params.set('sort', sort);
+        const url = `/products${params.size ? `?${params.toString()}` : ''}`;
         const response = await api.get(url);
         setProducts(response.data);
       } catch (err) {
@@ -31,15 +43,31 @@ const Products = () => {
       }
     };
     fetchProducts();
-  }, [categoryIdParam]);
+  }, [categoryIdParam, keyword, sort]);
 
   const handleCategoryClick = (id: number | null) => {
-    if (id === null) {
-      searchParams.delete('categoryId');
-    } else {
-      searchParams.set('categoryId', id.toString());
-    }
-    setSearchParams(searchParams);
+    const next = new URLSearchParams(searchParams);
+    if (id === null) next.delete('categoryId'); else next.set('categoryId', id.toString());
+    setSearchParams(next);
+  };
+
+  const updateSearch = (value: string) => {
+    setKeyword(value);
+    const next = new URLSearchParams(searchParams);
+    if (value.trim()) next.set('search', value); else next.delete('search');
+    setSearchParams(next, { replace: true });
+  };
+
+  const updateSort = (value: string) => {
+    setSort(value);
+    const next = new URLSearchParams(searchParams);
+    if (value !== 'newest') next.set('sort', value); else next.delete('sort');
+    setSearchParams(next, { replace: true });
+  };
+
+  const toggleSaved = (id: number) => {
+    toggleFavorite(id);
+    setFavorites(JSON.parse(localStorage.getItem('favoriteProductIds') ?? '[]'));
   };
 
   return (
@@ -75,14 +103,15 @@ const Products = () => {
 
         {/* Product Grid */}
         <div className="flex-1">
-          <div className="flex justify-between items-end mb-6">
-            <h1 className="text-3xl font-bold text-gray-900">
+          <div className="flex flex-col sm:flex-row justify-between gap-4 sm:items-end mb-6">
+            <div><h1 className="text-3xl font-bold text-gray-900">
               {categoryIdParam 
                 ? categories.find(c => c.categoryId.toString() === categoryIdParam)?.name || 'Danh sách Sản phẩm' 
                 : 'Tất cả Sản phẩm'}
-            </h1>
-            <span className="text-gray-500 text-sm">{products.length} sản phẩm</span>
+            </h1><span className="text-gray-500 text-sm">{products.length} sản phẩm phù hợp</span></div>
+            <select value={sort} onChange={event => updateSort(event.target.value)} className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"><option value="newest">Mới cập nhật</option><option value="price-asc">Giá thấp đến cao</option><option value="price-desc">Giá cao đến thấp</option><option value="oldest">Cũ nhất</option></select>
           </div>
+          <div className="mb-6 relative"><input value={keyword} onChange={event => updateSearch(event.target.value)} placeholder="Tìm theo tên sản phẩm, mô tả hoặc xưởng..." className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-4 pr-10 focus:outline-none focus:ring-2 focus:ring-emerald-500" />{keyword && <button onClick={() => updateSearch('')} className="absolute right-3 top-3 text-gray-400 hover:text-gray-700" aria-label="Xóa tìm kiếm">×</button>}</div>
           
           {loading ? (
             <div className="text-center py-20 text-gray-500">Đang tải sản phẩm...</div>
@@ -94,7 +123,9 @@ const Products = () => {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {products.map((product: any) => (
-                <div key={product.productId} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow group cursor-pointer flex flex-col">
+                <div key={product.productId} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow group flex flex-col relative">
+                  <button onClick={() => toggleSaved(product.productId)} className={`absolute z-10 top-3 right-3 w-9 h-9 rounded-full bg-white/95 shadow-sm text-xl ${favorites.includes(product.productId) || isFavorite(product.productId) ? 'text-rose-600' : 'text-gray-500 hover:text-rose-600'}`} aria-label="Lưu sản phẩm">{favorites.includes(product.productId) || isFavorite(product.productId) ? '♥' : '♡'}</button>
+                  <Link to={`/products/${product.productId}`} className="flex flex-col flex-1">
                   <div className="h-48 bg-gray-100 relative overflow-hidden shrink-0">
                     {product.productImages && product.productImages.length > 0 ? (
                       <img 
@@ -124,7 +155,7 @@ const Products = () => {
                           : 'Liên hệ'}
                       </div>
                     </div>
-                  </div>
+                  </div></Link>
                 </div>
               ))}
             </div>

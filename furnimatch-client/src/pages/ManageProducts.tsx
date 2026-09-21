@@ -307,7 +307,7 @@ const ManageProducts = () => {
                   required
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
                   value={formData.categoryId}
-                  onChange={(e) => setFormData(prev => ({ ...prev, categoryId: e.target.value }))}
+                  onChange={(e) => setFormData(prev => ({ ...prev, categoryId: Number(e.target.value) }))}
                 >
                   {categories.map(c => (
                     <option key={c.categoryId} value={c.categoryId}>{c.name}</option>
