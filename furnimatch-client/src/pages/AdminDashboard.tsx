@@ -14,7 +14,7 @@ const AdminDashboard = () => {
   const [alertModal, setAlertModal] = useState<{ isOpen: boolean; message: string; type: 'success' | 'error' }>({ isOpen: false, message: '', type: 'success' });
   
   // Tabs and Category States
-  const [activeTab, setActiveTab] = useState<'USERS' | 'PENDING_SELLERS' | 'CATEGORIES' | 'BANNERS' | 'FOOTER'>('USERS');
+  const [activeTab, setActiveTab] = useState<'USERS' | 'PENDING_SELLERS' | 'CATEGORIES' | 'BANNERS' | 'FOOTER' | 'HOME_SETTINGS'>('USERS');
   const [categories, setCategories] = useState<any[]>([]);
   const [banners, setBanners] = useState<any[]>([]);
   const [pendingSellers, setPendingSellers] = useState<any[]>([]);
@@ -37,9 +37,12 @@ const AdminDashboard = () => {
     email: '',
     facebookLink: '',
     instagramLink: '',
-    zaloLink: ''
+    zaloLink: '',
+    homeTitle: '',
+    homeSubtitle: ''
   });
   const [loadingFooter, setLoadingFooter] = useState(false);
+  const [isSettingsDropdownOpen, setIsSettingsDropdownOpen] = useState(false);
 
   const fetchCategories = async () => {
     setLoadingCategories(true);
@@ -105,7 +108,17 @@ const AdminDashboard = () => {
     try {
       const response = await api.get('/footersettings');
       if (response.data) {
-        setFooterSetting(response.data);
+        setFooterSetting({
+          description: response.data.description || '',
+          address: response.data.address || '',
+          phone: response.data.phone || '',
+          email: response.data.email || '',
+          facebookLink: response.data.facebookLink || '',
+          instagramLink: response.data.instagramLink || '',
+          zaloLink: response.data.zaloLink || '',
+          homeTitle: response.data.homeTitle || 'Đặt Làm Nội Thất Theo Yêu Cầu',
+          homeSubtitle: response.data.homeSubtitle || 'Kết nối bạn với những xưởng sản xuất uy tín nhất. Chọn mẫu mã bạn thích, nhập kích thước riêng, và nhận báo giá tốt nhất.'
+        });
       }
     } catch (error) {
       console.error(error);
@@ -124,7 +137,7 @@ const AdminDashboard = () => {
       fetchBanners();
     } else if (activeTab === 'PENDING_SELLERS') {
       fetchPendingSellers();
-    } else if (activeTab === 'FOOTER') {
+    } else if (activeTab === 'FOOTER' || activeTab === 'HOME_SETTINGS') {
       fetchFooterSetting();
     }
   }, [filterRole, activeTab]);
@@ -168,7 +181,7 @@ const AdminDashboard = () => {
     e.preventDefault();
     try {
       await api.put('/footersettings', footerSetting);
-      setAlertModal({ isOpen: true, message: 'Cập nhật Footer thành công!', type: 'success' });
+      setAlertModal({ isOpen: true, message: 'Cập nhật thành công!', type: 'success' });
     } catch (error: any) {
       setAlertModal({ isOpen: true, message: error.response?.data?.message || 'Có lỗi xảy ra.', type: 'error' });
     }
@@ -311,12 +324,31 @@ const AdminDashboard = () => {
           >
             Quản lý Slide Trang Chủ
           </button>
-          <button 
-            onClick={() => setActiveTab('FOOTER')} 
-            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'FOOTER' ? 'bg-white text-emerald-700 shadow' : 'text-gray-500 hover:text-gray-700'}`}
-          >
-            ⚙️ Cấu hình Footer
-          </button>
+          <div className="relative">
+            <button 
+              onClick={() => setIsSettingsDropdownOpen(!isSettingsDropdownOpen)} 
+              className={`flex items-center gap-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${(activeTab === 'FOOTER' || activeTab === 'HOME_SETTINGS') ? 'bg-white text-emerald-700 shadow' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              ⚙️ Cấu Hình Hệ Thống
+              <svg className={`w-4 h-4 transition-transform ${isSettingsDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+            </button>
+            {isSettingsDropdownOpen && (
+              <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-100">
+                <button
+                  onClick={() => { setActiveTab('HOME_SETTINGS'); setIsSettingsDropdownOpen(false); }}
+                  className={`block w-full text-left px-4 py-2 text-sm ${activeTab === 'HOME_SETTINGS' ? 'bg-emerald-50 text-emerald-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                >
+                  Cấu hình Trang chủ
+                </button>
+                <button
+                  onClick={() => { setActiveTab('FOOTER'); setIsSettingsDropdownOpen(false); }}
+                  className={`block w-full text-left px-4 py-2 text-sm ${activeTab === 'FOOTER' ? 'bg-emerald-50 text-emerald-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                >
+                  Cấu hình Footer
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -684,8 +716,45 @@ const AdminDashboard = () => {
                 </div>
               </div>
               <div className="mt-6 flex justify-end">
-                <button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-lg font-medium shadow-sm transition-colors">
-                  Lưu Thay Đổi
+                <button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-lg font-medium transition-colors shadow-sm">
+                  Lưu thay đổi
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'HOME_SETTINGS' && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 max-w-3xl mx-auto">
+          <h2 className="text-xl font-bold text-gray-900 mb-6">Cấu hình Trang Chủ</h2>
+          {loadingFooter ? (
+            <div className="text-center text-gray-500 py-8">Đang tải...</div>
+          ) : (
+            <form onSubmit={handleSaveFooter} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Tiêu đề chính (Title)</label>
+                <input 
+                  type="text"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
+                  value={footerSetting.homeTitle}
+                  onChange={e => setFooterSetting({...footerSetting, homeTitle: e.target.value})}
+                  placeholder="VD: Đặt Làm Nội Thất Theo Yêu Cầu"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Mô tả phụ (Subtitle)</label>
+                <textarea 
+                  rows={3}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
+                  value={footerSetting.homeSubtitle}
+                  onChange={e => setFooterSetting({...footerSetting, homeSubtitle: e.target.value})}
+                  placeholder="VD: Kết nối bạn với những xưởng sản xuất uy tín nhất..."
+                />
+              </div>
+              <div className="pt-4 flex justify-end">
+                <button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-lg font-medium transition-colors shadow-sm">
+                  Lưu thay đổi
                 </button>
               </div>
             </form>

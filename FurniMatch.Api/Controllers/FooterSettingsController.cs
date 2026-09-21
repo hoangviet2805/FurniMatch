@@ -29,7 +29,9 @@ namespace FurniMatch.Api.Controllers
                     Description = "Nền tảng kết nối xưởng nội thất uy tín và chất lượng.",
                     Address = "Hà Nội, Việt Nam",
                     Phone = "0123 456 789",
-                    Email = "contact@furnimatch.com"
+                    Email = "contact@furnimatch.com",
+                    HomeTitle = "Đặt Làm Nội Thất Theo Yêu Cầu",
+                    HomeSubtitle = "Kết nối bạn với những xưởng sản xuất uy tín nhất. Chọn mẫu mã bạn thích, nhập kích thước riêng, và nhận báo giá tốt nhất."
                 });
             }
             return Ok(setting);
@@ -54,6 +56,8 @@ namespace FurniMatch.Api.Controllers
             setting.FacebookLink = updateDto.FacebookLink;
             setting.InstagramLink = updateDto.InstagramLink;
             setting.ZaloLink = updateDto.ZaloLink;
+            setting.HomeTitle = updateDto.HomeTitle;
+            setting.HomeSubtitle = updateDto.HomeSubtitle;
 
             await _context.SaveChangesAsync();
 

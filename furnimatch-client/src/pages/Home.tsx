@@ -11,6 +11,10 @@ const Home = () => {
   const [latestProducts, setLatestProducts] = useState<any[]>([]);
   const [recentProducts, setRecentProducts] = useState<any[]>([]);
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [homeSettings, setHomeSettings] = useState({
+    title: 'Đặt Làm Nội Thất Theo Yêu Cầu',
+    subtitle: 'Kết nối bạn với những xưởng sản xuất uy tín nhất. Chọn mẫu mã bạn thích, nhập kích thước riêng, và nhận báo giá tốt nhất.'
+  });
 
   useEffect(() => {
     const userStr = localStorage.getItem('user');
@@ -22,6 +26,16 @@ const Home = () => {
     api.get('/banners').then(res => {
       setBanners(res.data);
     }).catch(err => console.error('Error fetching banners:', err));
+
+    // Fetch home settings
+    api.get('/footersettings').then(res => {
+      if (res.data) {
+        setHomeSettings({
+          title: res.data.homeTitle || 'Đặt Làm Nội Thất Theo Yêu Cầu',
+          subtitle: res.data.homeSubtitle || 'Kết nối bạn với những xưởng sản xuất uy tín nhất. Chọn mẫu mã bạn thích, nhập kích thước riêng, và nhận báo giá tốt nhất.'
+        });
+      }
+    }).catch(err => console.error('Error fetching settings:', err));
 
     // Fetch categories
     api.get('/categories').then(res => {
@@ -87,10 +101,10 @@ const Home = () => {
       <section className="bg-gradient-to-r from-emerald-50 to-teal-50 py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 tracking-tight mb-6">
-            Đặt Làm Nội Thất Theo Yêu Cầu
+            {homeSettings.title}
           </h1>
           <p className="text-xl text-gray-600 mb-10 max-w-2xl mx-auto">
-            Kết nối bạn với những xưởng sản xuất uy tín nhất. Chọn mẫu mã bạn thích, nhập kích thước riêng, và nhận báo giá tốt nhất.
+            {homeSettings.subtitle}
           </p>
           <div className="flex justify-center space-x-4">
             <Link to="/products" className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-3 rounded-lg font-medium text-lg transition-colors shadow-md">

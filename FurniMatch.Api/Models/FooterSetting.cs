@@ -14,5 +14,9 @@ namespace FurniMatch.Api.Models
         public string? FacebookLink { get; set; }
         public string? InstagramLink { get; set; }
         public string? ZaloLink { get; set; }
+
+        // Home settings
+        public string? HomeTitle { get; set; }
+        public string? HomeSubtitle { get; set; }
     }
 }
