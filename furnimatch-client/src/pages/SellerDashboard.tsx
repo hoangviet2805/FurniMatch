@@ -97,17 +97,17 @@ export default function SellerDashboard() {
                         {stateConfig[o.orderStatus]?.label || o.orderStatus}
                       </div>
                       <select 
-                        value={o.orderStatus === 'CONFIRMED' ? 'PREPARING' : o.orderStatus} 
+                        value={o.orderStatus} 
                         onChange={e => update(o.orderId, e.target.value)} 
-                        disabled={o.orderStatus === 'CANCELLED' || o.orderStatus === 'WAITING_PAYMENT'} 
+                        disabled={o.orderStatus === 'CANCELLED' || o.orderStatus === 'WAITING_PAYMENT' || o.orderStatus === 'COMPLETED'} 
                         className="rounded-lg border-gray-300 shadow-sm text-sm font-medium focus:ring-emerald-500 focus:border-emerald-500 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
                       >
                         <option value="WAITING_PAYMENT" disabled>Chờ thanh toán</option>
                         {o.orderStatus === 'CONFIRMED' && <option value="CONFIRMED" disabled>Đã xác nhận</option>}
-                        <option value="PREPARING">Đang chuẩn bị hàng</option>
-                        <option value="PRODUCING">Đang sản xuất</option>
-                        <option value="SHIPPED">Đang giao hàng</option>
-                        <option value="COMPLETED">Hoàn thành</option>
+                        <option value="PREPARING" disabled={!['CONFIRMED', 'PREPARING'].includes(o.orderStatus)}>Đang chuẩn bị hàng</option>
+                        <option value="PRODUCING" disabled={!['PREPARING', 'PRODUCING'].includes(o.orderStatus)}>Đang sản xuất</option>
+                        <option value="SHIPPED" disabled={!['PRODUCING', 'SHIPPED'].includes(o.orderStatus)}>Đang giao hàng</option>
+                        <option value="COMPLETED" disabled={!['SHIPPED', 'COMPLETED'].includes(o.orderStatus)}>Hoàn thành</option>
                         {o.orderStatus === 'CANCELLED' && <option value="CANCELLED" disabled>Đã huỷ</option>}
                       </select>
                     </div>

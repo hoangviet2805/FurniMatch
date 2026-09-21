@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../utils/api';
-import { CheckCircle2, Clock, XCircle, Package, Truck, Hammer, ClipboardList } from 'lucide-react';
+import { CheckCircle2, Clock, XCircle, Package, Truck, Hammer, ClipboardList, Store } from 'lucide-react';
 
 const money = (n: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n);
 
@@ -21,9 +21,12 @@ export default function Orders() {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [trackingOrder, setTrackingOrder] = useState<any | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 5;
 
   const fetchOrders = () => {
     setLoading(true);
+    setCurrentPage(1);
     api.get('/orders/my')
       .then(r => setOrders(r.data))
       .finally(() => setLoading(false));
@@ -62,7 +65,7 @@ export default function Orders() {
         </div>
       ) : (
         <div className="space-y-6">
-          {orders.map(o => {
+          {orders.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE).map(o => {
             let items: any[] = [];
             try { items = JSON.parse(o.itemsJson); } catch {}
             const StatusIcon = statusConfig[o.orderStatus]?.icon || Clock;
@@ -71,7 +74,13 @@ export default function Orders() {
               <article key={o.orderId} className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm hover:shadow-md transition-shadow">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-gray-100 pb-5 gap-4">
                   <div>
-                    <h3 className="text-lg font-bold text-gray-900">Đơn #{o.orderCode}</h3>
+                    <div className="flex items-center gap-3">
+                      <h3 className="text-lg font-bold text-gray-900">Đơn #{o.orderCode}</h3>
+                      <Link to={`/shop/${o.sellerId}`} className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-md transition-colors">
+                        <Store className="w-3.5 h-3.5" />
+                        {o.shopName || 'Xưởng nội thất'}
+                      </Link>
+                    </div>
                     <p className="text-sm text-gray-500 mt-1">{new Date(o.createdAt).toLocaleString('vi-VN', { dateStyle: 'full', timeStyle: 'short' })}</p>
                   </div>
                   <div className={`flex items-center gap-2 rounded-full border px-4 py-1.5 text-sm font-medium ${statusConfig[o.orderStatus]?.color || 'bg-gray-50 text-gray-600 border-gray-200'}`}>
@@ -91,7 +100,7 @@ export default function Orders() {
                       <div key={i} className="flex justify-between py-4 group">
                         <div className="flex gap-4 items-center">
                           <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg border bg-gray-50">
-                            {imageUrl ? <img src={imageUrl} alt={name} className="h-full w-full object-cover" /> : <Package className="h-full w-full p-4 text-gray-300" />}
+                            {imageUrl ? <img src={imageUrl.startsWith('http') ? imageUrl : `http://localhost:5234${imageUrl}`} alt={name} className="h-full w-full object-cover" /> : <Package className="h-full w-full p-4 text-gray-300" />}
                           </div>
                           <div>
                             <p className="font-medium text-gray-900 group-hover:text-emerald-600 transition-colors">{name}</p>
@@ -130,6 +139,28 @@ export default function Orders() {
               </article>
             );
           })}
+
+          {orders.length > 0 && (
+            <div className="flex justify-center items-center gap-4 mt-8">
+              <button 
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1 || Math.ceil(orders.length / ITEMS_PER_PAGE) <= 1}
+                className="px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:text-emerald-600 disabled:opacity-50 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed font-semibold shadow-sm transition-all"
+              >
+                Trước
+              </button>
+              <div className="flex items-center justify-center min-w-[80px] px-3 py-2 rounded-lg bg-gray-50 border border-gray-100 text-gray-700 font-medium">
+                {currentPage} / {Math.max(1, Math.ceil(orders.length / ITEMS_PER_PAGE))}
+              </div>
+              <button 
+                onClick={() => setCurrentPage(p => Math.min(Math.ceil(orders.length / ITEMS_PER_PAGE), p + 1))}
+                disabled={currentPage === Math.ceil(orders.length / ITEMS_PER_PAGE) || Math.ceil(orders.length / ITEMS_PER_PAGE) <= 1}
+                className="px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:text-emerald-600 disabled:opacity-50 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed font-semibold shadow-sm transition-all"
+              >
+                Sau
+              </button>
+            </div>
+          )}
         </div>
       )}
 

@@ -31,7 +31,35 @@ public class OrdersController : ControllerBase
         try { var qrCodeUrl = await _sepay.CreateQrUrlAsync(order); return Ok(new { orderId = order.OrderId, orderCode = order.OrderCode, qrCodeUrl, expiredAt = order.PaymentExpiredAt }); }
         catch (Exception ex) { order.PaymentStatus = "FAILED"; await _db.SaveChangesAsync(); return BadRequest(new { message = ex.Message }); }
     }
-    [HttpGet("my"), Authorize(Roles = "CUSTOMER")] public async Task<IActionResult> Mine() => Ok(await _db.Orders.Where(x => x.CustomerId == UserId).OrderByDescending(x => x.CreatedAt).ToListAsync());
+    [HttpGet("my"), Authorize(Roles = "CUSTOMER")]
+    public async Task<IActionResult> Mine()
+    {
+        var orders = await _db.Orders
+            .Where(x => x.CustomerId == UserId)
+            .OrderByDescending(x => x.CreatedAt)
+            .Select(o => new {
+                o.OrderId,
+                o.OrderCode,
+                o.CustomerId,
+                o.SellerId,
+                o.ItemsJson,
+                o.RecipientName,
+                o.RecipientPhone,
+                o.Address,
+                o.Note,
+                o.Subtotal,
+                o.ShippingFee,
+                o.TotalAmount,
+                o.PaymentMethod,
+                o.PaymentStatus,
+                o.OrderStatus,
+                o.CreatedAt,
+                o.UpdatedAt,
+                ShopName = o.Seller != null ? (o.Seller.ShopName ?? o.Seller.FullName) : "Xưởng nội thất"
+            })
+            .ToListAsync();
+        return Ok(orders);
+    }
     [HttpGet("seller"), Authorize(Roles = "SELLER")] public async Task<IActionResult> Seller() => Ok(await _db.Orders.Where(x => x.SellerId == UserId).OrderByDescending(x => x.CreatedAt).ToListAsync());
     [HttpGet("{id:int}")] public async Task<IActionResult> Get(int id)
     {

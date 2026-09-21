@@ -8,6 +8,7 @@ using FurniMatch.Api.Data;
 using FurniMatch.Api.DTOs;
 using FurniMatch.Api.Models;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
@@ -378,6 +379,32 @@ namespace FurniMatch.Api.Controllers
             user.ResetPasswordToken = null;
             user.ResetPasswordTokenExpiry = null;
 
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Đổi mật khẩu thành công." });
+        }
+        [Authorize]
+        [HttpPut("change-password")]
+        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDto dto)
+        {
+            var userIdStr = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdStr) || !int.TryParse(userIdStr, out int userId))
+            {
+                return Unauthorized();
+            }
+
+            var user = await _context.Users.FindAsync(userId);
+            if (user == null)
+            {
+                return NotFound("Người dùng không tồn tại.");
+            }
+
+            if (!BC.Verify(dto.OldPassword, user.PasswordHash))
+            {
+                return BadRequest("Mật khẩu cũ không chính xác.");
+            }
+
+            user.PasswordHash = BC.HashPassword(dto.NewPassword);
             await _context.SaveChangesAsync();
 
             return Ok(new { message = "Đổi mật khẩu thành công." });

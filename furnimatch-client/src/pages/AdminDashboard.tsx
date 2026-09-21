@@ -8,7 +8,9 @@ const AdminDashboard = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
   const [deleteConfirmModal, setDeleteConfirmModal] = useState<{ isOpen: boolean; userId: number | null }>({ isOpen: false, userId: null });
+  const [approveConfirmModal, setApproveConfirmModal] = useState<{ isOpen: boolean; sellerId: number | null }>({ isOpen: false, sellerId: null });
   const [deleteCategoryModal, setDeleteCategoryModal] = useState<{ isOpen: boolean; categoryId: number | null }>({ isOpen: false, categoryId: null });
+  const [deleteBannerConfirmModal, setDeleteBannerConfirmModal] = useState<{ isOpen: boolean; bannerId: number | null }>({ isOpen: false, bannerId: null });
   const [alertModal, setAlertModal] = useState<{ isOpen: boolean; message: string; type: 'success' | 'error' }>({ isOpen: false, message: '', type: 'success' });
   
   // Tabs and Category States
@@ -127,8 +129,15 @@ const AdminDashboard = () => {
     }
   }, [filterRole, activeTab]);
 
-  const approveSeller = async (id: number) => {
-    if (!window.confirm('Bạn có chắc chắn muốn duyệt nhà sản xuất này?')) return;
+  const confirmApproveSeller = (id: number) => {
+    setApproveConfirmModal({ isOpen: true, sellerId: id });
+  };
+
+  const submitApproveSeller = async () => {
+    if (!approveConfirmModal.sellerId) return;
+    const id = approveConfirmModal.sellerId;
+    setApproveConfirmModal({ isOpen: false, sellerId: null });
+    
     try {
       await api.post(`/admin/approve-seller/${id}`);
       setAlertModal({ isOpen: true, message: 'Đã duyệt nhà sản xuất thành công!', type: 'success' });
@@ -252,8 +261,15 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleDeleteBanner = async (id: number) => {
-    if (!window.confirm('Bạn có chắc chắn muốn xóa ảnh banner này?')) return;
+  const confirmDeleteBanner = (id: number) => {
+    setDeleteBannerConfirmModal({ isOpen: true, bannerId: id });
+  };
+
+  const submitDeleteBanner = async () => {
+    if (!deleteBannerConfirmModal.bannerId) return;
+    const id = deleteBannerConfirmModal.bannerId;
+    setDeleteBannerConfirmModal({ isOpen: false, bannerId: null });
+    
     try {
       await api.delete(`/banners/${id}`);
       setAlertModal({ isOpen: true, message: 'Đã xóa ảnh banner!', type: 'success' });
@@ -460,7 +476,7 @@ const AdminDashboard = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <button
-                          onClick={() => approveSeller(seller.userId)}
+                          onClick={() => confirmApproveSeller(seller.userId)}
                           className="text-green-600 hover:text-green-900 mr-4 font-bold"
                         >
                           Duyệt
@@ -518,7 +534,7 @@ const AdminDashboard = () => {
                     {index + 1}
                   </div>
                   <button 
-                    onClick={() => handleDeleteBanner(banner.bannerId)}
+                    onClick={() => confirmDeleteBanner(banner.bannerId)}
                     className="absolute top-2 right-2 bg-red-500 text-white w-8 h-8 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10 hover:bg-red-600"
                     title="Xóa ảnh này"
                   >
@@ -745,6 +761,30 @@ const AdminDashboard = () => {
         </div>
       )}
 
+      {/* Approve Seller Confirm Modal */}
+      {approveConfirmModal.isOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Duyệt Nhà Sản Xuất</h3>
+            <p className="text-gray-600 mb-6">Bạn có chắc chắn muốn duyệt nhà sản xuất này không?</p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setApproveConfirmModal({ isOpen: false, sellerId: null })}
+                className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={submitApproveSeller}
+                className="px-4 py-2 text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg font-medium transition-colors"
+              >
+                Đồng ý
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Delete Category Confirm Modal */}
       {deleteCategoryModal.isOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -760,6 +800,30 @@ const AdminDashboard = () => {
               </button>
               <button
                 onClick={deleteCategory}
+                className="px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-lg font-medium transition-colors"
+              >
+                Xóa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Banner Confirm Modal */}
+      {deleteBannerConfirmModal.isOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Xóa Ảnh Banner</h3>
+            <p className="text-gray-600 mb-6">Bạn có chắc chắn muốn xóa ảnh banner này không?</p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setDeleteBannerConfirmModal({ isOpen: false, bannerId: null })}
+                className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={submitDeleteBanner}
                 className="px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-lg font-medium transition-colors"
               >
                 Xóa

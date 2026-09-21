@@ -21,6 +21,7 @@ const Profile = () => {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [message, setMessage] = useState('');
+  const [locationMsg, setLocationMsg] = useState({ text: '', type: '' });
 
   useEffect(() => {
     const userData = localStorage.getItem('user');
@@ -86,11 +87,13 @@ const Profile = () => {
             latitude: position.coords.latitude,
             longitude: position.coords.longitude
           }));
-          alert("Lấy vị trí thành công!");
+          setLocationMsg({ text: "Lấy vị trí thành công!", type: 'success' });
+          setTimeout(() => setLocationMsg({ text: '', type: '' }), 3000);
         },
         (error) => {
           console.error("Error getting location", error);
-          alert("Không thể lấy vị trí. Vui lòng cho phép trình duyệt truy cập vị trí.");
+          setLocationMsg({ text: "Không thể lấy vị trí. Vui lòng cho phép trình duyệt truy cập vị trí.", type: 'error' });
+          setTimeout(() => setLocationMsg({ text: '', type: '' }), 5000);
         }
       );
     } else {
@@ -316,20 +319,25 @@ const Profile = () => {
             </>
           )}
 
-          <div className="bg-gray-50 p-4 rounded-lg mt-4">
-            <h4 className="text-sm font-medium text-gray-900 mb-2">Vị trí của bạn (Phục vụ tìm kiếm gần nhất)</h4>
-            <div className="flex items-center space-x-4 mb-2">
-              <span className="text-sm text-gray-600">
-                Vĩ độ: {formData.latitude?.toFixed(4) || 'Chưa có'} | Kinh độ: {formData.longitude?.toFixed(4) || 'Chưa có'}
-              </span>
+          <div className="bg-gray-50 rounded-lg p-6">
+            <h4 className="text-md font-semibold text-gray-900 mb-4">Vị trí của bạn (Phục vụ tìm kiếm gần nhất)</h4>
+            <div className="flex items-center gap-4">
+              <p className="text-sm text-gray-600">
+                Vĩ độ: {formData.latitude || 'Chưa có'} | Kinh độ: {formData.longitude || 'Chưa có'}
+              </p>
               <button
                 type="button"
                 onClick={handleGetLocation}
-                className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded text-sm hover:bg-emerald-200"
+                className="px-4 py-2 bg-emerald-100 text-emerald-700 rounded-md text-sm font-medium hover:bg-emerald-200"
               >
                 Cập nhật vị trí
               </button>
             </div>
+            {locationMsg.text && (
+              <p className={`text-sm mt-2 font-medium ${locationMsg.type === 'success' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                {locationMsg.text}
+              </p>
+            )}
           </div>
 
           <div className="flex justify-end pt-4">
