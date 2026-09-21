@@ -85,8 +85,8 @@ namespace FurniMatch.Api.Controllers
 
             query = sort?.ToLower() switch
             {
-                "price-asc" => query.OrderBy(p => p.ProductVariants.Select(v => v.Price).DefaultIfEmpty(p.Price).Min()),
-                "price-desc" => query.OrderByDescending(p => p.ProductVariants.Select(v => v.Price).DefaultIfEmpty(p.Price).Min()),
+                "price-asc" => query.OrderBy(p => p.ProductVariants.Any() ? p.ProductVariants.Min(v => v.Price) : p.Price),
+                "price-desc" => query.OrderByDescending(p => p.ProductVariants.Any() ? p.ProductVariants.Min(v => v.Price) : p.Price),
                 "oldest" => query.OrderBy(p => p.CreatedAt),
                 _ => query.OrderByDescending(p => p.CreatedAt)
             };

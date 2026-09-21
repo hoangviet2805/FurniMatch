@@ -13,6 +13,8 @@ const Products = () => {
   const [keyword, setKeyword] = useState(searchParams.get('search') ?? '');
   const [sort, setSort] = useState(searchParams.get('sort') ?? 'newest');
   const [favorites, setFavorites] = useState<number[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 8;
 
   useEffect(() => {
     setFavorites(JSON.parse(localStorage.getItem('favoriteProductIds') ?? '[]'));
@@ -24,6 +26,10 @@ const Products = () => {
       .then(res => setCategories(res.data))
       .catch(err => console.error('Error fetching categories:', err));
   }, []);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [categoryIdParam, keyword, sort]);
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -122,7 +128,7 @@ const Products = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {products.map((product: any) => (
+              {products.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE).map((product: any) => (
                 <div key={product.productId} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow group flex flex-col relative">
                   <button onClick={() => toggleSaved(product.productId)} className={`absolute z-10 top-3 right-3 w-9 h-9 rounded-full bg-white/95 shadow-sm text-xl ${favorites.includes(product.productId) || isFavorite(product.productId) ? 'text-rose-600' : 'text-gray-500 hover:text-rose-600'}`} aria-label="Lưu sản phẩm">{favorites.includes(product.productId) || isFavorite(product.productId) ? '♥' : '♡'}</button>
                   <Link to={`/products/${product.productId}`} className="flex flex-col flex-1">
@@ -158,6 +164,28 @@ const Products = () => {
                   </div></Link>
                 </div>
               ))}
+            </div>
+          )}
+          
+          {products.length > 0 && (
+            <div className="flex justify-center items-center gap-4 mt-12 mb-8">
+              <button 
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1 || Math.ceil(products.length / ITEMS_PER_PAGE) <= 1}
+                className="px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:text-emerald-600 disabled:opacity-50 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed font-semibold shadow-sm transition-all"
+              >
+                Trước
+              </button>
+              <div className="flex items-center justify-center min-w-[80px] px-3 py-2 rounded-lg bg-gray-50 border border-gray-100 text-gray-700 font-medium">
+                {currentPage} / {Math.max(1, Math.ceil(products.length / ITEMS_PER_PAGE))}
+              </div>
+              <button 
+                onClick={() => setCurrentPage(p => Math.min(Math.ceil(products.length / ITEMS_PER_PAGE), p + 1))}
+                disabled={currentPage === Math.ceil(products.length / ITEMS_PER_PAGE) || Math.ceil(products.length / ITEMS_PER_PAGE) <= 1}
+                className="px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:text-emerald-600 disabled:opacity-50 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed font-semibold shadow-sm transition-all"
+              >
+                Sau
+              </button>
             </div>
           )}
         </div>

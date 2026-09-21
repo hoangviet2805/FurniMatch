@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import api from '../utils/api';
 import { isFavorite, toggleFavorite } from '../utils/favorites';
 import { addRecentlyViewed, isCompared, toggleComparison } from '../utils/comparison';
-import { addToCart } from '../utils/cart';
+import { saveCart } from '../utils/cart';
 
 const imageUrl = (url?: string) => url?.startsWith('http') ? url : `http://localhost:5234${url}`;
 const money = (value: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
@@ -20,6 +20,7 @@ const ProductDetail = () => {
   const [actionMessage, setActionMessage] = useState('');
   const [selectedVariantId, setSelectedVariantId] = useState<number | null>(null);
   const [quantity, setQuantity] = useState(1);
+  const user = JSON.parse(localStorage.getItem('user') || 'null');
 
   useEffect(() => {
     if (!id) return;
@@ -42,7 +43,7 @@ const ProductDetail = () => {
     if (!localStorage.getItem('token')) { navigate(`/login?redirect=/products/${product.productId}`); return; }
     const stock = selectedVariant?.stock;
     if (typeof stock === 'number' && stock > 0 && quantity > stock) { setActionMessage(`Số lượng tối đa hiện có là ${stock}.`); return; }
-    addToCart({ productId: product.productId, variantId: selectedVariant?.productVariantId ?? selectedVariant?.variantId, name: product.name, sizeLabel: selectedVariant ? variantLabel(selectedVariant) : 'Tiêu chuẩn', price: selectedPrice, quantity, imageUrl: product.productImages?.[0]?.imageUrl, sellerName: product.seller?.shopName || product.seller?.fullName });
+    saveCart([{ productId: product.productId, variantId: selectedVariant?.productVariantId ?? selectedVariant?.variantId, name: product.name, sizeLabel: selectedVariant ? variantLabel(selectedVariant) : 'Tiêu chuẩn', price: selectedPrice, quantity, imageUrl: product.productImages?.[0]?.imageUrl, sellerName: product.seller?.shopName || product.seller?.fullName }]);
     navigate('/checkout');
   };
   const updateComparison = () => {
@@ -91,9 +92,13 @@ const ProductDetail = () => {
             <div className="bg-gray-50 rounded-lg p-3"><span className="block text-gray-500">Đặt theo kích thước</span><span className="font-semibold text-gray-900">{product.customSizeSupported ? 'Có hỗ trợ' : 'Không hỗ trợ'}</span></div>
           </div>
           <div className="mt-7"><h2 className="font-bold text-gray-900 mb-3">Chọn kích thước <span className="text-rose-600">*</span></h2>{variants.length > 0 ? <div className="space-y-2">{variants.map((variant: any) => { const variantId = variant.productVariantId ?? variant.variantId; const selected = selectedVariantId === variantId; return <button type="button" key={variantId} onClick={() => { setSelectedVariantId(variantId); setActionMessage(''); }} className={`w-full flex justify-between items-center rounded-lg border px-4 py-3 text-left text-sm transition-colors ${selected ? 'border-emerald-600 bg-emerald-50 ring-1 ring-emerald-200' : 'border-gray-200 hover:border-emerald-300'}`}><span><strong>{variantLabel(variant)}</strong>{variant.productionDays ? <small className="block text-gray-500 mt-1">Sản xuất dự kiến {variant.productionDays} ngày{typeof variant.stock === 'number' ? ` · Còn ${variant.stock}` : ''}</small> : null}</span><span className="font-bold text-emerald-600">{money(variant.price)}</span></button>; })}</div> : <div className="rounded-lg border border-emerald-600 bg-emerald-50 px-4 py-3 text-sm font-medium">Tiêu chuẩn</div>}</div>
-          <div className="mt-6 flex items-center justify-between gap-4"><div><h2 className="font-bold text-gray-900">Số lượng <span className="text-rose-600">*</span></h2><p className="mt-1 text-xs text-gray-500">Chọn số sản phẩm cần mua</p></div><div className="flex items-center rounded-lg border border-gray-300"><button type="button" aria-label="Giảm số lượng" onClick={() => setQuantity(value => Math.max(1, value - 1))} className="px-4 py-2 text-lg hover:bg-gray-50">−</button><span className="min-w-10 text-center font-semibold">{quantity}</span><button type="button" aria-label="Tăng số lượng" onClick={() => setQuantity(value => value + 1)} className="px-4 py-2 text-lg hover:bg-gray-50">+</button></div></div>
-          <div className="mt-6 rounded-xl bg-emerald-50 p-4 flex items-center justify-between"><span className="text-sm text-gray-700">Tạm tính</span><strong className="text-xl text-emerald-700">{money(selectedPrice * quantity)}</strong></div>
-          <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3"><button type="button" onClick={buyNow} className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-5 py-3 font-semibold transition-colors">Mua ngay</button><button onClick={updateComparison} className="rounded-lg border border-emerald-600 px-5 py-3 font-semibold text-emerald-700 hover:bg-emerald-50 transition-colors">{compared ? 'Bỏ so sánh' : 'Thêm so sánh'}</button></div>
+          {(!user || user.role === 'CUSTOMER') && (
+            <>
+              <div className="mt-6 flex items-center justify-between gap-4"><div><h2 className="font-bold text-gray-900">Số lượng <span className="text-rose-600">*</span></h2><p className="mt-1 text-xs text-gray-500">Chọn số sản phẩm cần mua</p></div><div className="flex items-center rounded-lg border border-gray-300"><button type="button" aria-label="Giảm số lượng" onClick={() => setQuantity(value => Math.max(1, value - 1))} className="px-4 py-2 text-lg hover:bg-gray-50">−</button><span className="min-w-10 text-center font-semibold">{quantity}</span><button type="button" aria-label="Tăng số lượng" onClick={() => setQuantity(value => value + 1)} className="px-4 py-2 text-lg hover:bg-gray-50">+</button></div></div>
+              <div className="mt-6 rounded-xl bg-emerald-50 p-4 flex items-center justify-between"><span className="text-sm text-gray-700">Tạm tính</span><strong className="text-xl text-emerald-700">{money(selectedPrice * quantity)}</strong></div>
+              <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3"><button type="button" onClick={buyNow} className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-5 py-3 font-semibold transition-colors">Mua ngay</button><button onClick={updateComparison} className="rounded-lg border border-emerald-600 px-5 py-3 font-semibold text-emerald-700 hover:bg-emerald-50 transition-colors">{compared ? 'Bỏ so sánh' : 'Thêm so sánh'}</button></div>
+            </>
+          )}
           <div className="grid grid-cols-2 gap-3 mt-3"><button onClick={shareProduct} className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Chia sẻ liên kết</button><button onClick={copySpecification} className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Sao chép thông tin</button></div>
           {compareMessage && <p className="mt-3 text-sm text-emerald-700" role="status">{compareMessage} {compared && <Link to="/compare" className="underline font-medium">Xem ngay</Link>}</p>}
           {actionMessage && <p className="mt-3 text-sm text-emerald-700" role="status">{actionMessage}</p>}

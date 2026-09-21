@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { getShopInfo, getShopProducts } from '../utils/api';
 
 interface ShopInfo {
@@ -146,7 +146,7 @@ const Shop: React.FC = () => {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {products.filter(p => selectedCategory === '' || p.categoryName === selectedCategory).map(product => (
-              <div key={product.productId} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow group cursor-pointer flex flex-col">
+              <Link to={`/products/${product.productId}`} key={product.productId} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow group cursor-pointer flex flex-col">
                 <div className="h-48 bg-gray-100 relative overflow-hidden shrink-0">
                   {product.primaryImage ? (
                     <img 
@@ -170,7 +170,7 @@ const Shop: React.FC = () => {
                     </div>
                   </div>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         )}

@@ -309,6 +309,8 @@ using (var scope = app.Services.CreateScope())
 
         context.SaveChanges();
     }
+
+    FurniMatch.Api.Data.SampleDataSeeder.SeedAdditionalSellersAndProducts(context);
 }
 
 app.UseHttpsRedirection();

@@ -2,7 +2,12 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import api from '../utils/api';
 
-const RequestQuotation = () => {
+interface Props {
+  onSuccess?: () => void;
+  onCancel?: () => void;
+}
+
+const RequestQuotation = ({ onSuccess, onCancel }: Props) => {
   const [searchParams] = useSearchParams();
   const [formData, setFormData] = useState({
     categoryId: 1, // Default, would be dynamic
@@ -39,6 +44,9 @@ const RequestQuotation = () => {
     try {
       const response = await api.post('/quotationrequests', formData);
       setSuccessMessage(response.data.message || 'Đã gửi yêu cầu khảo giá thành công!');
+      if (onSuccess) {
+        setTimeout(onSuccess, 1500);
+      }
     } catch (err) {
       console.error(err);
       alert('Có lỗi xảy ra, vui lòng đăng nhập trước khi gửi yêu cầu.');
@@ -55,7 +63,10 @@ const RequestQuotation = () => {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-12">
-      <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-100">
+      <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-100 relative">
+        {onCancel && (
+          <button type="button" onClick={onCancel} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-xl font-bold p-2">✕</button>
+        )}
         <h2 className="text-2xl font-bold text-gray-900 mb-6">Tạo Yêu Cầu Khảo Giá Kích Thước Riêng</h2>
         {successMessage && <div className="mb-6 rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-800">✓ {successMessage}</div>}
         {sourceProduct && <div className="mb-6 rounded-lg bg-emerald-50 border border-emerald-100 px-4 py-3 text-sm text-emerald-800">Đang điền sẵn yêu cầu theo mẫu: <strong>{sourceProduct}</strong>. Bạn vẫn có thể điều chỉnh mọi thông tin bên dưới.</div>}
@@ -161,13 +172,24 @@ const RequestQuotation = () => {
               onChange={handleChange}
             />
           </div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-3 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition-colors shadow-md disabled:bg-gray-400"
-          >
-            {loading ? 'Đang gửi...' : 'Gửi Yêu Cầu Báo Giá'}
-          </button>
+          <div className="flex gap-4 pt-4">
+            {onCancel && (
+              <button
+                type="button"
+                onClick={onCancel}
+                className="w-1/3 py-3 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+              >
+                Hủy
+              </button>
+            )}
+            <button
+              type="submit"
+              disabled={loading}
+              className={`${onCancel ? 'w-2/3' : 'w-full'} py-3 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition-colors shadow-md disabled:bg-gray-400`}
+            >
+              {loading ? 'Đang gửi...' : 'Gửi Yêu Cầu Báo Giá'}
+            </button>
+          </div>
         </form>
       </div>
     </div>

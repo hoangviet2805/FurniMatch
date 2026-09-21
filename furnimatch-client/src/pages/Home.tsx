@@ -7,6 +7,7 @@ const Home = () => {
   const [user, setUser] = useState<any>(null);
   const [banners, setBanners] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
+  const [allProducts, setAllProducts] = useState<any[]>([]);
   const [latestProducts, setLatestProducts] = useState<any[]>([]);
   const [recentProducts, setRecentProducts] = useState<any[]>([]);
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -29,9 +30,8 @@ const Home = () => {
 
     // Fetch latest products
     api.get('/products').then(res => {
-      // Sort by productId descending to get latest and take 8
-      const sorted = res.data.sort((a: any, b: any) => b.productId - a.productId).slice(0, 8);
-      setLatestProducts(sorted);
+      setAllProducts(res.data);
+      updateRandomLatest(res.data);
       const viewedIds = getRecentlyViewedIds();
       setRecentProducts(viewedIds.map(id => res.data.find((product: any) => product.productId === id)).filter(Boolean).slice(0, 4));
     }).catch(err => console.error('Error fetching products:', err));
@@ -45,6 +45,41 @@ const Home = () => {
     }, 3000);
     return () => clearInterval(timer);
   }, [banners.length]);
+
+  const updateRandomLatest = (products: any[]) => {
+    const sorted = [...products].sort((a: any, b: any) => b.productId - a.productId);
+    const bySeller: Record<string, any[]> = {};
+    sorted.forEach(p => {
+      const sellerId = p.sellerId || (p.seller && p.seller.userId) || 'unknown';
+      if (!bySeller[sellerId]) bySeller[sellerId] = [];
+      bySeller[sellerId].push(p);
+    });
+
+    let selected: any[] = [];
+    Object.values(bySeller).forEach(sellerProducts => {
+      const newestFew = sellerProducts.slice(0, 3);
+      const randomP = newestFew[Math.floor(Math.random() * newestFew.length)];
+      selected.push(randomP);
+    });
+
+    selected.sort(() => 0.5 - Math.random());
+
+    if (selected.length < 8) {
+      const remaining = sorted.filter(p => !selected.includes(p));
+      remaining.sort(() => 0.5 - Math.random());
+      selected = [...selected, ...remaining.slice(0, 8 - selected.length)];
+    }
+    
+    setLatestProducts(selected.slice(0, 8));
+  };
+
+  useEffect(() => {
+    if (allProducts.length === 0) return;
+    const timer = setInterval(() => {
+      updateRandomLatest(allProducts);
+    }, 30000);
+    return () => clearInterval(timer);
+  }, [allProducts]);
 
   return (
     <div className="flex flex-col">
