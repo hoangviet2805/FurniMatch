@@ -9,7 +9,7 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [filterRole, setFilterRole] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 20;
+  const itemsPerPage = 10;
   const [deleteConfirmModal, setDeleteConfirmModal] = useState<{ isOpen: boolean; userId: number | null }>({ isOpen: false, userId: null });
   const [approveConfirmModal, setApproveConfirmModal] = useState<{ isOpen: boolean; sellerId: number | null }>({ isOpen: false, sellerId: null });
   const [deleteCategoryModal, setDeleteCategoryModal] = useState<{ isOpen: boolean; categoryId: number | null }>({ isOpen: false, categoryId: null });
@@ -17,7 +17,44 @@ const AdminDashboard = () => {
   const [alertModal, setAlertModal] = useState<{ isOpen: boolean; message: string; type: 'success' | 'error' }>({ isOpen: false, message: '', type: 'success' });
   
   // Tabs and Category States
-  const [activeTab, setActiveTab] = useState<'USERS' | 'PENDING_SELLERS' | 'CATEGORIES' | 'BANNERS' | 'FOOTER' | 'HOME_SETTINGS' | 'REVENUE'>('USERS');
+  const [activeTab, setActiveTab] = useState<'USERS' | 'PENDING_SELLERS' | 'CATEGORIES' | 'BANNERS' | 'FOOTER' | 'HOME_SETTINGS' | 'REVENUE' | 'WITHDRAWALS' | 'DISPUTES' | 'PAYOUT_CONFIG'>('USERS');
+
+  // ========== WITHDRAWAL / DISPUTE STATE ==========
+  const [withdrawals, setWithdrawals] = useState<any[]>([]);
+  const [wdTotal, setWdTotal] = useState(0);
+  const [wdPage, setWdPage] = useState(1);
+  const [wdLoading, setWdLoading] = useState(false);
+  const [rejectWithdrawModal, setRejectWithdrawModal] = useState<{isOpen: boolean, requestId: number | null, note: string}>({isOpen: false, requestId: null, note: ''});
+  const [approveWithdrawModal, setApproveWithdrawModal] = useState<{
+    isOpen: boolean;
+    item: any | null;
+    file: File | null;
+    preview: string | null;
+    note: string;
+    loading: boolean;
+  }>({
+    isOpen: false,
+    item: null,
+    file: null,
+    preview: null,
+    note: '',
+    loading: false
+  });
+  const [viewReceiptModal, setViewReceiptModal] = useState<{
+    isOpen: boolean;
+    url: string;
+    title: string;
+  }>({
+    isOpen: false,
+    url: '',
+    title: ''
+  });
+
+  const [disputes, setDisputes] = useState<any[]>([]);
+  const [dsTotal, setDsTotal] = useState(0);
+  const [dsPage, setDsPage] = useState(1);
+  const [dsLoading, setDsLoading] = useState(false);
+  const [resolveDisputeModal, setResolveDisputeModal] = useState<{isOpen: boolean, disputeId: number | null, note: string, action: 'resolve'|'reject'}>({isOpen: false, disputeId: null, note: '', action: 'resolve'});
 
   // ========== REVENUE STATE ==========
   const [revSummary, setRevSummary] = useState<any>(null);
@@ -34,7 +71,7 @@ const AdminDashboard = () => {
   const [commissionRate, setCommissionRate] = useState(5);
   const [commissionEditMode, setCommissionEditMode] = useState(false);
   const [commissionInput, setCommissionInput] = useState('5');
-  const REV_PAGE_SIZE = 15;
+  const REV_PAGE_SIZE = 10;
   const [categories, setCategories] = useState<any[]>([]);
   const [banners, setBanners] = useState<any[]>([]);
   const [pendingSellers, setPendingSellers] = useState<any[]>([]);
@@ -386,6 +423,171 @@ const AdminDashboard = () => {
 
   const revTotalOrderPages = Math.ceil(revOrdersTotal / REV_PAGE_SIZE);
 
+  const WD_PAGE_SIZE = 10;
+  const fetchWithdrawals = useCallback(async (page = 1) => {
+    setWdLoading(true);
+    try {
+      const res = await api.get(`/admin/withdrawals?page=${page}&pageSize=${WD_PAGE_SIZE}`);
+      setWithdrawals(res.data.data || []);
+      setWdTotal(res.data.total || 0);
+      setWdPage(page);
+    } catch {} finally { setWdLoading(false); }
+  }, []);
+
+  const DS_PAGE_SIZE = 10;
+  const fetchDisputes = useCallback(async (page = 1) => {
+    setDsLoading(true);
+    try {
+      const res = await api.get(`/admin/disputes?page=${page}&pageSize=${DS_PAGE_SIZE}`);
+      setDisputes(res.data.data || []);
+      setDsTotal(res.data.total || 0);
+      setDsPage(page);
+    } catch {} finally { setDsLoading(false); }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'WITHDRAWALS') fetchWithdrawals(1);
+    if (activeTab === 'DISPUTES') fetchDisputes(1);
+  }, [activeTab]);
+
+  const openApproveModal = (item: any) => {
+    setApproveWithdrawModal({
+      isOpen: true,
+      item,
+      file: null,
+      preview: null,
+      note: '',
+      loading: false
+    });
+  };
+
+  const handleApproveWithdrawalSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!approveWithdrawModal.item) return;
+    setApproveWithdrawModal(m => ({ ...m, loading: true }));
+    try {
+      const formData = new FormData();
+      if (approveWithdrawModal.file) {
+        formData.append('receiptFile', approveWithdrawModal.file);
+      }
+      if (approveWithdrawModal.note) {
+        formData.append('note', approveWithdrawModal.note);
+      }
+
+      await api.put(`/admin/withdrawals/${approveWithdrawModal.item.withdrawalRequestId}/approve`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      setAlertModal({ isOpen: true, message: 'Đã phê duyệt yêu cầu rút tiền thành công!', type: 'success' });
+      setApproveWithdrawModal({ isOpen: false, item: null, file: null, preview: null, note: '', loading: false });
+      fetchWithdrawals(wdPage);
+    } catch (err: any) {
+      setAlertModal({ isOpen: true, message: err.response?.data?.message || 'Lỗi phê duyệt', type: 'error' });
+      setApproveWithdrawModal(m => ({ ...m, loading: false }));
+    }
+  };
+
+  const rejectWithdrawal = async () => {
+    if (!rejectWithdrawModal.requestId) return;
+    try {
+      await api.put(`/admin/withdrawals/${rejectWithdrawModal.requestId}/reject`, { note: rejectWithdrawModal.note });
+      setAlertModal({ isOpen: true, message: 'Đã từ chối yêu cầu rút tiền và hoàn trả số dư.', type: 'success' });
+      setRejectWithdrawModal({isOpen: false, requestId: null, note: ''});
+      fetchWithdrawals(wdPage);
+    } catch (e: any) {
+      setAlertModal({ isOpen: true, message: e.response?.data?.message || 'Lỗi từ chối', type: 'error' });
+    }
+  };
+
+  const handleDisputeAction = async () => {
+    if (!resolveDisputeModal.disputeId) return;
+    const url = `/admin/disputes/${resolveDisputeModal.disputeId}/${resolveDisputeModal.action}`;
+    try {
+      await api.put(url, { note: resolveDisputeModal.note });
+      setAlertModal({ isOpen: true, message: resolveDisputeModal.action === 'resolve' ? 'Đã chấp nhận khiếu nại.' : 'Đã bác khiếu nại.', type: 'success' });
+      setResolveDisputeModal({isOpen: false, disputeId: null, note: '', action: 'resolve'});
+      fetchDisputes(dsPage);
+    } catch (e: any) {
+      setAlertModal({ isOpen: true, message: e.response?.data?.message || 'Lỗi xử lý', type: 'error' });
+    }
+  };
+
+  // ========== PAYOUT CONFIG & ORDERS STATE ==========
+  const [payoutDays, setPayoutDays] = useState<number>(3);
+  const [payoutHours, setPayoutHours] = useState<number>(0);
+  const [payoutMinutes, setPayoutMinutes] = useState<number>(0);
+  const [payoutNote, setPayoutNote] = useState<string>('');
+  const [payoutPendingOrders, setPayoutPendingOrders] = useState<any[]>([]);
+  const [loadingPayoutConfig, setLoadingPayoutConfig] = useState<boolean>(false);
+  const [triggeringPayout, setTriggeringPayout] = useState<boolean>(false);
+
+  const fetchPayoutConfigAndOrders = useCallback(async () => {
+    setLoadingPayoutConfig(true);
+    try {
+      const res = await api.get('/admin/payouts/pending-orders');
+      if (res.data?.config) {
+        setPayoutDays(res.data.config.payoutDelayDays ?? 3);
+        setPayoutHours(res.data.config.payoutDelayHours ?? 0);
+        setPayoutMinutes(res.data.config.payoutDelayMinutes ?? 0);
+      }
+      setPayoutPendingOrders(res.data?.orders || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingPayoutConfig(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'PAYOUT_CONFIG') {
+      fetchPayoutConfigAndOrders();
+    }
+  }, [activeTab, fetchPayoutConfigAndOrders]);
+
+  const handleSavePayoutConfig = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const d = Math.max(0, Number(payoutDays) || 0);
+    const h = Math.max(0, Math.min(23, Number(payoutHours) || 0));
+    const m = Math.max(0, Math.min(59, Number(payoutMinutes) || 0));
+    try {
+      await api.put('/admin/commission-config', {
+        commissionRate: commissionRate,
+        payoutDelayDays: d,
+        payoutDelayHours: h,
+        payoutDelayMinutes: m,
+        note: payoutNote || undefined
+      });
+      setAlertModal({ isOpen: true, message: `Đã lưu cấu hình thời gian chờ: ${d} ngày ${h} giờ ${m} phút!`, type: 'success' });
+      fetchPayoutConfigAndOrders();
+    } catch (err: any) {
+      setAlertModal({ isOpen: true, message: err.response?.data?.message || 'Lỗi khi lưu cấu hình', type: 'error' });
+    }
+  };
+
+  const handleTriggerPayoutNow = async () => {
+    setTriggeringPayout(true);
+    try {
+      const res = await api.post('/admin/payouts/trigger-now');
+      setAlertModal({ isOpen: true, message: res.data.message || 'Đã quét và giải ngân thành công!', type: 'success' });
+      fetchPayoutConfigAndOrders();
+    } catch (err: any) {
+      setAlertModal({ isOpen: true, message: err.response?.data?.message || 'Lỗi kích hoạt giải ngân', type: 'error' });
+    } finally {
+      setTriggeringPayout(false);
+    }
+  };
+
+  const handleReleaseOrder = async (orderId: number, orderCode: string) => {
+    if (!window.confirm(`Xác nhận giải ngân ngay cho đơn hàng ${orderCode}? Tiền sẽ được cộng vào ví người bán (sau khi trừ phí sàn).`)) return;
+    try {
+      const res = await api.post(`/admin/payouts/release-order/${orderId}`);
+      setAlertModal({ isOpen: true, message: res.data.message || 'Giải ngân thành công!', type: 'success' });
+      fetchPayoutConfigAndOrders();
+    } catch (err: any) {
+      setAlertModal({ isOpen: true, message: err.response?.data?.message || 'Lỗi giải ngân đơn hàng', type: 'error' });
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
@@ -421,28 +623,50 @@ const AdminDashboard = () => {
           >
             📊 Báo Cáo Doanh Thu
           </button>
+          <button 
+            onClick={() => setActiveTab('WITHDRAWALS')} 
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'WITHDRAWALS' ? 'bg-white text-emerald-700 shadow' : 'text-gray-500 hover:text-gray-700'}`}
+          >
+            🏧 Yêu Cầu Rút Tiền
+          </button>
+          <button 
+            onClick={() => setActiveTab('DISPUTES')} 
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'DISPUTES' ? 'bg-white text-emerald-700 shadow' : 'text-gray-500 hover:text-gray-700'}`}
+          >
+            ⚠️ Khiếu Nại
+          </button>
           <div className="relative">
             <button 
               onClick={() => setIsSettingsDropdownOpen(!isSettingsDropdownOpen)} 
-              className={`flex items-center gap-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${(activeTab === 'FOOTER' || activeTab === 'HOME_SETTINGS') ? 'bg-white text-emerald-700 shadow' : 'text-gray-500 hover:text-gray-700'}`}
+              className={`flex items-center gap-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${(activeTab === 'FOOTER' || activeTab === 'HOME_SETTINGS' || activeTab === 'PAYOUT_CONFIG') ? 'bg-white text-emerald-700 shadow' : 'text-gray-500 hover:text-gray-700'}`}
             >
               ⚙️ Cấu Hình Hệ Thống
               <svg className={`w-4 h-4 transition-transform ${isSettingsDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>
             {isSettingsDropdownOpen && (
-              <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-100">
-                <button
-                  onClick={() => { setActiveTab('HOME_SETTINGS'); setIsSettingsDropdownOpen(false); }}
-                  className={`block w-full text-left px-4 py-2 text-sm ${activeTab === 'HOME_SETTINGS' ? 'bg-emerald-50 text-emerald-700' : 'text-gray-700 hover:bg-gray-50'}`}
-                >
-                  Cấu hình Trang chủ
-                </button>
-                <button
-                  onClick={() => { setActiveTab('FOOTER'); setIsSettingsDropdownOpen(false); }}
-                  className={`block w-full text-left px-4 py-2 text-sm ${activeTab === 'FOOTER' ? 'bg-emerald-50 text-emerald-700' : 'text-gray-700 hover:bg-gray-50'}`}
-                >
-                  Cấu hình Footer
-                </button>
+              <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl py-2 z-50 border border-gray-100 divide-y divide-gray-50">
+                <div className="py-1">
+                  <button
+                    onClick={() => { setActiveTab('HOME_SETTINGS'); setIsSettingsDropdownOpen(false); }}
+                    className={`block w-full text-left px-4 py-2.5 text-sm ${activeTab === 'HOME_SETTINGS' ? 'bg-emerald-50 text-emerald-700 font-semibold' : 'text-gray-700 hover:bg-gray-50'}`}
+                  >
+                    🏠 Cấu hình Trang chủ
+                  </button>
+                  <button
+                    onClick={() => { setActiveTab('FOOTER'); setIsSettingsDropdownOpen(false); }}
+                    className={`block w-full text-left px-4 py-2.5 text-sm ${activeTab === 'FOOTER' ? 'bg-emerald-50 text-emerald-700 font-semibold' : 'text-gray-700 hover:bg-gray-50'}`}
+                  >
+                    📄 Cấu hình Footer
+                  </button>
+                </div>
+                <div className="py-1">
+                  <button
+                    onClick={() => { setActiveTab('PAYOUT_CONFIG'); setIsSettingsDropdownOpen(false); }}
+                    className={`block w-full text-left px-4 py-2.5 text-sm ${activeTab === 'PAYOUT_CONFIG' ? 'bg-emerald-50 text-emerald-700 font-semibold' : 'text-gray-700 hover:bg-gray-50'}`}
+                  >
+                    ⏱️ Thời Gian Chờ Hoàn Đơn / Giải Ngân
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -535,21 +759,21 @@ const AdminDashboard = () => {
             
             {/* Pagination Controls */}
             {totalPages > 0 && (
-              <div className="px-6 py-4 flex items-center justify-center gap-6 border-t border-gray-200 bg-gray-50">
+              <div className="flex justify-center items-center gap-4 py-5 border-t border-gray-100 bg-gray-50">
                 <button 
                   onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  disabled={currentPage === 1 || totalPages <= 1}
+                  className="px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:text-emerald-600 disabled:opacity-50 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed font-semibold shadow-sm transition-all"
                 >
                   Trước
                 </button>
-                <span className="text-sm font-medium text-gray-700">
-                  {currentPage} / {totalPages}
-                </span>
+                <div className="flex items-center justify-center min-w-[80px] px-3 py-2 rounded-lg bg-gray-50 border border-gray-100 text-gray-700 font-medium">
+                  {currentPage} / {Math.max(1, totalPages)}
+                </div>
                 <button 
                   onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
-                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  disabled={currentPage >= totalPages || totalPages <= 1}
+                  className="px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:text-emerald-600 disabled:opacity-50 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed font-semibold shadow-sm transition-all"
                 >
                   Sau
                 </button>
@@ -856,6 +1080,329 @@ const AdminDashboard = () => {
               </div>
             </form>
           )}
+        </div>
+      )}
+
+      {/* ===================== ORDER COMPLETION & PAYOUT CONFIG TAB ===================== */}
+      {activeTab === 'PAYOUT_CONFIG' && (
+        <div className="space-y-8 max-w-6xl mx-auto">
+          {/* Header Card */}
+          <div className="bg-gradient-to-r from-emerald-800 to-teal-900 rounded-2xl p-6 text-white shadow-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+              <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-700/60 rounded-full text-xs font-semibold text-emerald-200 mb-2">
+                <span>⏱️ Cấu Hình Hệ Thống</span>
+                <span>•</span>
+                <span>Bảo Lưu Thanh Toán</span>
+              </div>
+              <h2 className="text-2xl font-bold">Thời Gian Chờ Hoàn Tất Đơn & Giải Ngân</h2>
+              <p className="text-emerald-100 text-sm mt-1 max-w-2xl">
+                Cấu hình thời hạn chờ sau khi đơn hàng hoàn thành (không phát sinh khiếu nại) trước khi tiền được tự động cộng vào Ví của Người Bán.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleTriggerPayoutNow}
+                disabled={triggeringPayout}
+                className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-sm font-semibold shadow-md transition-all flex items-center gap-2 disabled:opacity-50"
+              >
+                {triggeringPayout ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                    <span>Đang quét...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>⚡ Quét & Giải ngân ngay</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Main Setting Card */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8">
+            <h3 className="text-lg font-bold text-gray-900 mb-1 flex items-center gap-2">
+              <span>🕒 Thiết lập thời hạn chờ khiếu nại</span>
+            </h3>
+            <p className="text-sm text-gray-500 mb-6">
+              Bạn có thể linh hoạt thiết lập theo <strong>Số Ngày</strong>, <strong>Số Giờ</strong> và <strong>Số Phút</strong>.
+            </p>
+
+            <form onSubmit={handleSavePayoutConfig} className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Ngày */}
+                <div className="bg-gray-50 p-5 rounded-2xl border border-gray-200/80 focus-within:border-emerald-500 focus-within:bg-white transition-all">
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="text-sm font-bold text-gray-800">📅 Số Ngày</label>
+                    <span className="text-xs text-gray-400">0 - 30 ngày</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="0"
+                      max="30"
+                      value={payoutDays}
+                      onChange={e => setPayoutDays(Math.max(0, parseInt(e.target.value) || 0))}
+                      className="w-full text-2xl font-bold text-gray-900 bg-transparent border-0 outline-none"
+                    />
+                    <span className="text-sm font-medium text-gray-500">ngày</span>
+                  </div>
+                </div>
+
+                {/* Giờ */}
+                <div className="bg-gray-50 p-5 rounded-2xl border border-gray-200/80 focus-within:border-emerald-500 focus-within:bg-white transition-all">
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="text-sm font-bold text-gray-800">⏰ Số Giờ</label>
+                    <span className="text-xs text-gray-400">0 - 23 giờ</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="0"
+                      max="23"
+                      value={payoutHours}
+                      onChange={e => setPayoutHours(Math.max(0, Math.min(23, parseInt(e.target.value) || 0)))}
+                      className="w-full text-2xl font-bold text-gray-900 bg-transparent border-0 outline-none"
+                    />
+                    <span className="text-sm font-medium text-gray-500">giờ</span>
+                  </div>
+                </div>
+
+                {/* Phút */}
+                <div className="bg-gray-50 p-5 rounded-2xl border border-gray-200/80 focus-within:border-emerald-500 focus-within:bg-white transition-all">
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="text-sm font-bold text-gray-800">⏱️ Số Phút</label>
+                    <span className="text-xs text-gray-400">0 - 59 phút</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="0"
+                      max="59"
+                      value={payoutMinutes}
+                      onChange={e => setPayoutMinutes(Math.max(0, Math.min(59, parseInt(e.target.value) || 0)))}
+                      className="w-full text-2xl font-bold text-gray-900 bg-transparent border-0 outline-none"
+                    />
+                    <span className="text-sm font-medium text-gray-500">phút</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Presets Chips */}
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">
+                  ⚡ Mẫu thời gian gợi ý nhanh:
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { label: '3 Ngày (Chuẩn TMĐT)', d: 3, h: 0, m: 0 },
+                    { label: '7 Ngày (Đồ gỗ lớn)', d: 7, h: 0, m: 0 },
+                    { label: '1 Ngày (24h)', d: 1, h: 0, m: 0 },
+                    { label: '2 Giờ', d: 0, h: 2, m: 0 },
+                    { label: '10 Phút (Thử nghiệm)', d: 0, h: 0, m: 10 },
+                    { label: '2 Phút (Test siêu tốc)', d: 0, h: 0, m: 2 },
+                  ].map((preset, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => {
+                        setPayoutDays(preset.d);
+                        setPayoutHours(preset.h);
+                        setPayoutMinutes(preset.m);
+                      }}
+                      className="px-3 py-1.5 bg-gray-100 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 border border-gray-200 rounded-lg text-xs font-medium text-gray-700 transition-colors"
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Total calculation banner */}
+              <div className="bg-emerald-50/80 border border-emerald-200 rounded-xl p-4 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">💡</span>
+                  <div>
+                    <p className="text-sm font-semibold text-emerald-900">
+                      Tổng thời gian chờ sau khi đơn hoàn thành:
+                    </p>
+                    <p className="text-xs text-emerald-700 mt-0.5">
+                      <span className="font-bold text-sm text-emerald-800">
+                        {payoutDays} ngày {payoutHours} giờ {payoutMinutes} phút
+                      </span>
+                      {' '}(tương đương {(payoutDays * 24 * 60) + (payoutHours * 60) + payoutMinutes} phút)
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <span className="text-xs text-gray-500">Phí hoa hồng sàn:</span>
+                  <p className="text-base font-bold text-amber-600">{commissionRate}%</p>
+                </div>
+              </div>
+
+              {/* Note input */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Ghi chú chính sách (tuỳ chọn)</label>
+                <input
+                  type="text"
+                  value={payoutNote}
+                  onChange={e => setPayoutNote(e.target.value)}
+                  placeholder="VD: Cập nhật chính sách thanh toán áp dụng từ hôm nay..."
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={fetchPayoutConfigAndOrders}
+                  className="px-5 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50"
+                >
+                  🔄 Hoàn tác / Tải lại
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors"
+                >
+                  💾 Lưu Cấu Hình Thời Gian
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Process flow guide */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-gray-700 mb-4">
+              📌 Quy trình bảo lưu và giải ngân tiền đơn hàng:
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 font-bold flex items-center justify-center mb-2">1</div>
+                <h4 className="text-sm font-bold text-gray-900">Đơn Hoàn Thành</h4>
+                <p className="text-xs text-gray-500 mt-1">Đơn giao thành công chuyển sang <code>COMPLETED</code>, ghi nhận thời điểm hoàn tất.</p>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 font-bold flex items-center justify-center mb-2">2</div>
+                <h4 className="text-sm font-bold text-gray-900">Thời Gian Chờ</h4>
+                <p className="text-xs text-gray-500 mt-1">Hệ thống tạm giữ tiền trong <strong>{payoutDays}d {payoutHours}h {payoutMinutes}m</strong> để người mua kiểm tra sản phẩm.</p>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                <div className="w-8 h-8 rounded-lg bg-red-100 text-red-700 font-bold flex items-center justify-center mb-2">3</div>
+                <h4 className="text-sm font-bold text-gray-900">Xử Lý Khiếu Nại</h4>
+                <p className="text-xs text-gray-500 mt-1">Nếu khách khiếu nại, tiền lập tức bị đóng băng chờ Admin phân xử tại tab Khiếu Nại.</p>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 font-bold flex items-center justify-center mb-2">4</div>
+                <h4 className="text-sm font-bold text-gray-900">Giải Ngân Vào Ví</h4>
+                <p className="text-xs text-gray-500 mt-1">Hết hạn không khiếu nại, tiền tự động trừ hoa hồng ({commissionRate}%) và cộng vào Ví Seller.</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Pending Payout Orders Table */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="px-6 py-5 border-b border-gray-100 flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+              <div>
+                <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                  <span>📦 Đơn hàng Hoàn tất đang bảo lưu thanh toán</span>
+                  <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-600">
+                    {payoutPendingOrders.length} đơn
+                  </span>
+                </h3>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Danh sách các đơn hàng đã hoàn tất (COMPLETED) đang trong thời gian chờ giải ngân hoặc sẵn sàng giải ngân
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={fetchPayoutConfigAndOrders}
+                disabled={loadingPayoutConfig}
+                className="px-3.5 py-1.5 text-xs font-semibold text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 self-start sm:self-auto flex items-center gap-1.5"
+              >
+                <span>🔄 Làm mới</span>
+              </button>
+            </div>
+
+            {loadingPayoutConfig ? (
+              <div className="py-16 text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-2 border-emerald-500 border-t-transparent mx-auto mb-2" />
+                <span className="text-xs text-gray-400">Đang tải danh sách đơn hàng...</span>
+              </div>
+            ) : payoutPendingOrders.length === 0 ? (
+              <div className="py-16 text-center">
+                <span className="text-3xl block mb-2">✨</span>
+                <p className="text-sm font-medium text-gray-700">Hiện tại không có đơn hàng nào đang trong thời gian bảo lưu.</p>
+                <p className="text-xs text-gray-400 mt-1">Tất cả đơn hoàn thành đã được giải ngân hoặc chưa có đơn hàng mới.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-100">
+                  <thead className="bg-gray-50/80">
+                    <tr>
+                      <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Mã Đơn</th>
+                      <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Người Bán</th>
+                      <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Khách Hàng</th>
+                      <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Doanh thu</th>
+                      <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Hoàn Tất Lúc</th>
+                      <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Trạng Thái</th>
+                      <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Thao Tác</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {payoutPendingOrders.map((ord: any) => {
+                      return (
+                        <tr key={ord.orderId} className="hover:bg-gray-50/50 transition-colors">
+                          <td className="px-5 py-3.5 text-sm font-mono font-bold text-gray-900">
+                            {ord.orderCode}
+                          </td>
+                          <td className="px-5 py-3.5 text-sm font-medium text-gray-800">
+                            {ord.sellerName}
+                          </td>
+                          <td className="px-5 py-3.5 text-sm text-gray-600">
+                            {ord.customerName}
+                          </td>
+                          <td className="px-5 py-3.5 text-sm font-bold text-right text-emerald-700 whitespace-nowrap">
+                            {money(ord.subtotal || ord.totalAmount)}
+                          </td>
+                          <td className="px-5 py-3.5 text-xs text-gray-500 whitespace-nowrap">
+                            {ord.completedAt ? new Date(ord.completedAt).toLocaleString('vi-VN') : '—'}
+                          </td>
+                          <td className="px-5 py-3.5 text-center">
+                            {ord.hasDispute ? (
+                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">
+                                ⚠️ Đang có khiếu nại
+                              </span>
+                            ) : ord.isEligible ? (
+                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">
+                                ✅ Đủ điều kiện giải ngân
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
+                                ⏳ Đang bảo lưu
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-5 py-3.5 text-center">
+                            {!ord.hasDispute && (
+                              <button
+                                type="button"
+                                onClick={() => handleReleaseOrder(ord.orderId, ord.orderCode)}
+                                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition-colors shadow-sm"
+                                title="Giải ngân ngay cho người bán mà không cần chờ hết hạn"
+                              >
+                                ⚡ Duyệt sớm
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -1251,15 +1798,25 @@ const AdminDashboard = () => {
                   </table>
                 </div>
                 {/* Pagination */}
-                {revTotalOrderPages > 1 && (
-                  <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-between">
-                    <p className="text-sm text-gray-500">Trang {revOrdersPage} / {revTotalOrderPages}</p>
-                    <div className="flex gap-2">
-                      <button disabled={revOrdersPage <= 1} onClick={() => fetchRevenueOrders(revOrdersPage - 1)}
-                        className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg disabled:opacity-40 hover:bg-gray-50 transition-colors">← Trước</button>
-                      <button disabled={revOrdersPage >= revTotalOrderPages} onClick={() => fetchRevenueOrders(revOrdersPage + 1)}
-                        className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg disabled:opacity-40 hover:bg-gray-50 transition-colors">Tiếp →</button>
+                {revOrders.length > 0 && (
+                  <div className="flex justify-center items-center gap-4 py-5 border-t border-gray-100">
+                    <button 
+                      onClick={() => fetchRevenueOrders(Math.max(1, revOrdersPage - 1))}
+                      disabled={revOrdersPage <= 1}
+                      className="px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:text-emerald-600 disabled:opacity-50 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed font-semibold shadow-sm transition-all"
+                    >
+                      Trước
+                    </button>
+                    <div className="flex items-center justify-center min-w-[80px] px-3 py-2 rounded-lg bg-gray-50 border border-gray-100 text-gray-700 font-medium">
+                      {revOrdersPage} / {Math.max(1, revTotalOrderPages)}
                     </div>
+                    <button 
+                      onClick={() => fetchRevenueOrders(Math.min(revTotalOrderPages, revOrdersPage + 1))}
+                      disabled={revOrdersPage >= revTotalOrderPages || revTotalOrderPages <= 1}
+                      className="px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:text-emerald-600 disabled:opacity-50 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed font-semibold shadow-sm transition-all"
+                    >
+                      Sau
+                    </button>
                   </div>
                 )}
               </div>
@@ -1269,8 +1826,437 @@ const AdminDashboard = () => {
       )}
 
       {/* Alert Modal */}
-      {alertModal.isOpen && (
+      {/* ===================== WITHDRAWALS TAB ===================== */}
+      {activeTab === 'WITHDRAWALS' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-xl font-bold text-gray-900">🏧 Yêu Cầu Rút Tiền</h2>
+            <span className="text-sm text-gray-500">{wdTotal} yêu cầu</span>
+          </div>
+          {wdLoading ? (
+            <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-600" /></div>
+          ) : (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+              {withdrawals.length === 0 ? (
+                <div className="py-12 text-center text-gray-400">Không có yêu cầu nào đang chờ xử lý.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-100">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Ngày tạo</th>
+                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Seller</th>
+                        <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Số tiền</th>
+                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Ngân hàng</th>
+                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Số TK / Chủ TK</th>
+                        <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Trạng thái</th>
+                        <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Thao tác</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {withdrawals.map((w: any) => {
+                        const statusCls: Record<string, string> = { PENDING: 'bg-amber-100 text-amber-700', APPROVED: 'bg-emerald-100 text-emerald-700', REJECTED: 'bg-red-100 text-red-700' };
+                        const statusLabel: Record<string, string> = { PENDING: 'Chờ duyệt', APPROVED: 'Đã duyệt', REJECTED: 'Từ chối' };
+                        return (
+                          <tr key={w.withdrawalRequestId} className="hover:bg-gray-50/50">
+                            <td className="px-5 py-4 text-sm text-gray-600 whitespace-nowrap">{new Date(w.createdAt).toLocaleDateString('vi-VN')}</td>
+                            <td className="px-5 py-4">
+                              <p className="text-sm font-semibold text-gray-900">{w.sellerName}</p>
+                              <p className="text-xs text-gray-400">{w.sellerEmail}</p>
+                            </td>
+                            <td className="px-5 py-4 text-sm font-bold text-emerald-700 text-right whitespace-nowrap">
+                              {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(w.amount)}
+                            </td>
+                            <td className="px-5 py-4 text-sm text-gray-700">{w.bankName}</td>
+                            <td className="px-5 py-4">
+                              <p className="text-sm font-mono text-gray-900">{w.bankAccountNumber}</p>
+                              <p className="text-xs text-gray-500">{w.bankAccountHolder}</p>
+                            </td>
+                            <td className="px-5 py-4 text-center">
+                              <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold ${statusCls[w.status] ?? 'bg-gray-100 text-gray-600'}`}>
+                                {statusLabel[w.status] ?? w.status}
+                              </span>
+                            </td>
+                            <td className="px-5 py-4 text-center">
+                              {w.status === 'PENDING' && (
+                                <div className="flex items-center justify-center gap-2">
+                                  <button onClick={() => openApproveModal(w)}
+                                    className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700 transition-colors shadow-sm">
+                                    ✅ Duyệt & Đính kèm Bill
+                                  </button>
+                                  <button onClick={() => setRejectWithdrawModal({isOpen: true, requestId: w.withdrawalRequestId, note: ''})}
+                                    className="px-3 py-1.5 bg-red-100 text-red-700 text-xs font-semibold rounded-lg hover:bg-red-200 transition-colors">
+                                    ❌ Từ chối
+                                  </button>
+                                </div>
+                              )}
+                              {w.status !== 'PENDING' && (
+                                <div className="space-y-1">
+                                  {w.paymentReceiptUrl && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setViewReceiptModal({
+                                        isOpen: true,
+                                        url: w.paymentReceiptUrl.startsWith('http') ? w.paymentReceiptUrl : `http://localhost:5234${w.paymentReceiptUrl}`,
+                                        title: `Bill chuyển khoản - ${w.sellerName} (${money(w.amount)})`
+                                      })}
+                                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg text-xs font-semibold transition-colors border border-emerald-200"
+                                    >
+                                      <span>🧾 Xem bill</span>
+                                    </button>
+                                  )}
+                                  {w.adminNote && (
+                                    <p className="text-xs text-gray-500 max-w-xs truncate" title={w.adminNote}>
+                                      {w.status === 'REJECTED' ? `Lý do: ${w.adminNote}` : `Ghi chú: ${w.adminNote}`}
+                                    </p>
+                                  )}
+                                  {!w.paymentReceiptUrl && !w.adminNote && <span className="text-xs text-gray-400">—</span>}
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {wdTotal > 0 && (
+                <div className="flex justify-center items-center gap-4 py-5 border-t border-gray-100">
+                  <button 
+                    disabled={wdPage <= 1} 
+                    onClick={() => fetchWithdrawals(wdPage - 1)} 
+                    className="px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:text-emerald-600 disabled:opacity-50 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed font-semibold shadow-sm transition-all"
+                  >
+                    Trước
+                  </button>
+                  <div className="flex items-center justify-center min-w-[80px] px-3 py-2 rounded-lg bg-gray-50 border border-gray-100 text-gray-700 font-medium">
+                    {wdPage} / {Math.max(1, Math.ceil(wdTotal / WD_PAGE_SIZE))}
+                  </div>
+                  <button 
+                    disabled={wdPage >= Math.ceil(wdTotal / WD_PAGE_SIZE) || Math.ceil(wdTotal / WD_PAGE_SIZE) <= 1} 
+                    onClick={() => fetchWithdrawals(wdPage + 1)} 
+                    className="px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:text-emerald-600 disabled:opacity-50 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed font-semibold shadow-sm transition-all"
+                  >
+                    Sau
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
+          {/* Reject Withdrawal Modal */}
+          {rejectWithdrawModal.isOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-4">❌ Từ chối yêu cầu rút tiền</h3>
+                <p className="text-sm text-gray-600 mb-3">Vui lòng nhập lý do từ chối để thông báo cho seller:</p>
+                <textarea
+                  value={rejectWithdrawModal.note}
+                  onChange={e => setRejectWithdrawModal(m => ({...m, note: e.target.value}))}
+                  rows={3} placeholder="Lý do từ chối..."
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-red-400 resize-none text-sm"
+                />
+                <div className="flex gap-3 mt-4">
+                  <button onClick={() => setRejectWithdrawModal({isOpen: false, requestId: null, note: ''})} className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-gray-600 font-medium hover:bg-gray-50">Huỷ</button>
+                  <button onClick={rejectWithdrawal} className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700">Xác nhận từ chối</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Approve Withdrawal Modal with Bill upload */}
+          {approveWithdrawModal.isOpen && approveWithdrawModal.item && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+                <div className="bg-gradient-to-r from-emerald-600 to-teal-700 px-6 py-4 text-white flex justify-between items-center">
+                  <h3 className="text-lg font-bold">✅ Phê Duyệt & Tải Lên Bill Chuyển Khoản</h3>
+                  <button
+                    type="button"
+                    onClick={() => setApproveWithdrawModal({ isOpen: false, item: null, file: null, preview: null, note: '', loading: false })}
+                    className="text-white/80 hover:text-white text-xl"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <form onSubmit={handleApproveWithdrawalSubmit} className="p-6 space-y-4">
+                  {/* Bank & Transfer Info Box */}
+                  <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-4 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-semibold text-emerald-800 uppercase">Số tiền chuyển:</span>
+                      <span className="text-xl font-extrabold text-emerald-700">
+                        {money(approveWithdrawModal.item.amount)}
+                      </span>
+                    </div>
+                    <div className="text-xs text-gray-600 grid grid-cols-2 gap-2 pt-2 border-t border-emerald-100">
+                      <div>
+                        <span className="text-gray-400 block">Xưởng / Seller:</span>
+                        <span className="font-semibold text-gray-900">{approveWithdrawModal.item.sellerName}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-400 block">Ngân hàng:</span>
+                        <span className="font-semibold text-gray-900">{approveWithdrawModal.item.bankName}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-400 block">Số tài khoản:</span>
+                        <span className="font-mono font-bold text-gray-900 text-sm">{approveWithdrawModal.item.bankAccountNumber}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-400 block">Chủ tài khoản:</span>
+                        <span className="font-semibold text-gray-900">{approveWithdrawModal.item.bankAccountHolder}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Upload File Input */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                      🧾 Đính kèm bill / Ủy nhiệm chi (Hình ảnh bill chuyển khoản)
+                    </label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={e => {
+                        const f = e.target.files?.[0];
+                        if (f) {
+                          setApproveWithdrawModal(m => ({
+                            ...m,
+                            file: f,
+                            preview: URL.createObjectURL(f)
+                          }));
+                        }
+                      }}
+                      className="block w-full text-xs text-gray-500 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer"
+                    />
+
+                    {/* Preview Image */}
+                    {approveWithdrawModal.preview && (
+                      <div className="mt-3 relative rounded-xl border border-gray-200 overflow-hidden bg-gray-50 max-h-48 flex items-center justify-center group">
+                        <img
+                          src={approveWithdrawModal.preview}
+                          alt="Bill preview"
+                          className="max-h-48 w-auto object-contain"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setApproveWithdrawModal(m => ({ ...m, file: null, preview: null }))}
+                          className="absolute top-2 right-2 px-2 py-1 bg-red-600/80 hover:bg-red-700 text-white rounded text-xs font-semibold shadow"
+                        >
+                          Gỡ ảnh
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Note Input */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Mã tham chiếu giao dịch / Lời nhắn cho Seller (tuỳ chọn)
+                    </label>
+                    <input
+                      type="text"
+                      value={approveWithdrawModal.note}
+                      onChange={e => setApproveWithdrawModal(m => ({ ...m, note: e.target.value }))}
+                      placeholder="VD: FT2609221234 - Đã chuyển khoản qua Techcombank"
+                      className="w-full px-4 py-2 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setApproveWithdrawModal({ isOpen: false, item: null, file: null, preview: null, note: '', loading: false })}
+                      className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-gray-600 font-medium hover:bg-gray-50"
+                    >
+                      Huỷ
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={approveWithdrawModal.loading}
+                      className="flex-1 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold shadow-md transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {approveWithdrawModal.loading ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          <span>Đang xử lý...</span>
+                        </>
+                      ) : (
+                        <span>✅ Xác nhận Duyệt</span>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* View Receipt Image Modal */}
+          {viewReceiptModal.isOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+              <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden">
+                <div className="p-4 border-b border-gray-100 flex justify-between items-center">
+                  <h3 className="font-bold text-gray-900 text-sm truncate">{viewReceiptModal.title || 'Chứng từ chuyển khoản'}</h3>
+                  <button
+                    type="button"
+                    onClick={() => setViewReceiptModal({ isOpen: false, url: '', title: '' })}
+                    className="p-1 rounded-lg hover:bg-gray-100 text-gray-500"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="p-4 bg-gray-50 flex items-center justify-center max-h-[75vh] overflow-auto">
+                  <img src={viewReceiptModal.url} alt="Receipt" className="max-w-full max-h-[70vh] object-contain rounded-lg shadow-sm" />
+                </div>
+                <div className="p-3 border-t border-gray-100 flex justify-between items-center">
+                  <a
+                    href={viewReceiptModal.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs font-semibold text-emerald-600 hover:underline flex items-center gap-1"
+                  >
+                    <span>Mở ảnh gốc trong tab mới ↗</span>
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => setViewReceiptModal({ isOpen: false, url: '', title: '' })}
+                    className="px-4 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-semibold rounded-lg"
+                  >
+                    Đóng
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ===================== DISPUTES TAB ===================== */}
+      {activeTab === 'DISPUTES' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-xl font-bold text-gray-900">⚠️ Khiếu Nại Đơn Hàng</h2>
+            <span className="text-sm text-gray-500">{dsTotal} khiếu nại đang mở</span>
+          </div>
+          {dsLoading ? (
+            <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-amber-500" /></div>
+          ) : (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+              {disputes.length === 0 ? (
+                <div className="py-12 text-center text-gray-400">✅ Không có khiếu nại nào đang mở.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-100">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Ngày tạo</th>
+                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Mã Đơn</th>
+                        <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Giá trị</th>
+                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Khách hàng</th>
+                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Lý do khiếu nại</th>
+                        <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Trạng thái</th>
+                        <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Thao tác</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {disputes.map((d: any) => {
+                        const statusCls: Record<string, string> = { OPEN: 'bg-amber-100 text-amber-700', RESOLVED: 'bg-blue-100 text-blue-700', REJECTED: 'bg-emerald-100 text-emerald-700' };
+                        const statusLabel: Record<string, string> = { OPEN: 'Đang mở', RESOLVED: 'Đã chấp nhận', REJECTED: 'Đã bác' };
+                        return (
+                          <tr key={d.orderDisputeId} className="hover:bg-gray-50/50">
+                            <td className="px-5 py-4 text-sm text-gray-600 whitespace-nowrap">{new Date(d.createdAt).toLocaleDateString('vi-VN')}</td>
+                            <td className="px-5 py-4 text-sm font-mono font-semibold text-gray-900">{d.orderCode}</td>
+                            <td className="px-5 py-4 text-sm font-bold text-right text-gray-900 whitespace-nowrap">
+                              {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(d.orderAmount)}
+                            </td>
+                            <td className="px-5 py-4">
+                              <p className="text-sm font-medium text-gray-900">{d.customerName}</p>
+                              <p className="text-xs text-gray-400">{d.customerEmail}</p>
+                            </td>
+                            <td className="px-5 py-4 text-sm text-gray-700 max-w-xs">
+                              <p className="truncate" title={d.reason}>{d.reason}</p>
+                            </td>
+                            <td className="px-5 py-4 text-center">
+                              <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold ${statusCls[d.status] ?? 'bg-gray-100 text-gray-600'}`}>
+                                {statusLabel[d.status] ?? d.status}
+                              </span>
+                            </td>
+                            <td className="px-5 py-4 text-center">
+                              {d.status === 'OPEN' && (
+                                <div className="flex items-center justify-center gap-2">
+                                  <button onClick={() => setResolveDisputeModal({isOpen: true, disputeId: d.orderDisputeId, note: '', action: 'resolve'})}
+                                    className="px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 transition-colors">
+                                    ✅ Chấp nhận
+                                  </button>
+                                  <button onClick={() => setResolveDisputeModal({isOpen: true, disputeId: d.orderDisputeId, note: '', action: 'reject'})}
+                                    className="px-3 py-1.5 bg-gray-100 text-gray-700 text-xs font-semibold rounded-lg hover:bg-gray-200 transition-colors">
+                                    ❌ Bác khiếu nại
+                                  </button>
+                                </div>
+                              )}
+                              {d.status !== 'OPEN' && <span className="text-xs text-gray-400">{d.adminNote || '—'}</span>}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {dsTotal > 0 && (
+                <div className="flex justify-center items-center gap-4 py-5 border-t border-gray-100">
+                  <button 
+                    disabled={dsPage <= 1} 
+                    onClick={() => fetchDisputes(dsPage - 1)} 
+                    className="px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:text-emerald-600 disabled:opacity-50 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed font-semibold shadow-sm transition-all"
+                  >
+                    Trước
+                  </button>
+                  <div className="flex items-center justify-center min-w-[80px] px-3 py-2 rounded-lg bg-gray-50 border border-gray-100 text-gray-700 font-medium">
+                    {dsPage} / {Math.max(1, Math.ceil(dsTotal / DS_PAGE_SIZE))}
+                  </div>
+                  <button 
+                    disabled={dsPage >= Math.ceil(dsTotal / DS_PAGE_SIZE) || Math.ceil(dsTotal / DS_PAGE_SIZE) <= 1} 
+                    onClick={() => fetchDisputes(dsPage + 1)} 
+                    className="px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:text-emerald-600 disabled:opacity-50 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed font-semibold shadow-sm transition-all"
+                  >
+                    Sau
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Resolve/Reject Dispute Modal */}
+          {resolveDisputeModal.isOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-2">
+                  {resolveDisputeModal.action === 'resolve' ? '✅ Chấp nhận khiếu nại' : '❌ Bác khiếu nại'}
+                </h3>
+                <p className="text-sm text-gray-600 mb-3">
+                  {resolveDisputeModal.action === 'resolve'
+                    ? 'Khiếu nại sẽ được chấp nhận. Tiền sẽ không giải ngân cho seller và cần xử lý thủ công.'
+                    : 'Khiếu nại sẽ bị bác. Đơn hàng sẽ được giải ngân về ví seller theo lịch tự động.'}
+                </p>
+                <textarea
+                  value={resolveDisputeModal.note}
+                  onChange={e => setResolveDisputeModal(m => ({...m, note: e.target.value}))}
+                  rows={3} placeholder="Ghi chú của Admin..."
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-400 resize-none text-sm"
+                />
+                <div className="flex gap-3 mt-4">
+                  <button onClick={() => setResolveDisputeModal({isOpen: false, disputeId: null, note: '', action: 'resolve'})} className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-gray-600 font-medium hover:bg-gray-50">Huỷ</button>
+                  <button onClick={handleDisputeAction} className={`flex-1 px-4 py-2.5 text-white rounded-xl font-semibold ${resolveDisputeModal.action === 'resolve' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-emerald-600 hover:bg-emerald-700'}`}>Xác nhận</button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Alert Modal */}
+      {alertModal.isOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6 text-center">
             {alertModal.type === 'success' ? (

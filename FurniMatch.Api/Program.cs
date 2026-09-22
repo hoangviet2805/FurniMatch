@@ -24,6 +24,10 @@ builder.Services.AddHttpClient<MomoPaymentService>();
 builder.Services.Configure<SePayOptions>(builder.Configuration.GetSection("SePay"));
 builder.Services.AddHttpClient<SePayPaymentService>(client => client.BaseAddress = new Uri("https://userapi.sepay.vn/v2/"));
 
+// Escrow & Payout Services
+builder.Services.AddScoped<EscrowService>();
+builder.Services.AddHostedService<PayoutBackgroundService>();
+
 // Add Authentication
 var jwtSettings = builder.Configuration.GetSection("Jwt");
 builder.Services.AddAuthentication(options =>

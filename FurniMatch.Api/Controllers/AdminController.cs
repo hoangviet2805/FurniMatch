@@ -203,6 +203,9 @@ namespace FurniMatch.Api.Controllers
                 _context.CommissionConfigs.Add(config);
             }
             config.CommissionRate = Math.Clamp(dto.CommissionRate, 0, 100);
+            config.PayoutDelayDays = Math.Max(0, dto.PayoutDelayDays);
+            config.PayoutDelayHours = Math.Clamp(dto.PayoutDelayHours, 0, 23);
+            config.PayoutDelayMinutes = Math.Clamp(dto.PayoutDelayMinutes, 0, 59);
             config.Note = dto.Note;
             config.IsActive = true;
             config.UpdatedAt = DateTime.UtcNow;
@@ -307,7 +310,7 @@ namespace FurniMatch.Api.Controllers
             [FromQuery] string? to,
             [FromQuery] string? status,
             [FromQuery] int page = 1,
-            [FromQuery] int pageSize = 20)
+            [FromQuery] int pageSize = 10)
         {
             var commissionRate = await GetCurrentCommissionRate();
             var query = _context.Orders
@@ -339,6 +342,7 @@ namespace FurniMatch.Api.Controllers
                     o.PaymentStatus,
                     o.OrderStatus,
                     o.CreatedAt,
+                    o.Note,
                     SellerShopName = o.Seller != null ? (o.Seller.ShopName ?? o.Seller.FullName) : "N/A",
                     CustomerName = o.Customer != null ? o.Customer.FullName : "N/A"
                 })
@@ -355,6 +359,382 @@ namespace FurniMatch.Api.Controllers
                 .FirstOrDefaultAsync();
             return config?.CommissionRate ?? 5.0m;
         }
+
+        // ─── WITHDRAWAL MANAGEMENT ───────────────────────────────────────────
+
+        [HttpGet("withdrawals")]
+        public async Task<IActionResult> GetWithdrawals([FromQuery] string? status = null, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
+        {
+            var query = _context.WithdrawalRequests
+                .Include(w => w.Seller)
+                .AsQueryable();
+
+            if (!string.IsNullOrEmpty(status))
+                query = query.Where(w => w.Status == status.ToUpper());
+
+            var total = await query.CountAsync();
+            var data = await query
+                .OrderByDescending(w => w.CreatedAt)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(w => new
+                {
+                    w.WithdrawalRequestId,
+                    w.Amount,
+                    w.BankName,
+                    w.BankAccountNumber,
+                    w.BankAccountHolder,
+                    w.Note,
+                    w.Status,
+                    w.AdminNote,
+                    w.PaymentReceiptUrl,
+                    w.CreatedAt,
+                    w.ProcessedAt,
+                    SellerName = w.Seller != null ? (w.Seller.ShopName ?? w.Seller.FullName) : "N/A",
+                    SellerEmail = w.Seller != null ? w.Seller.Email : "N/A"
+                })
+                .ToListAsync();
+
+            return Ok(new { total, page, pageSize, data });
+        }
+
+        [HttpPut("withdrawals/{id}/approve")]
+        public async Task<IActionResult> ApproveWithdrawal(
+            int id,
+            [FromForm] ApproveWithdrawalForm? form,
+            [FromServices] IWebHostEnvironment env)
+        {
+            var request = await _context.WithdrawalRequests
+                .Include(w => w.Seller)
+                .FirstOrDefaultAsync(w => w.WithdrawalRequestId == id);
+
+            if (request == null) return NotFound(new { message = "Không tìm thấy yêu cầu." });
+            if (request.Status != "PENDING") return BadRequest(new { message = "Yêu cầu này đã được xử lý." });
+
+            // Giải phóng số tiền đóng băng
+            var wallet = await _context.EscrowWallets.FirstOrDefaultAsync(w => w.UserId == request.SellerId);
+            if (wallet == null) return BadRequest(new { message = "Không tìm thấy ví của seller." });
+
+            wallet.FrozenBalance -= request.Amount;
+            wallet.UpdatedAt = DateTime.UtcNow;
+
+            // Xử lý lưu ảnh bill chuyển khoản đính kèm nếu có
+            if (form?.ReceiptFile != null && form.ReceiptFile.Length > 0)
+            {
+                var uploadsFolder = Path.Combine(env.WebRootPath ?? Path.Combine(env.ContentRootPath, "wwwroot"), "uploads", "receipts");
+                if (!Directory.Exists(uploadsFolder))
+                {
+                    Directory.CreateDirectory(uploadsFolder);
+                }
+
+                var ext = Path.GetExtension(form.ReceiptFile.FileName);
+                var fileName = $"receipt_{request.WithdrawalRequestId}_{Guid.NewGuid():N}{ext}";
+                var filePath = Path.Combine(uploadsFolder, fileName);
+
+                using (var stream = new FileStream(filePath, FileMode.Create))
+                {
+                    await form.ReceiptFile.CopyToAsync(stream);
+                }
+
+                request.PaymentReceiptUrl = $"/uploads/receipts/{fileName}";
+            }
+
+            if (!string.IsNullOrWhiteSpace(form?.Note))
+            {
+                request.AdminNote = form.Note.Trim();
+            }
+
+            request.Status = "APPROVED";
+            request.ProcessedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            // Gửi thông báo chuông cho seller
+            _context.Notifications.Add(new Notification
+            {
+                UserId = request.SellerId,
+                Title = "Yêu cầu rút tiền đã được duyệt",
+                Message = $"Yêu cầu rút {request.Amount:N0}đ về ngân hàng {request.BankName} ({request.BankAccountNumber}) đã được chuyển khoản thành công." +
+                          (!string.IsNullOrEmpty(request.PaymentReceiptUrl) ? " Admin đã đính kèm bill chuyển khoản." : ""),
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow
+            });
+            await _context.SaveChangesAsync();
+
+            // Gửi email thông báo cho seller
+            if (request.Seller != null)
+            {
+                try
+                {
+                    var emailBody = $@"
+                        <h2>✅ Yêu cầu rút tiền đã được phê duyệt!</h2>
+                        <p>Yêu cầu rút <strong>{request.Amount:N0}đ</strong> về tài khoản <strong>{request.BankName} - {request.BankAccountNumber} ({request.BankAccountHolder})</strong> đã được Admin phê duyệt và thực hiện chuyển khoản.</p>
+                        {(!string.IsNullOrEmpty(request.AdminNote) ? $"<p><strong>Ghi chú:</strong> {request.AdminNote}</p>" : "")}
+                        {(!string.IsNullOrEmpty(request.PaymentReceiptUrl) ? "<p>Hình ảnh chứng từ / bill chuyển khoản đã được lưu vào hệ thống, bạn có thể xem lại tại trang Quản lý Ví của Seller.</p>" : "")}
+                    ";
+                    await _emailService.SendEmailAsync(request.Seller.Email, "Yêu cầu rút tiền được phê duyệt - FurniMatch", emailBody);
+                }
+                catch { }
+            }
+
+            return Ok(new { 
+                message = "Đã phê duyệt yêu cầu rút tiền.", 
+                paymentReceiptUrl = request.PaymentReceiptUrl 
+            });
+        }
+
+        [HttpPut("withdrawals/{id}/reject")]
+        public async Task<IActionResult> RejectWithdrawal(int id, [FromBody] AdminNoteDto dto)
+        {
+            var request = await _context.WithdrawalRequests
+                .Include(w => w.Seller)
+                .FirstOrDefaultAsync(w => w.WithdrawalRequestId == id);
+
+            if (request == null) return NotFound(new { message = "Không tìm thấy yêu cầu." });
+            if (request.Status != "PENDING") return BadRequest(new { message = "Yêu cầu này đã được xử lý." });
+
+            // Hoàn trả số tiền đóng băng về AvailableBalance
+            var wallet = await _context.EscrowWallets.FirstOrDefaultAsync(w => w.UserId == request.SellerId);
+            if (wallet != null)
+            {
+                wallet.FrozenBalance -= request.Amount;
+                wallet.AvailableBalance += request.Amount;
+                wallet.UpdatedAt = DateTime.UtcNow;
+            }
+
+            request.Status = "REJECTED";
+            request.AdminNote = dto.Note;
+            request.ProcessedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            // Gửi email thông báo lý do từ chối
+            if (request.Seller != null)
+            {
+                try
+                {
+                    var emailBody = $@"
+                        <h2>❌ Yêu cầu rút tiền bị từ chối</h2>
+                        <p>Yêu cầu rút <strong>{request.Amount:N0}đ</strong> của bạn đã bị từ chối với lý do:</p>
+                        <div style='padding:15px;background:#f8d7da;color:#721c24;border-radius:5px;'>{dto.Note}</div>
+                        <p>Số tiền đã được hoàn trả vào số dư khả dụng của bạn. Vui lòng kiểm tra lại thông tin và thử lại.</p>
+                    ";
+                    await _emailService.SendEmailAsync(request.Seller.Email, "Yêu cầu rút tiền bị từ chối - FurniMatch", emailBody);
+                }
+                catch { }
+            }
+
+            return Ok(new { message = "Đã từ chối yêu cầu rút tiền và hoàn trả số dư." });
+        }
+
+        // ─── DISPUTE MANAGEMENT ──────────────────────────────────────────────
+
+        [HttpGet("disputes")]
+        public async Task<IActionResult> GetDisputes([FromQuery] string? status = null, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
+        {
+            var query = _context.OrderDisputes
+                .Include(d => d.Order)
+                .Include(d => d.Customer)
+                .AsQueryable();
+
+            if (!string.IsNullOrEmpty(status))
+                query = query.Where(d => d.Status == status.ToUpper());
+            else
+                query = query.Where(d => d.Status == "OPEN");
+
+            var total = await query.CountAsync();
+            var data = await query
+                .OrderByDescending(d => d.CreatedAt)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(d => new
+                {
+                    d.OrderDisputeId,
+                    d.OrderId,
+                    OrderCode = d.Order != null ? d.Order.OrderCode : "N/A",
+                    OrderAmount = d.Order != null ? d.Order.Subtotal : 0,
+                    CustomerName = d.Customer != null ? d.Customer.FullName : "N/A",
+                    CustomerEmail = d.Customer != null ? d.Customer.Email : "N/A",
+                    d.Reason,
+                    d.Status,
+                    d.AdminNote,
+                    d.CreatedAt,
+                    d.ResolvedAt
+                })
+                .ToListAsync();
+
+            return Ok(new { total, page, pageSize, data });
+        }
+
+        /// <summary>Admin bác khiếu nại → đơn hàng được giải ngân bình thường</summary>
+        [HttpPut("disputes/{id}/reject")]
+        public async Task<IActionResult> RejectDispute(int id, [FromBody] AdminNoteDto dto)
+        {
+            var dispute = await _context.OrderDisputes
+                .Include(d => d.Order)
+                .FirstOrDefaultAsync(d => d.OrderDisputeId == id);
+
+            if (dispute == null) return NotFound();
+            if (dispute.Status != "OPEN") return BadRequest(new { message = "Khiếu nại này đã được xử lý." });
+
+            dispute.Status = "REJECTED";
+            dispute.AdminNote = dto.Note;
+            dispute.ResolvedAt = DateTime.UtcNow;
+
+            // Trả trạng thái giải ngân về PENDING để background job có thể xử lý
+            if (dispute.Order != null && dispute.Order.PayoutStatus == "DISPUTED")
+                dispute.Order.PayoutStatus = "PENDING";
+
+            await _context.SaveChangesAsync();
+            return Ok(new { message = "Đã bác khiếu nại. Đơn hàng sẽ được giải ngân theo lịch tự động." });
+        }
+
+        /// <summary>Admin duyệt khiếu nại → giải ngân bị đóng băng (xử lý thủ công)</summary>
+        [HttpPut("disputes/{id}/resolve")]
+        public async Task<IActionResult> ResolveDispute(int id, [FromBody] AdminNoteDto dto)
+        {
+            var dispute = await _context.OrderDisputes
+                .Include(d => d.Order)
+                .FirstOrDefaultAsync(d => d.OrderDisputeId == id);
+
+            if (dispute == null) return NotFound();
+            if (dispute.Status != "OPEN") return BadRequest(new { message = "Khiếu nại này đã được xử lý." });
+
+            dispute.Status = "RESOLVED";
+            dispute.AdminNote = dto.Note;
+            dispute.ResolvedAt = DateTime.UtcNow;
+
+            // Đánh dấu đơn là DISPUTED — tiền không giải ngân tự động
+            if (dispute.Order != null)
+                dispute.Order.PayoutStatus = "DISPUTED";
+
+            await _context.SaveChangesAsync();
+            return Ok(new { message = "Đã chấp nhận khiếu nại. Đơn hàng sẽ được xử lý thủ công." });
+        }
+
+        /// <summary>
+        /// Lấy danh sách các đơn hàng hoàn thành đang chờ giải ngân hoặc sẵn sàng giải ngân
+        /// </summary>
+        [HttpGet("payouts/pending-orders")]
+        public async Task<IActionResult> GetPendingPayoutOrders()
+        {
+            var config = await _context.CommissionConfigs
+                .Where(c => c.IsActive)
+                .OrderByDescending(c => c.UpdatedAt)
+                .FirstOrDefaultAsync();
+
+            var delayDays = config?.PayoutDelayDays ?? 3;
+            var delayHours = config?.PayoutDelayHours ?? 0;
+            var delayMinutes = config?.PayoutDelayMinutes ?? 0;
+            var totalDelay = TimeSpan.FromDays(delayDays).Add(TimeSpan.FromHours(delayHours)).Add(TimeSpan.FromMinutes(delayMinutes));
+            var cutoff = DateTime.UtcNow.Subtract(totalDelay);
+
+            var orders = await _context.Orders
+                .Where(o => o.OrderStatus == "COMPLETED" && o.PayoutStatus != "RELEASED")
+                .OrderByDescending(o => o.CompletedAt)
+                .Take(50)
+                .Select(o => new
+                {
+                    o.OrderId,
+                    o.OrderCode,
+                    o.TotalAmount,
+                    o.Subtotal,
+                    o.CompletedAt,
+                    o.PayoutStatus,
+                    HasDispute = _context.OrderDisputes.Any(d => d.OrderId == o.OrderId && d.Status == "OPEN"),
+                    IsEligible = o.CompletedAt != null && o.CompletedAt <= cutoff && !_context.OrderDisputes.Any(d => d.OrderId == o.OrderId && d.Status == "OPEN"),
+                    SellerName = _context.Users.Where(u => u.UserId == o.SellerId).Select(u => u.ShopName ?? u.FullName).FirstOrDefault() ?? "Người bán",
+                    CustomerName = _context.Users.Where(u => u.UserId == o.CustomerId).Select(u => u.FullName).FirstOrDefault() ?? "Khách hàng"
+                })
+                .ToListAsync();
+
+            return Ok(new
+            {
+                config = new
+                {
+                    commissionRate = config?.CommissionRate ?? 5.0m,
+                    payoutDelayDays = delayDays,
+                    payoutDelayHours = delayHours,
+                    payoutDelayMinutes = delayMinutes,
+                    totalDelayMinutes = (int)totalDelay.TotalMinutes
+                },
+                orders
+            });
+        }
+
+        /// <summary>
+        /// Kích hoạt quét và giải ngân ngay lập tức cho các đơn đủ điều kiện
+        /// </summary>
+        [HttpPost("payouts/trigger-now")]
+        public async Task<IActionResult> TriggerPayoutsNow(
+            [FromServices] FurniMatch.Api.Services.EscrowService escrowService,
+            [FromServices] ILogger<AdminController> logger)
+        {
+            var config = await _context.CommissionConfigs
+                .Where(c => c.IsActive)
+                .OrderByDescending(c => c.UpdatedAt)
+                .FirstOrDefaultAsync();
+
+            var commissionRate = config?.CommissionRate ?? 5.0m;
+            var delayDays = config?.PayoutDelayDays ?? 3;
+            var delayHours = config?.PayoutDelayHours ?? 0;
+            var delayMinutes = config?.PayoutDelayMinutes ?? 0;
+
+            var totalDelay = TimeSpan.FromDays(delayDays)
+                .Add(TimeSpan.FromHours(delayHours))
+                .Add(TimeSpan.FromMinutes(delayMinutes));
+
+            var cutoffDate = DateTime.UtcNow.Subtract(totalDelay);
+
+            var ordersToRelease = await _context.Orders
+                .Where(o =>
+                    o.OrderStatus == "COMPLETED" &&
+                    o.PayoutStatus == "PENDING" &&
+                    o.CompletedAt != null &&
+                    o.CompletedAt <= cutoffDate &&
+                    !_context.OrderDisputes.Any(d => d.OrderId == o.OrderId && d.Status == "OPEN"))
+                .ToListAsync();
+
+            int count = 0;
+            foreach (var order in ordersToRelease)
+            {
+                try
+                {
+                    await escrowService.ReleasePayoutAsync(order, commissionRate);
+                    count++;
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Lỗi giải ngân đơn {OrderCode}", order.OrderCode);
+                }
+            }
+
+            return Ok(new
+            {
+                processedCount = count,
+                message = count > 0 
+                    ? $"Đã quét và giải ngân thành công cho {count} đơn hàng đủ điều kiện." 
+                    : "Hiện tại không có đơn hàng nào đủ điều kiện giải ngân (chưa qua thời gian chờ hoặc có khiếu nại)."
+            });
+        }
+
+        /// <summary>
+        /// Admin chủ động giải ngân sớm cho 1 đơn hàng cụ thể
+        /// </summary>
+        [HttpPost("payouts/release-order/{orderId}")]
+        public async Task<IActionResult> ReleaseOrderNow(int orderId, [FromServices] FurniMatch.Api.Services.EscrowService escrowService)
+        {
+            var order = await _context.Orders.FirstOrDefaultAsync(o => o.OrderId == orderId);
+            if (order == null) return NotFound(new { message = "Không tìm thấy đơn hàng." });
+            if (order.PayoutStatus == "RELEASED") return BadRequest(new { message = "Đơn hàng này đã được giải ngân trước đó." });
+
+            var config = await _context.CommissionConfigs
+                .Where(c => c.IsActive)
+                .OrderByDescending(c => c.UpdatedAt)
+                .FirstOrDefaultAsync();
+            var commissionRate = config?.CommissionRate ?? 5.0m;
+
+            await escrowService.ReleasePayoutAsync(order, commissionRate);
+            return Ok(new { message = $"Đã giải ngân thành công đơn hàng {order.OrderCode} cho người bán." });
+        }
     }
 
     public class RejectSellerDto
@@ -370,6 +750,21 @@ namespace FurniMatch.Api.Controllers
     public class CommissionConfigDto
     {
         public decimal CommissionRate { get; set; } = 5.0m;
+        public int PayoutDelayDays { get; set; } = 3;
+        public int PayoutDelayHours { get; set; } = 0;
+        public int PayoutDelayMinutes { get; set; } = 0;
+        public string? Note { get; set; }
+    }
+
+    public class AdminNoteDto
+    {
+        public string Note { get; set; } = string.Empty;
+    }
+
+    public class ApproveWithdrawalForm
+    {
+        public IFormFile? ReceiptFile { get; set; }
         public string? Note { get; set; }
     }
 }
+

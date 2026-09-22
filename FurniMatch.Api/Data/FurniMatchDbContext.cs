@@ -27,6 +27,8 @@ namespace FurniMatch.Api.Data
         public DbSet<PaymentQrConfig> PaymentQrConfigs { get; set; }
         public DbSet<FooterSetting> FooterSettings { get; set; }
         public DbSet<CommissionConfig> CommissionConfigs { get; set; }
+        public DbSet<OrderDispute> OrderDisputes { get; set; }
+        public DbSet<WithdrawalRequest> WithdrawalRequests { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -129,6 +131,33 @@ namespace FurniMatch.Api.Data
             modelBuilder.Entity<Order>()
                 .HasIndex(o => o.OrderCode)
                 .IsUnique();
+
+            // OrderDispute
+            modelBuilder.Entity<OrderDispute>()
+                .HasOne(d => d.Order)
+                .WithMany()
+                .HasForeignKey(d => d.OrderId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<OrderDispute>()
+                .HasOne(d => d.Customer)
+                .WithMany()
+                .HasForeignKey(d => d.CustomerId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // WithdrawalRequest
+            modelBuilder.Entity<WithdrawalRequest>()
+                .HasOne(w => w.Seller)
+                .WithMany()
+                .HasForeignKey(w => w.SellerId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // EscrowTransaction -> Order
+            modelBuilder.Entity<EscrowTransaction>()
+                .HasOne(t => t.Order)
+                .WithMany()
+                .HasForeignKey(t => t.OrderId)
+                .OnDelete(DeleteBehavior.SetNull);
         }
     }
 }

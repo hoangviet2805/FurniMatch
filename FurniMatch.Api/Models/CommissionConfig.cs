@@ -24,6 +24,16 @@ namespace FurniMatch.Api.Models
 
         public bool IsActive { get; set; } = true;
 
+        /// <summary>
+        /// Thời gian chờ sau khi đơn COMPLETED trước khi tự động giải ngân cho seller (theo ngày, giờ, phút).
+        /// Mặc định: 3 ngày, 0 giờ, 0 phút. Admin có thể thay đổi.
+        /// </summary>
+        public int PayoutDelayDays { get; set; } = 3;
+
+        public int PayoutDelayHours { get; set; } = 0;
+
+        public int PayoutDelayMinutes { get; set; } = 0;
+
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
         public string? Note { get; set; }

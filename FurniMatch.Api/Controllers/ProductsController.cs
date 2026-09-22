@@ -92,6 +92,43 @@ namespace FurniMatch.Api.Controllers
             };
 
             var products = await query.ToListAsync();
+
+            // Phân phối đa dạng nhà sản xuất trên từng trang & Tự động đổi mới mỗi 1 tiếng
+            if (string.IsNullOrEmpty(sort) || sort.ToLower() == "newest" || sort.ToLower() == "diverse")
+            {
+                var hourSeed = (int)(DateTimeOffset.UtcNow.ToUnixTimeSeconds() / 3600);
+                var rng = new Random(hourSeed);
+
+                var sellerGroups = products
+                    .GroupBy(p => p.SellerId)
+                    .Select(g =>
+                    {
+                        var list = g.OrderByDescending(p => p.CreatedAt).ToList();
+                        int offset = Math.Abs(rng.Next()) % Math.Max(1, list.Count);
+                        var rotated = list.Skip(offset).Concat(list.Take(offset)).ToList();
+                        return new { SellerId = g.Key, Queue = new Queue<Product>(rotated) };
+                    })
+                    .OrderBy(g => rng.Next())
+                    .ToList();
+
+                var diverseList = new List<Product>();
+                bool hasMore = true;
+                while (hasMore)
+                {
+                    hasMore = false;
+                    foreach (var group in sellerGroups)
+                    {
+                        if (group.Queue.Count > 0)
+                        {
+                            diverseList.Add(group.Queue.Dequeue());
+                            hasMore = true;
+                        }
+                    }
+                }
+
+                products = diverseList;
+            }
+
             return Ok(products);
         }
 

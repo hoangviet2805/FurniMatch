@@ -19,6 +19,7 @@ const timelineSteps = ['WAITING_PAYMENT', 'CONFIRMED', 'PREPARING', 'PRODUCING',
 
 export default function Orders() {
   const [orders, setOrders] = useState<any[]>([]);
+  const [orderStatusFilter, setOrderStatusFilter] = useState<'ALL' | 'INCOMPLETE' | 'COMPLETED' | 'CANCELLED'>('ALL');
   const [loading, setLoading] = useState(true);
   const [trackingOrder, setTrackingOrder] = useState<any | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -26,7 +27,19 @@ export default function Orders() {
   const [paySeconds, setPaySeconds] = useState(0);
   const [cancelOrder, setCancelOrder] = useState<any | null>(null);
   const [alertModal, setAlertModal] = useState<{ type: 'success' | 'error' | 'info'; title: string; message: string } | null>(null);
-  const ITEMS_PER_PAGE = 5;
+  const ITEMS_PER_PAGE = 10;
+
+  const filteredOrders = orders.filter(o => {
+    if (orderStatusFilter === 'ALL') return true;
+    if (orderStatusFilter === 'INCOMPLETE') return o.orderStatus !== 'COMPLETED' && o.orderStatus !== 'CANCELLED';
+    if (orderStatusFilter === 'COMPLETED') return o.orderStatus === 'COMPLETED';
+    if (orderStatusFilter === 'CANCELLED') return o.orderStatus === 'CANCELLED';
+    return true;
+  });
+
+  const incompleteCount = orders.filter(o => o.orderStatus !== 'COMPLETED' && o.orderStatus !== 'CANCELLED').length;
+  const completedCount = orders.filter(o => o.orderStatus === 'COMPLETED').length;
+  const cancelledCount = orders.filter(o => o.orderStatus === 'CANCELLED').length;
 
   const fetchOrders = () => {
     setLoading(true);
@@ -87,7 +100,89 @@ export default function Orders() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-12">
-      <h1 className="text-3xl font-bold text-gray-900 tracking-tight mb-8">Đơn mua của tôi</h1>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Đơn mua của tôi</h1>
+          <p className="text-sm text-gray-500 mt-1">Quản lý và theo dõi tiến độ các đơn hàng của bạn</p>
+        </div>
+
+        {orders.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 p-1.5 bg-gray-100/90 rounded-2xl border border-gray-200/80 w-fit shadow-xs">
+            <button
+              type="button"
+              onClick={() => { setOrderStatusFilter('ALL'); setCurrentPage(1); }}
+              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                orderStatusFilter === 'ALL'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <span>Tất cả</span>
+              <span className={`text-xs px-2 py-0.5 rounded-full ${
+                orderStatusFilter === 'ALL' ? 'bg-gray-100 text-gray-800' : 'bg-gray-200/70 text-gray-600'
+              }`}>
+                {orders.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { setOrderStatusFilter('INCOMPLETE'); setCurrentPage(1); }}
+              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                orderStatusFilter === 'INCOMPLETE'
+                  ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/20'
+                  : 'text-amber-800 hover:bg-amber-100/60'
+              }`}
+            >
+              <Clock className="w-4 h-4" />
+              <span>Chưa hoàn thành</span>
+              <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
+                orderStatusFilter === 'INCOMPLETE' ? 'bg-white/25 text-white' : 'bg-amber-100 text-amber-800'
+              }`}>
+                {incompleteCount}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { setOrderStatusFilter('COMPLETED'); setCurrentPage(1); }}
+              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                orderStatusFilter === 'COMPLETED'
+                  ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/20'
+                  : 'text-emerald-800 hover:bg-emerald-100/60'
+              }`}
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Đã hoàn thành</span>
+              <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
+                orderStatusFilter === 'COMPLETED' ? 'bg-white/25 text-white' : 'bg-emerald-100 text-emerald-800'
+              }`}>
+                {completedCount}
+              </span>
+            </button>
+
+            {cancelledCount > 0 && (
+              <button
+                type="button"
+                onClick={() => { setOrderStatusFilter('CANCELLED'); setCurrentPage(1); }}
+                className={`px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                  orderStatusFilter === 'CANCELLED'
+                    ? 'bg-rose-600 text-white shadow-sm shadow-rose-600/20'
+                    : 'text-rose-700 hover:bg-rose-100/60'
+                }`}
+              >
+                <XCircle className="w-4 h-4" />
+                <span>Đã huỷ</span>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
+                  orderStatusFilter === 'CANCELLED' ? 'bg-white/25 text-white' : 'bg-rose-100 text-rose-700'
+                }`}>
+                  {cancelledCount}
+                </span>
+              </button>
+            )}
+          </div>
+        )}
+      </div>
       
       {loading ? (
         <div className="flex items-center justify-center py-20">
@@ -102,9 +197,22 @@ export default function Orders() {
             Khám phá sản phẩm ngay
           </Link>
         </div>
+      ) : filteredOrders.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-12 text-center">
+          <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            {orderStatusFilter === 'INCOMPLETE'
+              ? 'Không có đơn hàng nào chưa hoàn thành.'
+              : orderStatusFilter === 'COMPLETED'
+              ? 'Chưa có đơn hàng nào đã hoàn thành.'
+              : orderStatusFilter === 'CANCELLED'
+              ? 'Không có đơn hàng nào đã huỷ.'
+              : 'Chưa có đơn hàng nào.'}
+          </h3>
+        </div>
       ) : (
         <div className="space-y-6">
-          {orders.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE).map(o => {
+          {filteredOrders.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE).map(o => {
             let items: any[] = [];
             try { items = JSON.parse(o.itemsJson); } catch {}
             const StatusIcon = statusConfig[o.orderStatus]?.icon || Clock;
@@ -152,19 +260,26 @@ export default function Orders() {
                     );
                   })}
                 </div>
+
+                {(o.note || o.Note) && (
+                  <div className="mb-4 px-4 py-2.5 bg-amber-50/70 border border-amber-200/70 rounded-xl text-xs text-amber-900 flex items-start gap-2">
+                    <span className="font-semibold shrink-0 text-amber-800">📝 Ghi chú:</span>
+                    <span className="leading-relaxed">{o.note || o.Note}</span>
+                  </div>
+                )}
                 
                 <div className="flex flex-col sm:flex-row justify-between items-end sm:items-center border-t border-gray-100 pt-5 gap-4">
                   <div className="flex flex-wrap gap-3 w-full sm:w-auto">
                     <button 
                       onClick={() => setTrackingOrder(o)}
-                      className="flex-1 sm:flex-none rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-gray-800 transition-colors shadow-sm"
+                      className="flex-1 sm:flex-none rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-gray-800 transition-colors shadow-sm cursor-pointer"
                     >
                       Theo dõi đơn hàng
                     </button>
                     {o.orderStatus === 'WAITING_PAYMENT' && getUtcDate(o.paymentExpiredAt).getTime() > Date.now() && (
                       <button
                         onClick={() => handleContinuePayment(o)}
-                        className="flex-1 sm:flex-none rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors shadow-sm"
+                        className="flex-1 sm:flex-none rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors shadow-sm cursor-pointer"
                       >
                         Tiếp tục thanh toán
                       </button>
@@ -172,7 +287,7 @@ export default function Orders() {
                     {o.orderStatus === 'WAITING_PAYMENT' && (
                       <button 
                         onClick={() => setCancelOrder(o)}
-                        className="flex-1 sm:flex-none rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-semibold text-rose-600 hover:bg-rose-50 transition-colors shadow-sm"
+                        className="flex-1 sm:flex-none rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-semibold text-rose-600 hover:bg-rose-50 transition-colors shadow-sm cursor-pointer"
                       >
                         Huỷ đơn hàng
                       </button>
@@ -187,21 +302,21 @@ export default function Orders() {
             );
           })}
 
-          {orders.length > 0 && (
+          {filteredOrders.length > 0 && (
             <div className="flex justify-center items-center gap-4 mt-8">
               <button 
                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                disabled={currentPage === 1 || Math.ceil(orders.length / ITEMS_PER_PAGE) <= 1}
+                disabled={currentPage === 1 || Math.ceil(filteredOrders.length / ITEMS_PER_PAGE) <= 1}
                 className="px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:text-emerald-600 disabled:opacity-50 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed font-semibold shadow-sm transition-all"
               >
                 Trước
               </button>
               <div className="flex items-center justify-center min-w-[80px] px-3 py-2 rounded-lg bg-gray-50 border border-gray-100 text-gray-700 font-medium">
-                {currentPage} / {Math.max(1, Math.ceil(orders.length / ITEMS_PER_PAGE))}
+                {currentPage} / {Math.max(1, Math.ceil(filteredOrders.length / ITEMS_PER_PAGE))}
               </div>
               <button 
-                onClick={() => setCurrentPage(p => Math.min(Math.ceil(orders.length / ITEMS_PER_PAGE), p + 1))}
-                disabled={currentPage === Math.ceil(orders.length / ITEMS_PER_PAGE) || Math.ceil(orders.length / ITEMS_PER_PAGE) <= 1}
+                onClick={() => setCurrentPage(p => Math.min(Math.ceil(filteredOrders.length / ITEMS_PER_PAGE), p + 1))}
+                disabled={currentPage === Math.ceil(filteredOrders.length / ITEMS_PER_PAGE) || Math.ceil(filteredOrders.length / ITEMS_PER_PAGE) <= 1}
                 className="px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:text-emerald-600 disabled:opacity-50 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed font-semibold shadow-sm transition-all"
               >
                 Sau

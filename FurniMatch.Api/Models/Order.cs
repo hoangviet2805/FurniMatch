@@ -75,6 +75,16 @@ namespace FurniMatch.Api.Models
 
         public DateTime? PaymentExpiredAt { get; set; }
 
+        /// <summary>Thời điểm đơn hàng được đánh dấu COMPLETED</summary>
+        public DateTime? CompletedAt { get; set; }
+
+        /// <summary>
+        /// Trạng thái giải ngân cho seller.
+        /// "PENDING" | "RELEASED" | "DISPUTED"
+        /// </summary>
+        [MaxLength(20)]
+        public string PayoutStatus { get; set; } = "PENDING";
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     }

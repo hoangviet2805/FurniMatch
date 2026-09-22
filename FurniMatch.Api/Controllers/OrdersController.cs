@@ -96,9 +96,67 @@ public class OrdersController : ControllerBase
         }
         catch (Exception ex) { return BadRequest(new { message = ex.Message }); }
     }
-    [HttpPut("{id:int}/status"), Authorize(Roles = "SELLER")] public async Task<IActionResult> Status(int id, UpdateOrderStatusRequest request) { var allowed = new[] { "PREPARING", "PRODUCING", "SHIPPED", "COMPLETED" }; var order = await _db.Orders.FirstOrDefaultAsync(x => x.OrderId == id && x.SellerId == UserId); if (order == null) return NotFound(); if (!allowed.Contains(request.Status)) return BadRequest(new { message = "Trạng thái không hợp lệ." }); order.OrderStatus = request.Status; order.LegacyStatus = request.Status; order.UpdatedAt = DateTime.UtcNow; await _db.SaveChangesAsync(); return Ok(order); }
-    [HttpPatch("{id:int}/cancel"), Authorize(Roles = "CUSTOMER")] public async Task<IActionResult> Cancel(int id) { var order = await _db.Orders.FirstOrDefaultAsync(x => x.OrderId == id && x.CustomerId == UserId); if (order == null) return NotFound(); if (order.PaymentStatus == "PAID") return BadRequest(new { message = "Đơn đã thanh toán, không thể hủy tại đây." }); order.PaymentStatus = "EXPIRED"; order.OrderStatus = "CANCELLED"; order.LegacyStatus = "CANCELLED"; await _db.SaveChangesAsync(); return Ok(order); }
+    [HttpPut("{id:int}/status"), Authorize(Roles = "SELLER")]
+    public async Task<IActionResult> Status(int id, UpdateOrderStatusRequest request)
+    {
+        var allowed = new[] { "PREPARING", "PRODUCING", "SHIPPED", "COMPLETED" };
+        var order = await _db.Orders.FirstOrDefaultAsync(x => x.OrderId == id && x.SellerId == UserId);
+        if (order == null) return NotFound();
+        if (!allowed.Contains(request.Status)) return BadRequest(new { message = "Trạng thái không hợp lệ." });
+
+        order.OrderStatus = request.Status;
+        order.LegacyStatus = request.Status;
+        order.UpdatedAt = DateTime.UtcNow;
+
+        // Ghi thời điểm hoàn thành để background job tính thời gian chờ giải ngân
+        if (request.Status == "COMPLETED")
+            order.CompletedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+        return Ok(order);
+    }
+
+    [HttpPatch("{id:int}/cancel"), Authorize(Roles = "CUSTOMER")]
+    public async Task<IActionResult> Cancel(int id)
+    {
+        var order = await _db.Orders.FirstOrDefaultAsync(x => x.OrderId == id && x.CustomerId == UserId);
+        if (order == null) return NotFound();
+        if (order.PaymentStatus == "PAID") return BadRequest(new { message = "Đơn đã thanh toán, không thể hủy tại đây." });
+        order.PaymentStatus = "EXPIRED"; order.OrderStatus = "CANCELLED"; order.LegacyStatus = "CANCELLED";
+        await _db.SaveChangesAsync();
+        return Ok(order);
+    }
+
+    /// <summary>Customer gửi khiếu nại trong thời gian chờ giải ngân</summary>
+    [HttpPost("{id:int}/dispute"), Authorize(Roles = "CUSTOMER")]
+    public async Task<IActionResult> CreateDispute(int id, [FromBody] CreateDisputeRequest request)
+    {
+        var order = await _db.Orders.FirstOrDefaultAsync(x => x.OrderId == id && x.CustomerId == UserId);
+        if (order == null) return NotFound(new { message = "Không tìm thấy đơn hàng." });
+        if (order.OrderStatus != "COMPLETED")
+            return BadRequest(new { message = "Chỉ có thể khiếu nại đơn hàng đã hoàn thành." });
+        if (order.PayoutStatus == "RELEASED")
+            return BadRequest(new { message = "Đơn hàng đã được giải ngân, không thể khiếu nại." });
+
+        var existing = await _db.OrderDisputes.AnyAsync(d => d.OrderId == id && d.Status == "OPEN");
+        if (existing) return BadRequest(new { message = "Đã có khiếu nại đang xử lý cho đơn hàng này." });
+
+        var dispute = new FurniMatch.Api.Models.OrderDispute
+        {
+            OrderId = id,
+            CustomerId = UserId,
+            Reason = request.Reason,
+            Status = "OPEN"
+        };
+        _db.OrderDisputes.Add(dispute);
+        order.PayoutStatus = "DISPUTED";
+        await _db.SaveChangesAsync();
+
+        return Ok(new { message = "Khiếu nại đã được ghi nhận. Admin sẽ xem xét và phản hồi sớm nhất." });
+    }
 }
 public sealed class CreateOrderRequest { public List<OrderLine> Items { get; set; } = []; public string RecipientName { get; set; } = ""; public string Phone { get; set; } = ""; public string Address { get; set; } = ""; public string? Note { get; set; } public decimal ShippingFee { get; set; } public string PaymentMethod { get; set; } = "SEPAY"; }
 public sealed class OrderLine { public int ProductId { get; set; } public int? VariantId { get; set; } public string Name { get; set; } = ""; public string SizeLabel { get; set; } = ""; public decimal Price { get; set; } public int Quantity { get; set; } public string? ImageUrl { get; set; } }
 public sealed class UpdateOrderStatusRequest { public string Status { get; set; } = ""; }
+public sealed class CreateDisputeRequest { public string Reason { get; set; } = ""; }
+

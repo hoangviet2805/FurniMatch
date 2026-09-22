@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import api from '../utils/api';
 import { isFavorite, toggleFavorite } from '../utils/favorites';
@@ -11,10 +11,10 @@ const Products = () => {
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [keyword, setKeyword] = useState(searchParams.get('search') ?? '');
-  const [sort, setSort] = useState(searchParams.get('sort') ?? 'newest');
+  const [sort, setSort] = useState(searchParams.get('sort') ?? 'diverse');
   const [favorites, setFavorites] = useState<number[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 8;
+  const ITEMS_PER_PAGE = 10;
 
   useEffect(() => {
     setFavorites(JSON.parse(localStorage.getItem('favoriteProductIds') ?? '[]'));
@@ -31,25 +31,45 @@ const Products = () => {
     setCurrentPage(1);
   }, [categoryIdParam, keyword, sort]);
 
-  useEffect(() => {
-    const fetchProducts = async () => {
-      setLoading(true);
-      try {
-        const params = new URLSearchParams();
-        if (categoryIdParam) params.set('categoryId', categoryIdParam);
-        if (keyword.trim()) params.set('search', keyword.trim());
-        if (sort !== 'newest') params.set('sort', sort);
-        const url = `/products${params.size ? `?${params.toString()}` : ''}`;
-        const response = await api.get(url);
-        setProducts(response.data);
-      } catch (err) {
-        console.error('Error fetching products:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchProducts();
+  const fetchProducts = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (categoryIdParam) params.set('categoryId', categoryIdParam);
+      if (keyword.trim()) params.set('search', keyword.trim());
+      if (sort) params.set('sort', sort);
+      const url = `/products${params.size ? `?${params.toString()}` : ''}`;
+      const response = await api.get(url);
+      setProducts(response.data);
+    } catch (err) {
+      console.error('Error fetching products:', err);
+    } finally {
+      setLoading(false);
+    }
   }, [categoryIdParam, keyword, sort]);
+
+  useEffect(() => {
+    fetchProducts();
+  }, [fetchProducts]);
+
+  // Tự động làm mới danh sách sản phẩm khi sang khung giờ mới (mỗi 1 tiếng)
+  useEffect(() => {
+    const now = new Date();
+    const msToNextHour = (60 - now.getMinutes()) * 60000 - now.getSeconds() * 1000 - now.getMilliseconds();
+
+    let intervalId: any;
+    const timeoutId = setTimeout(() => {
+      fetchProducts();
+      intervalId = setInterval(() => {
+        fetchProducts();
+      }, 3600000);
+    }, Math.max(1000, msToNextHour));
+
+    return () => {
+      clearTimeout(timeoutId);
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [fetchProducts]);
 
   const handleCategoryClick = (id: number | null) => {
     const next = new URLSearchParams(searchParams);
@@ -67,7 +87,7 @@ const Products = () => {
   const updateSort = (value: string) => {
     setSort(value);
     const next = new URLSearchParams(searchParams);
-    if (value !== 'newest') next.set('sort', value); else next.delete('sort');
+    if (value !== 'diverse') next.set('sort', value); else next.delete('sort');
     setSearchParams(next, { replace: true });
   };
 
@@ -110,12 +130,25 @@ const Products = () => {
         {/* Product Grid */}
         <div className="flex-1">
           <div className="flex flex-col sm:flex-row justify-between gap-4 sm:items-end mb-6">
-            <div><h1 className="text-3xl font-bold text-gray-900">
-              {categoryIdParam 
-                ? categories.find(c => c.categoryId.toString() === categoryIdParam)?.name || 'Danh sách Sản phẩm' 
-                : 'Tất cả Sản phẩm'}
-            </h1><span className="text-gray-500 text-sm">{products.length} sản phẩm phù hợp</span></div>
-            <select value={sort} onChange={event => updateSort(event.target.value)} className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"><option value="newest">Mới cập nhật</option><option value="price-asc">Giá thấp đến cao</option><option value="price-desc">Giá cao đến thấp</option><option value="oldest">Cũ nhất</option></select>
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">
+                {categoryIdParam 
+                  ? categories.find(c => c.categoryId.toString() === categoryIdParam)?.name || 'Danh sách Sản phẩm' 
+                  : 'Tất cả Sản phẩm'}
+              </h1>
+              <p className="text-gray-500 text-sm mt-1">{products.length} sản phẩm phù hợp</p>
+            </div>
+            <select 
+              value={sort} 
+              onChange={event => updateSort(event.target.value)} 
+              className="rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-700 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-sm"
+            >
+              <option value="diverse">Đa dạng xưởng (Làm mới mỗi 1h)</option>
+              <option value="newest">Mới nhất</option>
+              <option value="price-asc">Giá thấp đến cao</option>
+              <option value="price-desc">Giá cao đến thấp</option>
+              <option value="oldest">Cũ nhất</option>
+            </select>
           </div>
           <div className="mb-6 relative"><input value={keyword} onChange={event => updateSearch(event.target.value)} placeholder="Tìm theo tên sản phẩm, mô tả hoặc xưởng..." className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-4 pr-10 focus:outline-none focus:ring-2 focus:ring-emerald-500" />{keyword && <button onClick={() => updateSearch('')} className="absolute right-3 top-3 text-gray-400 hover:text-gray-700" aria-label="Xóa tìm kiếm">×</button>}</div>
           

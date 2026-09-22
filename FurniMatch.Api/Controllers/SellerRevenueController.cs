@@ -101,14 +101,14 @@ namespace FurniMatch.Api.Controllers
 
         /// <summary>
         /// Danh sách đơn hàng đã thanh toán của seller (phân trang)
-        /// GET /api/seller/revenue/orders?page=1&pageSize=20&from=&to=
+        /// GET /api/seller/revenue/orders?page=1&pageSize=10&from=&to=
         /// </summary>
         [HttpGet("orders")]
         public async Task<IActionResult> GetOrders(
             [FromQuery] string? from,
             [FromQuery] string? to,
             [FromQuery] int page = 1,
-            [FromQuery] int pageSize = 20)
+            [FromQuery] int pageSize = 10)
         {
             var commissionRate = await GetCurrentCommissionRate();
             var query = _context.Orders
@@ -135,6 +135,7 @@ namespace FurniMatch.Api.Controllers
                     o.PaymentStatus,
                     o.OrderStatus,
                     o.CreatedAt,
+                    o.Note,
                     CustomerName = o.Customer != null ? o.Customer.FullName : "N/A"
                 })
                 .ToListAsync();

@@ -2,6 +2,7 @@ import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useEffect, useState, useRef } from 'react';
 import logoImg from '../assets/logo.png';
 import { cartCount } from '../utils/cart';
+import { getComparisonIds } from '../utils/comparison';
 import { ChevronDown, User as UserIcon, Key, LogOut } from 'lucide-react';
 import ChangePasswordModal from './ChangePasswordModal';
 
@@ -20,7 +21,7 @@ const Header = () => {
     const savedUser = localStorage.getItem('user');
     if (savedUser) setUser(JSON.parse(savedUser));
     const updateComparisonCount = () => {
-      try { setComparisonCount(JSON.parse(localStorage.getItem('comparisonProductIds') ?? '[]').length); }
+      try { setComparisonCount(getComparisonIds().length); }
       catch { setComparisonCount(0); }
     };
     const updateCartCount = () => setCartItems(cartCount());
