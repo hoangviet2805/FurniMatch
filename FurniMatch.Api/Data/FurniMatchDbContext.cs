@@ -26,6 +26,7 @@ namespace FurniMatch.Api.Data
         public DbSet<Order> Orders { get; set; }
         public DbSet<PaymentQrConfig> PaymentQrConfigs { get; set; }
         public DbSet<FooterSetting> FooterSettings { get; set; }
+        public DbSet<CommissionConfig> CommissionConfigs { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

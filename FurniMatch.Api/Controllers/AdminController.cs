@@ -179,6 +179,182 @@ namespace FurniMatch.Api.Controllers
             config.PaymentTimeoutMinutes = Math.Clamp(input.PaymentTimeoutMinutes, 1, 120); config.IsActive = input.IsActive; config.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync(); return Ok(config);
         }
+
+        [HttpGet("commission-config")]
+        public async Task<IActionResult> GetCommissionConfig()
+        {
+            var config = await _context.CommissionConfigs
+                .Where(c => c.IsActive)
+                .OrderByDescending(c => c.UpdatedAt)
+                .FirstOrDefaultAsync();
+            return Ok(config ?? new FurniMatch.Api.Models.CommissionConfig { CommissionRate = 5.0m });
+        }
+
+        [HttpPut("commission-config")]
+        public async Task<IActionResult> SaveCommissionConfig([FromBody] CommissionConfigDto dto)
+        {
+            var config = await _context.CommissionConfigs
+                .Where(c => c.IsActive)
+                .OrderByDescending(c => c.UpdatedAt)
+                .FirstOrDefaultAsync();
+            if (config == null)
+            {
+                config = new FurniMatch.Api.Models.CommissionConfig();
+                _context.CommissionConfigs.Add(config);
+            }
+            config.CommissionRate = Math.Clamp(dto.CommissionRate, 0, 100);
+            config.Note = dto.Note;
+            config.IsActive = true;
+            config.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+            return Ok(config);
+        }
+
+        [HttpGet("revenue/summary")]
+        public async Task<IActionResult> GetRevenueSummary([FromQuery] string? from, [FromQuery] string? to)
+        {
+            var commissionRate = await GetCurrentCommissionRate();
+            var query = _context.Orders.Where(o => o.PaymentStatus == "PAID");
+            if (DateTime.TryParse(from, out var fromDate)) query = query.Where(o => o.CreatedAt >= fromDate);
+            if (DateTime.TryParse(to, out var toDate)) query = query.Where(o => o.CreatedAt <= toDate.AddDays(1));
+
+            var orders = await query.ToListAsync();
+            var totalGmv = orders.Sum(o => o.Subtotal);
+            var totalCommission = totalGmv * (commissionRate / 100);
+            var activeSellers = await _context.Users
+                .Include(u => u.Role)
+                .CountAsync(u => u.Role!.RoleName == "SELLER" && u.Status == "ACTIVE");
+
+            return Ok(new
+            {
+                totalGmv,
+                totalCommission,
+                commissionRate,
+                totalPaidOrders = orders.Count,
+                activeSellers
+            });
+        }
+
+        [HttpGet("revenue/chart")]
+        public async Task<IActionResult> GetRevenueChart([FromQuery] string period = "monthly", [FromQuery] int year = 0)
+        {
+            if (year == 0) year = DateTime.UtcNow.Year;
+            var orders = await _context.Orders
+                .Where(o => o.PaymentStatus == "PAID" && o.CreatedAt.Year == year)
+                .ToListAsync();
+
+            if (period == "monthly")
+            {
+                var data = Enumerable.Range(1, 12).Select(m => new
+                {
+                    label = new DateTime(year, m, 1).ToString("MMM", new System.Globalization.CultureInfo("vi-VN")),
+                    month = m,
+                    gmv = orders.Where(o => o.CreatedAt.Month == m).Sum(o => o.Subtotal),
+                    orders = orders.Count(o => o.CreatedAt.Month == m)
+                }).ToList();
+                return Ok(data);
+            }
+            else // weekly - last 12 weeks
+            {
+                var data = Enumerable.Range(0, 12).Select(w =>
+                {
+                    var weekStart = DateTime.UtcNow.AddDays(-7 * (11 - w));
+                    var weekEnd = weekStart.AddDays(7);
+                    return new
+                    {
+                        label = $"Tuần {weekStart:dd/MM}",
+                        gmv = orders.Where(o => o.CreatedAt >= weekStart && o.CreatedAt < weekEnd).Sum(o => o.Subtotal),
+                        orders = orders.Count(o => o.CreatedAt >= weekStart && o.CreatedAt < weekEnd)
+                    };
+                }).ToList();
+                return Ok(data);
+            }
+        }
+
+        [HttpGet("revenue/by-seller")]
+        public async Task<IActionResult> GetRevenueBySeller([FromQuery] string? from, [FromQuery] string? to)
+        {
+            var commissionRate = await GetCurrentCommissionRate();
+            var query = _context.Orders.Where(o => o.PaymentStatus == "PAID");
+            if (DateTime.TryParse(from, out var fromDate)) query = query.Where(o => o.CreatedAt >= fromDate);
+            if (DateTime.TryParse(to, out var toDate)) query = query.Where(o => o.CreatedAt <= toDate.AddDays(1));
+
+            var orders = await query.Include(o => o.Seller).ToListAsync();
+            var data = orders
+                .GroupBy(o => o.SellerId)
+                .Select(g =>
+                {
+                    var gmv = g.Sum(o => o.Subtotal);
+                    var commission = gmv * (commissionRate / 100);
+                    return new
+                    {
+                        sellerId = g.Key,
+                        shopName = g.First().Seller?.ShopName ?? g.First().Seller?.FullName ?? "N/A",
+                        totalOrders = g.Count(),
+                        gmv,
+                        commission,
+                        netRevenue = gmv - commission
+                    };
+                })
+                .OrderByDescending(x => x.gmv)
+                .ToList();
+            return Ok(data);
+        }
+
+        [HttpGet("revenue/orders")]
+        public async Task<IActionResult> GetRevenueOrders(
+            [FromQuery] string? from,
+            [FromQuery] string? to,
+            [FromQuery] string? status,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20)
+        {
+            var commissionRate = await GetCurrentCommissionRate();
+            var query = _context.Orders
+                .Include(o => o.Seller)
+                .Include(o => o.Customer)
+                .AsQueryable();
+
+            if (!string.IsNullOrEmpty(status))
+                query = query.Where(o => o.PaymentStatus == status);
+            else
+                query = query.Where(o => o.PaymentStatus == "PAID");
+
+            if (DateTime.TryParse(from, out var fromDate)) query = query.Where(o => o.CreatedAt >= fromDate);
+            if (DateTime.TryParse(to, out var toDate)) query = query.Where(o => o.CreatedAt <= toDate.AddDays(1));
+
+            var total = await query.CountAsync();
+            var orders = await query
+                .OrderByDescending(o => o.CreatedAt)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(o => new
+                {
+                    o.OrderId,
+                    o.OrderCode,
+                    o.Subtotal,
+                    o.ShippingFee,
+                    o.TotalAmount,
+                    commission = o.Subtotal * (commissionRate / 100),
+                    o.PaymentStatus,
+                    o.OrderStatus,
+                    o.CreatedAt,
+                    SellerShopName = o.Seller != null ? (o.Seller.ShopName ?? o.Seller.FullName) : "N/A",
+                    CustomerName = o.Customer != null ? o.Customer.FullName : "N/A"
+                })
+                .ToListAsync();
+
+            return Ok(new { total, page, pageSize, data = orders });
+        }
+
+        private async Task<decimal> GetCurrentCommissionRate()
+        {
+            var config = await _context.CommissionConfigs
+                .Where(c => c.IsActive)
+                .OrderByDescending(c => c.UpdatedAt)
+                .FirstOrDefaultAsync();
+            return config?.CommissionRate ?? 5.0m;
+        }
     }
 
     public class RejectSellerDto
@@ -189,5 +365,11 @@ namespace FurniMatch.Api.Controllers
     public class UpdateStatusDto
     {
         public string Status { get; set; } = string.Empty;
+    }
+
+    public class CommissionConfigDto
+    {
+        public decimal CommissionRate { get; set; } = 5.0m;
+        public string? Note { get; set; }
     }
 }

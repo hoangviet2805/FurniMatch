@@ -1,5 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import api from '../utils/api';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
+} from 'recharts';
 
 const AdminDashboard = () => {
   const [users, setUsers] = useState<any[]>([]);
@@ -14,7 +17,24 @@ const AdminDashboard = () => {
   const [alertModal, setAlertModal] = useState<{ isOpen: boolean; message: string; type: 'success' | 'error' }>({ isOpen: false, message: '', type: 'success' });
   
   // Tabs and Category States
-  const [activeTab, setActiveTab] = useState<'USERS' | 'PENDING_SELLERS' | 'CATEGORIES' | 'BANNERS' | 'FOOTER' | 'HOME_SETTINGS'>('USERS');
+  const [activeTab, setActiveTab] = useState<'USERS' | 'PENDING_SELLERS' | 'CATEGORIES' | 'BANNERS' | 'FOOTER' | 'HOME_SETTINGS' | 'REVENUE'>('USERS');
+
+  // ========== REVENUE STATE ==========
+  const [revSummary, setRevSummary] = useState<any>(null);
+  const [revChart, setRevChart] = useState<any[]>([]);
+  const [revBySeller, setRevBySeller] = useState<any[]>([]);
+  const [revOrders, setRevOrders] = useState<any[]>([]);
+  const [revOrdersTotal, setRevOrdersTotal] = useState(0);
+  const [revOrdersPage, setRevOrdersPage] = useState(1);
+  const [revChartPeriod, setRevChartPeriod] = useState<'monthly' | 'weekly'>('monthly');
+  const [revChartYear, setRevChartYear] = useState(new Date().getFullYear());
+  const [revLoading, setRevLoading] = useState(false);
+  const [revFromDate, setRevFromDate] = useState('');
+  const [revToDate, setRevToDate] = useState('');
+  const [commissionRate, setCommissionRate] = useState(5);
+  const [commissionEditMode, setCommissionEditMode] = useState(false);
+  const [commissionInput, setCommissionInput] = useState('5');
+  const REV_PAGE_SIZE = 15;
   const [categories, setCategories] = useState<any[]>([]);
   const [banners, setBanners] = useState<any[]>([]);
   const [pendingSellers, setPendingSellers] = useState<any[]>([]);
@@ -295,6 +315,77 @@ const AdminDashboard = () => {
   const totalPages = Math.ceil(users.length / itemsPerPage);
   const currentUsers = users.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
+  // ========== REVENUE LOGIC ==========
+  const money = (n: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n || 0);
+
+  const fetchRevenueSummary = useCallback(async () => {
+    try {
+      const params = new URLSearchParams();
+      if (revFromDate) params.set('from', revFromDate);
+      if (revToDate) params.set('to', revToDate);
+      const res = await api.get(`/admin/revenue/summary?${params}`);
+      setRevSummary(res.data);
+      setCommissionRate(res.data.commissionRate);
+      setCommissionInput(String(res.data.commissionRate));
+    } catch {}
+  }, [revFromDate, revToDate]);
+
+  const fetchRevenueChart = useCallback(async () => {
+    try {
+      const res = await api.get(`/admin/revenue/chart?period=${revChartPeriod}&year=${revChartYear}`);
+      setRevChart(res.data);
+    } catch {}
+  }, [revChartPeriod, revChartYear]);
+
+  const fetchRevenueBySeller = useCallback(async () => {
+    try {
+      const params = new URLSearchParams();
+      if (revFromDate) params.set('from', revFromDate);
+      if (revToDate) params.set('to', revToDate);
+      const res = await api.get(`/admin/revenue/by-seller?${params}`);
+      setRevBySeller(res.data);
+    } catch {}
+  }, [revFromDate, revToDate]);
+
+  const fetchRevenueOrders = useCallback(async (page = 1) => {
+    try {
+      const params = new URLSearchParams({ page: String(page), pageSize: String(REV_PAGE_SIZE) });
+      if (revFromDate) params.set('from', revFromDate);
+      if (revToDate) params.set('to', revToDate);
+      const res = await api.get(`/admin/revenue/orders?${params}`);
+      setRevOrders(res.data.data);
+      setRevOrdersTotal(res.data.total);
+      setRevOrdersPage(page);
+    } catch {}
+  }, [revFromDate, revToDate]);
+
+  const loadAllRevenue = useCallback(async () => {
+    setRevLoading(true);
+    await Promise.all([fetchRevenueSummary(), fetchRevenueChart(), fetchRevenueBySeller(), fetchRevenueOrders(1)]);
+    setRevLoading(false);
+  }, [fetchRevenueSummary, fetchRevenueChart, fetchRevenueBySeller, fetchRevenueOrders]);
+
+  useEffect(() => {
+    if (activeTab === 'REVENUE') loadAllRevenue();
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab === 'REVENUE') fetchRevenueChart();
+  }, [revChartPeriod, revChartYear]);
+
+  const handleSaveCommission = async () => {
+    const rate = parseFloat(commissionInput);
+    if (isNaN(rate) || rate < 0 || rate > 100) return alert('Tỷ lệ hoa hồng phải từ 0-100%');
+    try {
+      await api.put('/admin/commission-config', { commissionRate: rate });
+      setCommissionRate(rate);
+      setCommissionEditMode(false);
+      loadAllRevenue();
+    } catch { alert('Lỗi lưu cấu hình'); }
+  };
+
+  const revTotalOrderPages = Math.ceil(revOrdersTotal / REV_PAGE_SIZE);
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
@@ -323,6 +414,12 @@ const AdminDashboard = () => {
             className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'BANNERS' ? 'bg-white text-emerald-700 shadow' : 'text-gray-500 hover:text-gray-700'}`}
           >
             Quản lý Slide Trang Chủ
+          </button>
+          <button 
+            onClick={() => setActiveTab('REVENUE')} 
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'REVENUE' ? 'bg-white text-emerald-700 shadow' : 'text-gray-500 hover:text-gray-700'}`}
+          >
+            📊 Báo Cáo Doanh Thu
           </button>
           <div className="relative">
             <button 
@@ -975,8 +1072,205 @@ const AdminDashboard = () => {
         </div>
       )}
 
+      {/* ===================== REVENUE TAB ===================== */}
+      {activeTab === 'REVENUE' && (
+        <div className="space-y-6">
+          {/* Filter Bar + Commission Config */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 flex flex-col md:flex-row gap-4 items-end justify-between">
+            <div className="flex flex-wrap gap-3 items-end">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Từ ngày</label>
+                <input type="date" value={revFromDate} onChange={e => setRevFromDate(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-emerald-500 focus:border-emerald-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Đến ngày</label>
+                <input type="date" value={revToDate} onChange={e => setRevToDate(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-emerald-500 focus:border-emerald-500" />
+              </div>
+              <button onClick={loadAllRevenue}
+                className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors">
+                🔍 Lọc
+              </button>
+              <button onClick={() => { setRevFromDate(''); setRevToDate(''); }} 
+                className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors">
+                Xóa lọc
+              </button>
+            </div>
+            {/* Commission Config */}
+            <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2">
+              <span className="text-sm font-medium text-amber-800">💰 Hoa hồng platform:</span>
+              {commissionEditMode ? (
+                <>
+                  <input type="number" min="0" max="100" step="0.1" value={commissionInput}
+                    onChange={e => setCommissionInput(e.target.value)}
+                    className="w-20 px-2 py-1 border border-amber-300 rounded text-sm text-center" />
+                  <span className="text-amber-700 text-sm">%</span>
+                  <button onClick={handleSaveCommission} className="px-3 py-1 bg-amber-600 text-white rounded text-xs font-medium hover:bg-amber-700">Lưu</button>
+                  <button onClick={() => setCommissionEditMode(false)} className="px-3 py-1 bg-gray-200 text-gray-600 rounded text-xs">Hủy</button>
+                </>
+              ) : (
+                <>
+                  <span className="text-xl font-bold text-amber-700">{commissionRate}%</span>
+                  <button onClick={() => setCommissionEditMode(true)} className="px-3 py-1 bg-amber-100 text-amber-700 rounded text-xs font-medium hover:bg-amber-200">Sửa</button>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* KPI Cards */}
+          {revLoading ? (
+            <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-600"></div></div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-5 text-white shadow-sm">
+                  <p className="text-emerald-100 text-xs font-medium uppercase tracking-wide mb-1">Tổng GMV</p>
+                  <p className="text-2xl font-bold truncate">{money(revSummary?.totalGmv)}</p>
+                  <p className="text-emerald-200 text-xs mt-1">Tổng doanh thu sản phẩm</p>
+                </div>
+                <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl p-5 text-white shadow-sm">
+                  <p className="text-amber-100 text-xs font-medium uppercase tracking-wide mb-1">Hoa Hồng Platform</p>
+                  <p className="text-2xl font-bold truncate">{money(revSummary?.totalCommission)}</p>
+                  <p className="text-amber-200 text-xs mt-1">Tỷ lệ {revSummary?.commissionRate}%</p>
+                </div>
+                <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-5 text-white shadow-sm">
+                  <p className="text-blue-100 text-xs font-medium uppercase tracking-wide mb-1">Đơn Đã Thanh Toán</p>
+                  <p className="text-2xl font-bold">{revSummary?.totalPaidOrders ?? 0}</p>
+                  <p className="text-blue-200 text-xs mt-1">Đơn có PaymentStatus=PAID</p>
+                </div>
+                <div className="bg-gradient-to-br from-violet-500 to-violet-600 rounded-xl p-5 text-white shadow-sm">
+                  <p className="text-violet-100 text-xs font-medium uppercase tracking-wide mb-1">Seller Hoạt Động</p>
+                  <p className="text-2xl font-bold">{revSummary?.activeSellers ?? 0}</p>
+                  <p className="text-violet-200 text-xs mt-1">Nhà sản xuất ACTIVE</p>
+                </div>
+              </div>
+
+              {/* Chart */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-5">
+                  <h2 className="text-lg font-bold text-gray-900">📈 Biểu Đồ Doanh Thu</h2>
+                  <div className="flex items-center gap-3">
+                    <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
+                      <button onClick={() => setRevChartPeriod('monthly')} className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${revChartPeriod === 'monthly' ? 'bg-white text-emerald-700 shadow' : 'text-gray-500'}`}>Theo tháng</button>
+                      <button onClick={() => setRevChartPeriod('weekly')} className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${revChartPeriod === 'weekly' ? 'bg-white text-emerald-700 shadow' : 'text-gray-500'}`}>Theo tuần</button>
+                    </div>
+                    {revChartPeriod === 'monthly' && (
+                      <select value={revChartYear} onChange={e => setRevChartYear(Number(e.target.value))}
+                        className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm">
+                        {[2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
+                      </select>
+                    )}
+                  </div>
+                </div>
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={revChart} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#6b7280' }} />
+                    <YAxis tickFormatter={v => v >= 1000000 ? `${(v/1000000).toFixed(0)}M` : String(v)} tick={{ fontSize: 11, fill: '#6b7280' }} />
+                    <Tooltip formatter={(val: any) => [money(val), '']} contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }} />
+                    <Legend />
+                    <Bar dataKey="gmv" name="Doanh thu (VND)" fill="#10b981" radius={[4,4,0,0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Revenue by Seller */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <div className="px-5 py-4 border-b border-gray-100">
+                  <h2 className="text-lg font-bold text-gray-900">🏪 Doanh Thu Theo Nhà Sản Xuất</h2>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-100">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">#</th>
+                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Tên Xưởng</th>
+                        <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Số Đơn</th>
+                        <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Tổng GMV</th>
+                        <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Hoa Hồng</th>
+                        <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Thực Nhận</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {revBySeller.length === 0 ? (
+                        <tr><td colSpan={6} className="px-5 py-8 text-center text-gray-400">Chưa có dữ liệu</td></tr>
+                      ) : revBySeller.map((s, i) => (
+                        <tr key={s.sellerId} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-5 py-3 text-sm text-gray-500">{i + 1}</td>
+                          <td className="px-5 py-3 text-sm font-medium text-gray-900">{s.shopName}</td>
+                          <td className="px-5 py-3 text-sm text-gray-700 text-right">{s.totalOrders}</td>
+                          <td className="px-5 py-3 text-sm text-emerald-700 font-semibold text-right">{money(s.gmv)}</td>
+                          <td className="px-5 py-3 text-sm text-amber-600 font-medium text-right">{money(s.commission)}</td>
+                          <td className="px-5 py-3 text-sm text-blue-700 font-semibold text-right">{money(s.netRevenue)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Orders Detail Table */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <div className="px-5 py-4 border-b border-gray-100">
+                  <h2 className="text-lg font-bold text-gray-900">📋 Chi Tiết Đơn Hàng Đã Thanh Toán</h2>
+                  <p className="text-sm text-gray-500 mt-1">Tổng cộng: {revOrdersTotal} đơn</p>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-100">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Mã Đơn</th>
+                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Nhà SX</th>
+                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Khách Hàng</th>
+                        <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Tiền Hàng</th>
+                        <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Hoa Hồng</th>
+                        <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Trạng Thái</th>
+                        <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Ngày</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {revOrders.length === 0 ? (
+                        <tr><td colSpan={7} className="px-5 py-8 text-center text-gray-400">Chưa có đơn hàng nào</td></tr>
+                      ) : revOrders.map(o => (
+                        <tr key={o.orderId} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-5 py-3 text-sm font-mono text-gray-700">{o.orderCode}</td>
+                          <td className="px-5 py-3 text-sm text-gray-700 max-w-[120px] truncate">{o.sellerShopName}</td>
+                          <td className="px-5 py-3 text-sm text-gray-700 max-w-[120px] truncate">{o.customerName}</td>
+                          <td className="px-5 py-3 text-sm text-emerald-700 font-semibold text-right">{money(o.subtotal)}</td>
+                          <td className="px-5 py-3 text-sm text-amber-600 font-medium text-right">{money(o.commission)}</td>
+                          <td className="px-5 py-3 text-right">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${o.orderStatus === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>
+                              {o.orderStatus === 'COMPLETED' ? 'Hoàn thành' : o.orderStatus === 'CONFIRMED' ? 'Đã xác nhận' : o.orderStatus}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3 text-xs text-gray-500 text-right">{new Date(o.createdAt).toLocaleDateString('vi-VN')}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {/* Pagination */}
+                {revTotalOrderPages > 1 && (
+                  <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-between">
+                    <p className="text-sm text-gray-500">Trang {revOrdersPage} / {revTotalOrderPages}</p>
+                    <div className="flex gap-2">
+                      <button disabled={revOrdersPage <= 1} onClick={() => fetchRevenueOrders(revOrdersPage - 1)}
+                        className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg disabled:opacity-40 hover:bg-gray-50 transition-colors">← Trước</button>
+                      <button disabled={revOrdersPage >= revTotalOrderPages} onClick={() => fetchRevenueOrders(revOrdersPage + 1)}
+                        className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg disabled:opacity-40 hover:bg-gray-50 transition-colors">Tiếp →</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Alert Modal */}
       {alertModal.isOpen && (
+
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6 text-center">
             {alertModal.type === 'success' ? (

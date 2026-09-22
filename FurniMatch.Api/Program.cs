@@ -84,6 +84,20 @@ using (var scope = app.Services.CreateScope())
         context.SaveChanges();
     }
 
+    // Seed default CommissionConfig (5%) if none exists
+    if (!context.CommissionConfigs.Any())
+    {
+        context.CommissionConfigs.Add(new FurniMatch.Api.Models.CommissionConfig
+        {
+            CommissionRate = 5.0m,
+            IsActive = true,
+            Note = "Tỷ lệ hoa hồng mặc định",
+            EffectiveFrom = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        });
+        context.SaveChanges();
+    }
+
     // Seed Admin Role & User
     var adminRole = context.Roles.FirstOrDefault(r => r.RoleName == "ADMIN");
     if (adminRole == null)
