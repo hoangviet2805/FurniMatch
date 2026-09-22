@@ -22,6 +22,9 @@ export default function Orders() {
   const [loading, setLoading] = useState(true);
   const [trackingOrder, setTrackingOrder] = useState<any | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [payOrder, setPayOrder] = useState<any | null>(null);
+  const [paySeconds, setPaySeconds] = useState(0);
+  const [cancelOrder, setCancelOrder] = useState<any | null>(null);
   const ITEMS_PER_PAGE = 5;
 
   const fetchOrders = () => {
@@ -36,15 +39,49 @@ export default function Orders() {
     fetchOrders();
   }, []);
 
-  const handleCancel = async (id: number) => {
-    if (!confirm('Bạn có chắc chắn muốn huỷ đơn hàng này?')) return;
+  const confirmCancel = async () => {
+    if (!cancelOrder) return;
     try {
-      await api.patch(`/orders/${id}/cancel`);
+      await api.patch(`/orders/${cancelOrder.orderId}/cancel`);
+      setCancelOrder(null);
       fetchOrders();
     } catch (e: any) {
       alert(e.response?.data?.message || 'Không thể huỷ đơn hàng.');
     }
   };
+
+  const getUtcDate = (dateStr: string) => new Date(dateStr + (dateStr.endsWith('Z') ? '' : 'Z'));
+
+  const handleContinuePayment = async (order: any) => {
+    try {
+      const res = await api.get(`/orders/${order.orderId}/sepay`);
+      setPayOrder({ ...res.data, totalAmount: order.totalAmount });
+    } catch (e: any) {
+      alert(e.response?.data?.message || 'Không thể lấy thông tin thanh toán.');
+    }
+  };
+
+  useEffect(() => {
+    if (!payOrder) return;
+    const update = () => setPaySeconds(Math.max(0, Math.ceil((getUtcDate(payOrder.expiredAt).getTime() - Date.now()) / 1000)));
+    update();
+    const t = setInterval(update, 1000);
+    const p = setInterval(async () => {
+      try {
+        const r = await api.get(`/orders/${payOrder.orderId}`);
+        if (r.data.paymentStatus === 'PAID') {
+          alert('Thanh toán thành công!');
+          setPayOrder(null);
+          fetchOrders();
+        } else if (r.data.orderStatus === 'CANCELLED') {
+          alert('Đơn hàng đã hết hạn thanh toán và bị huỷ.');
+          setPayOrder(null);
+          fetchOrders();
+        }
+      } catch {}
+    }, 5000);
+    return () => { clearInterval(t); clearInterval(p); };
+  }, [payOrder]);
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-12">
@@ -81,7 +118,7 @@ export default function Orders() {
                         {o.shopName || 'Xưởng nội thất'}
                       </Link>
                     </div>
-                    <p className="text-sm text-gray-500 mt-1">{new Date(o.createdAt).toLocaleString('vi-VN', { dateStyle: 'full', timeStyle: 'short' })}</p>
+                    <p className="text-sm text-gray-500 mt-1">{getUtcDate(o.createdAt).toLocaleString('vi-VN', { dateStyle: 'full', timeStyle: 'short' })}</p>
                   </div>
                   <div className={`flex items-center gap-2 rounded-full border px-4 py-1.5 text-sm font-medium ${statusConfig[o.orderStatus]?.color || 'bg-gray-50 text-gray-600 border-gray-200'}`}>
                     <StatusIcon className="w-4 h-4" />
@@ -122,9 +159,17 @@ export default function Orders() {
                     >
                       Theo dõi đơn hàng
                     </button>
+                    {o.orderStatus === 'WAITING_PAYMENT' && getUtcDate(o.paymentExpiredAt).getTime() > Date.now() && (
+                      <button
+                        onClick={() => handleContinuePayment(o)}
+                        className="flex-1 sm:flex-none rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors shadow-sm"
+                      >
+                        Tiếp tục thanh toán
+                      </button>
+                    )}
                     {o.orderStatus === 'WAITING_PAYMENT' && (
                       <button 
-                        onClick={() => handleCancel(o.orderId)}
+                        onClick={() => setCancelOrder(o)}
                         className="flex-1 sm:flex-none rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-semibold text-rose-600 hover:bg-rose-50 transition-colors shadow-sm"
                       >
                         Huỷ đơn hàng
@@ -227,6 +272,63 @@ export default function Orders() {
                 className="rounded-xl bg-gray-900 px-6 py-2.5 font-semibold text-white hover:bg-gray-800 transition-colors"
               >
                 Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Modal */}
+      {payOrder && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm" onClick={() => setPayOrder(null)}>
+          <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200 p-8 text-center relative" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setPayOrder(null)} className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors">
+              <XCircle className="w-6 h-6" />
+            </button>
+            <h2 className="text-2xl font-bold text-[#0b6e4f]">Thanh toán qua SePay</h2>
+            <p className="mt-3 font-bold text-gray-700">⏱ Còn lại: {String(Math.floor(paySeconds / 60)).padStart(2, '0')}:{String(paySeconds % 60).padStart(2, '0')}</p>
+            <div className="mt-4 h-2 w-full rounded-full bg-gray-100 overflow-hidden">
+              <div className="h-full bg-emerald-600 transition-all duration-1000" style={{ width: `${Math.min(100, paySeconds / 18)}%` }} />
+            </div>
+            {payOrder.qrCodeUrl ? (
+              <img src={payOrder.qrCodeUrl} alt="Mã QR thanh toán SePay" className="mx-auto mt-7 h-56 w-56 object-contain" />
+            ) : (
+              <div className="mt-7 h-56 w-56 mx-auto flex items-center justify-center border-2 border-dashed border-gray-200 rounded-xl">
+                <p className="text-gray-500">Đang tải mã QR…</p>
+              </div>
+            )}
+            <p className="mt-6 text-gray-700">Mã đơn: <strong className="text-gray-900 text-lg">{payOrder.orderCode}</strong></p>
+            <p className="mt-2 text-gray-700">Số tiền: <strong className="text-emerald-600 text-xl">{money(payOrder.totalAmount)}</strong></p>
+            <p className="mt-6 text-sm text-gray-500 bg-gray-50 p-4 rounded-xl">
+              Quét QR bằng ứng dụng ngân hàng. Hệ thống sẽ tự xác nhận khi nhận đúng số tiền và nội dung chuyển khoản.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel Confirmation Modal */}
+      {cancelOrder && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm" onClick={() => setCancelOrder(null)}>
+          <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200 p-8 text-center" onClick={e => e.stopPropagation()}>
+            <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-rose-100 mb-6">
+              <XCircle className="h-8 w-8 text-rose-600" />
+            </div>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">Huỷ đơn hàng?</h2>
+            <p className="text-gray-500 mb-8">
+              Bạn có chắc chắn muốn huỷ đơn hàng <strong className="text-gray-700">#{cancelOrder.orderCode}</strong>? Hành động này không thể hoàn tác.
+            </p>
+            <div className="flex gap-3 w-full">
+              <button 
+                onClick={() => setCancelOrder(null)} 
+                className="flex-1 rounded-xl border border-gray-200 bg-white px-4 py-3 font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Không
+              </button>
+              <button 
+                onClick={confirmCancel} 
+                className="flex-1 rounded-xl bg-rose-600 px-4 py-3 font-semibold text-white hover:bg-rose-700 transition-colors shadow-sm shadow-rose-200"
+              >
+                Huỷ đơn
               </button>
             </div>
           </div>

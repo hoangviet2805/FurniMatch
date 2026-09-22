@@ -53,6 +53,7 @@ public class OrdersController : ControllerBase
                 o.PaymentMethod,
                 o.PaymentStatus,
                 o.OrderStatus,
+                o.PaymentExpiredAt,
                 o.CreatedAt,
                 o.UpdatedAt,
                 ShopName = o.Seller != null ? (o.Seller.ShopName ?? o.Seller.FullName) : "Xưởng nội thất"
@@ -81,6 +82,19 @@ public class OrdersController : ControllerBase
             catch { /* Keep the order pending; another poll can retry. */ }
         }
         return Ok(order);
+    }
+    [HttpGet("{id:int}/sepay"), Authorize(Roles = "CUSTOMER")]
+    public async Task<IActionResult> GetSePayQr(int id)
+    {
+        var order = await _db.Orders.FirstOrDefaultAsync(x => x.OrderId == id && x.CustomerId == UserId);
+        if (order == null) return NotFound();
+        if (order.PaymentStatus != "PENDING" || order.PaymentExpiredAt <= DateTime.UtcNow) return BadRequest(new { message = "Đơn hàng không ở trạng thái chờ thanh toán hoặc đã hết hạn." });
+        
+        try { 
+            var qrCodeUrl = await _sepay.CreateQrUrlAsync(order); 
+            return Ok(new { orderId = order.OrderId, orderCode = order.OrderCode, qrCodeUrl, expiredAt = order.PaymentExpiredAt }); 
+        }
+        catch (Exception ex) { return BadRequest(new { message = ex.Message }); }
     }
     [HttpPut("{id:int}/status"), Authorize(Roles = "SELLER")] public async Task<IActionResult> Status(int id, UpdateOrderStatusRequest request) { var allowed = new[] { "PREPARING", "PRODUCING", "SHIPPED", "COMPLETED" }; var order = await _db.Orders.FirstOrDefaultAsync(x => x.OrderId == id && x.SellerId == UserId); if (order == null) return NotFound(); if (!allowed.Contains(request.Status)) return BadRequest(new { message = "Trạng thái không hợp lệ." }); order.OrderStatus = request.Status; order.LegacyStatus = request.Status; order.UpdatedAt = DateTime.UtcNow; await _db.SaveChangesAsync(); return Ok(order); }
     [HttpPatch("{id:int}/cancel"), Authorize(Roles = "CUSTOMER")] public async Task<IActionResult> Cancel(int id) { var order = await _db.Orders.FirstOrDefaultAsync(x => x.OrderId == id && x.CustomerId == UserId); if (order == null) return NotFound(); if (order.PaymentStatus == "PAID") return BadRequest(new { message = "Đơn đã thanh toán, không thể hủy tại đây." }); order.PaymentStatus = "EXPIRED"; order.OrderStatus = "CANCELLED"; order.LegacyStatus = "CANCELLED"; await _db.SaveChangesAsync(); return Ok(order); }
