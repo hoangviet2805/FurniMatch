@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../utils/api';
-import { CheckCircle2, Clock, XCircle, Package, Truck, Hammer, ClipboardList, Store } from 'lucide-react';
+import { CheckCircle2, Clock, XCircle, Package, Truck, Hammer, ClipboardList, Store, Info } from 'lucide-react';
 
 const money = (n: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n);
 
@@ -25,6 +25,7 @@ export default function Orders() {
   const [payOrder, setPayOrder] = useState<any | null>(null);
   const [paySeconds, setPaySeconds] = useState(0);
   const [cancelOrder, setCancelOrder] = useState<any | null>(null);
+  const [alertModal, setAlertModal] = useState<{ type: 'success' | 'error' | 'info'; title: string; message: string } | null>(null);
   const ITEMS_PER_PAGE = 5;
 
   const fetchOrders = () => {
@@ -45,8 +46,9 @@ export default function Orders() {
       await api.patch(`/orders/${cancelOrder.orderId}/cancel`);
       setCancelOrder(null);
       fetchOrders();
+      setAlertModal({ type: 'success', title: 'Thành công', message: 'Đã huỷ đơn hàng.' });
     } catch (e: any) {
-      alert(e.response?.data?.message || 'Không thể huỷ đơn hàng.');
+      setAlertModal({ type: 'error', title: 'Lỗi', message: e.response?.data?.message || 'Không thể huỷ đơn hàng.' });
     }
   };
 
@@ -57,7 +59,7 @@ export default function Orders() {
       const res = await api.get(`/orders/${order.orderId}/sepay`);
       setPayOrder({ ...res.data, totalAmount: order.totalAmount });
     } catch (e: any) {
-      alert(e.response?.data?.message || 'Không thể lấy thông tin thanh toán.');
+      setAlertModal({ type: 'error', title: 'Lỗi', message: e.response?.data?.message || 'Không thể lấy thông tin thanh toán.' });
     }
   };
 
@@ -70,11 +72,11 @@ export default function Orders() {
       try {
         const r = await api.get(`/orders/${payOrder.orderId}`);
         if (r.data.paymentStatus === 'PAID') {
-          alert('Thanh toán thành công!');
+          setAlertModal({ type: 'success', title: 'Thanh toán thành công!', message: 'Cảm ơn bạn đã thanh toán. Đơn hàng của bạn đang được xử lý.' });
           setPayOrder(null);
           fetchOrders();
         } else if (r.data.orderStatus === 'CANCELLED') {
-          alert('Đơn hàng đã hết hạn thanh toán và bị huỷ.');
+          setAlertModal({ type: 'info', title: 'Đã huỷ', message: 'Đơn hàng đã hết hạn thanh toán và bị huỷ.' });
           setPayOrder(null);
           fetchOrders();
         }
@@ -331,6 +333,25 @@ export default function Orders() {
                 Huỷ đơn
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Alert Modal */}
+      {alertModal && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm" onClick={() => setAlertModal(null)}>
+          <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200 p-8 text-center" onClick={e => e.stopPropagation()}>
+            <div className={`mx-auto flex items-center justify-center h-16 w-16 rounded-full mb-6 ${alertModal.type === 'success' ? 'bg-emerald-100 text-emerald-600' : alertModal.type === 'error' ? 'bg-rose-100 text-rose-600' : 'bg-blue-100 text-blue-600'}`}>
+              {alertModal.type === 'success' ? <CheckCircle2 className="h-8 w-8" /> : alertModal.type === 'error' ? <XCircle className="h-8 w-8" /> : <Info className="h-8 w-8" />}
+            </div>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">{alertModal.title}</h2>
+            <p className="text-gray-500 mb-8">{alertModal.message}</p>
+            <button 
+              onClick={() => setAlertModal(null)} 
+              className="w-full rounded-xl bg-gray-900 px-4 py-3 font-semibold text-white hover:bg-gray-800 transition-colors shadow-sm"
+            >
+              Đóng
+            </button>
           </div>
         </div>
       )}

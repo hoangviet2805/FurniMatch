@@ -389,7 +389,7 @@ const AdminDashboard = () => {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
-        <h1 className="text-3xl font-bold text-gray-900">Quản Trị Hệ Thống</h1>
+        <h1 className="text-xl md:text-2xl font-bold text-gray-900 whitespace-nowrap shrink-0">Quản Trị Hệ Thống</h1>
         <div className="flex space-x-2 bg-gray-100 p-1 rounded-lg">
           <button 
             onClick={() => setActiveTab('USERS')} 
@@ -1167,7 +1167,7 @@ const AdminDashboard = () => {
                   <BarChart data={revChart} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                     <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#6b7280' }} />
-                    <YAxis tickFormatter={v => v >= 1000000 ? `${(v/1000000).toFixed(0)}M` : String(v)} tick={{ fontSize: 11, fill: '#6b7280' }} />
+                    <YAxis tickFormatter={(v: number) => v >= 1000000 ? `${(v/1000000).toFixed(0)}M` : String(v)} tick={{ fontSize: 11, fill: '#6b7280' }} />
                     <Tooltip formatter={(val: any) => [money(val), '']} contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }} />
                     <Legend />
                     <Bar dataKey="gmv" name="Doanh thu (VND)" fill="#10b981" radius={[4,4,0,0]} />
