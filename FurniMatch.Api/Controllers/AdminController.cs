@@ -206,6 +206,7 @@ namespace FurniMatch.Api.Controllers
             config.PayoutDelayDays = Math.Max(0, dto.PayoutDelayDays);
             config.PayoutDelayHours = Math.Clamp(dto.PayoutDelayHours, 0, 23);
             config.PayoutDelayMinutes = Math.Clamp(dto.PayoutDelayMinutes, 0, 59);
+            config.ReviewDeadlineDays = Math.Max(1, dto.ReviewDeadlineDays);
             config.Note = dto.Note;
             config.IsActive = true;
             config.UpdatedAt = DateTime.UtcNow;
@@ -654,7 +655,8 @@ namespace FurniMatch.Api.Controllers
                     payoutDelayDays = delayDays,
                     payoutDelayHours = delayHours,
                     payoutDelayMinutes = delayMinutes,
-                    totalDelayMinutes = (int)totalDelay.TotalMinutes
+                    totalDelayMinutes = (int)totalDelay.TotalMinutes,
+                    reviewDeadlineDays = (config?.ReviewDeadlineDays > 0) ? config.ReviewDeadlineDays : 7
                 },
                 orders
             });
@@ -735,6 +737,59 @@ namespace FurniMatch.Api.Controllers
             await escrowService.ReleasePayoutAsync(order, commissionRate);
             return Ok(new { message = $"Đã giải ngân thành công đơn hàng {order.OrderCode} cho người bán." });
         }
+
+        /// <summary>
+        /// Admin: Lấy danh sách đánh giá sản phẩm để theo dõi và quản lý
+        /// </summary>
+        [HttpGet("reviews")]
+        public async Task<IActionResult> GetReviews([FromQuery] int page = 1, [FromQuery] int pageSize = 15)
+        {
+            var query = _context.OrderReviews
+                .Include(r => r.Customer)
+                .Include(r => r.Order);
+
+            var total = await query.CountAsync();
+            var avgRating = total > 0 ? await query.AverageAsync(r => (double)r.Rating) : 5.0;
+
+            var items = await query
+                .OrderByDescending(r => r.CreatedAt)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(r => new
+                {
+                    r.ReviewId,
+                    r.OrderId,
+                    OrderCode = r.Order != null ? r.Order.OrderCode : "",
+                    r.ProductId,
+                    r.ProductName,
+                    r.Rating,
+                    r.Comment,
+                    r.MediaJson,
+                    r.CreatedAt,
+                    CustomerName = r.Customer != null ? r.Customer.FullName : "Khách hàng",
+                    CustomerEmail = r.Customer != null ? r.Customer.Email : ""
+                })
+                .ToListAsync();
+
+            return Ok(new
+            {
+                total,
+                avgRating = Math.Round(avgRating, 1),
+                page,
+                pageSize,
+                data = items
+            });
+        }
+
+        [HttpDelete("reviews/{reviewId:int}")]
+        public async Task<IActionResult> DeleteReview(int reviewId)
+        {
+            var rev = await _context.OrderReviews.FindAsync(reviewId);
+            if (rev == null) return NotFound(new { message = "Không tìm thấy đánh giá." });
+            _context.OrderReviews.Remove(rev);
+            await _context.SaveChangesAsync();
+            return Ok(new { message = "Đã xóa đánh giá thành công." });
+        }
     }
 
     public class RejectSellerDto
@@ -753,6 +808,8 @@ namespace FurniMatch.Api.Controllers
         public int PayoutDelayDays { get; set; } = 3;
         public int PayoutDelayHours { get; set; } = 0;
         public int PayoutDelayMinutes { get; set; } = 0;
+        /// <summary>Số ngày Customer được phép viết đánh giá kể từ CompletedAt. Mặc định 7.</summary>
+        public int ReviewDeadlineDays { get; set; } = 7;
         public string? Note { get; set; }
     }
 

@@ -15,16 +15,16 @@ const AdminDashboard = () => {
   const [deleteCategoryModal, setDeleteCategoryModal] = useState<{ isOpen: boolean; categoryId: number | null }>({ isOpen: false, categoryId: null });
   const [deleteBannerConfirmModal, setDeleteBannerConfirmModal] = useState<{ isOpen: boolean; bannerId: number | null }>({ isOpen: false, bannerId: null });
   const [alertModal, setAlertModal] = useState<{ isOpen: boolean; message: string; type: 'success' | 'error' }>({ isOpen: false, message: '', type: 'success' });
-  
+
   // Tabs and Category States
-  const [activeTab, setActiveTab] = useState<'USERS' | 'PENDING_SELLERS' | 'CATEGORIES' | 'BANNERS' | 'FOOTER' | 'HOME_SETTINGS' | 'REVENUE' | 'WITHDRAWALS' | 'DISPUTES' | 'PAYOUT_CONFIG'>('USERS');
+  const [activeTab, setActiveTab] = useState<'USERS' | 'PENDING_SELLERS' | 'CATEGORIES' | 'BANNERS' | 'FOOTER' | 'HOME_SETTINGS' | 'REVENUE' | 'WITHDRAWALS' | 'DISPUTES' | 'PAYOUT_CONFIG' | 'REVIEW_CONFIG'>('USERS');
 
   // ========== WITHDRAWAL / DISPUTE STATE ==========
   const [withdrawals, setWithdrawals] = useState<any[]>([]);
   const [wdTotal, setWdTotal] = useState(0);
   const [wdPage, setWdPage] = useState(1);
   const [wdLoading, setWdLoading] = useState(false);
-  const [rejectWithdrawModal, setRejectWithdrawModal] = useState<{isOpen: boolean, requestId: number | null, note: string}>({isOpen: false, requestId: null, note: ''});
+  const [rejectWithdrawModal, setRejectWithdrawModal] = useState<{ isOpen: boolean, requestId: number | null, note: string }>({ isOpen: false, requestId: null, note: '' });
   const [approveWithdrawModal, setApproveWithdrawModal] = useState<{
     isOpen: boolean;
     item: any | null;
@@ -54,7 +54,7 @@ const AdminDashboard = () => {
   const [dsTotal, setDsTotal] = useState(0);
   const [dsPage, setDsPage] = useState(1);
   const [dsLoading, setDsLoading] = useState(false);
-  const [resolveDisputeModal, setResolveDisputeModal] = useState<{isOpen: boolean, disputeId: number | null, note: string, action: 'resolve'|'reject'}>({isOpen: false, disputeId: null, note: '', action: 'resolve'});
+  const [resolveDisputeModal, setResolveDisputeModal] = useState<{ isOpen: boolean, disputeId: number | null, note: string, action: 'resolve' | 'reject' }>({ isOpen: false, disputeId: null, note: '', action: 'resolve' });
 
   // ========== REVENUE STATE ==========
   const [revSummary, setRevSummary] = useState<any>(null);
@@ -76,14 +76,14 @@ const AdminDashboard = () => {
   const [banners, setBanners] = useState<any[]>([]);
   const [pendingSellers, setPendingSellers] = useState<any[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
-  const [categoryModal, setCategoryModal] = useState<{isOpen: boolean, isEdit: boolean, data: {categoryId?: number, name: string, description: string}}>({
-    isOpen: false, isEdit: false, data: {name: '', description: ''}
+  const [categoryModal, setCategoryModal] = useState<{ isOpen: boolean, isEdit: boolean, data: { categoryId?: number, name: string, description: string } }>({
+    isOpen: false, isEdit: false, data: { name: '', description: '' }
   });
 
-  const [rejectModal, setRejectModal] = useState<{isOpen: boolean, userId: number | null, reason: string}>({
+  const [rejectModal, setRejectModal] = useState<{ isOpen: boolean, userId: number | null, reason: string }>({
     isOpen: false, userId: null, reason: ''
   });
-  const [imageModal, setImageModal] = useState<{isOpen: boolean, images: string[], currentIndex: number}>({
+  const [imageModal, setImageModal] = useState<{ isOpen: boolean, images: string[], currentIndex: number }>({
     isOpen: false, images: [], currentIndex: 0
   });
 
@@ -207,7 +207,7 @@ const AdminDashboard = () => {
     if (!approveConfirmModal.sellerId) return;
     const id = approveConfirmModal.sellerId;
     setApproveConfirmModal({ isOpen: false, sellerId: null });
-    
+
     try {
       await api.post(`/admin/approve-seller/${id}`);
       setAlertModal({ isOpen: true, message: 'Đã duyệt nhà sản xuất thành công!', type: 'success' });
@@ -223,7 +223,7 @@ const AdminDashboard = () => {
       alert('Vui lòng nhập lý do từ chối');
       return;
     }
-    
+
     try {
       await api.post(`/admin/reject-seller/${rejectModal.userId}`, { reason: rejectModal.reason });
       setAlertModal({ isOpen: true, message: 'Đã từ chối nhà sản xuất!', type: 'success' });
@@ -252,17 +252,17 @@ const AdminDashboard = () => {
     if (deleteConfirmModal.userId === null) return;
     const userId = deleteConfirmModal.userId;
     setDeleteConfirmModal({ isOpen: false, userId: null });
-    
+
     try {
       await api.delete(`/admin/users/${userId}`);
       setUsers(users.filter(u => u.userId !== userId));
       setAlertModal({ isOpen: true, message: 'Đã xóa tài khoản thành công!', type: 'success' });
     } catch (error: any) {
       console.error('Error deleting user:', error);
-      setAlertModal({ 
-        isOpen: true, 
-        message: error.response?.data?.message || 'Có lỗi xảy ra khi xóa tài khoản.', 
-        type: 'error' 
+      setAlertModal({
+        isOpen: true,
+        message: error.response?.data?.message || 'Có lỗi xảy ra khi xóa tài khoản.',
+        type: 'error'
       });
     }
   };
@@ -301,7 +301,7 @@ const AdminDashboard = () => {
   const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     const files = Array.from(e.target.files);
-    
+
     if (banners.length + files.length > 10) {
       setAlertModal({ isOpen: true, message: 'Chỉ được tải lên tối đa 10 ảnh banner!', type: 'error' });
       return;
@@ -339,7 +339,7 @@ const AdminDashboard = () => {
     if (!deleteBannerConfirmModal.bannerId) return;
     const id = deleteBannerConfirmModal.bannerId;
     setDeleteBannerConfirmModal({ isOpen: false, bannerId: null });
-    
+
     try {
       await api.delete(`/banners/${id}`);
       setAlertModal({ isOpen: true, message: 'Đã xóa ảnh banner!', type: 'success' });
@@ -364,14 +364,14 @@ const AdminDashboard = () => {
       setRevSummary(res.data);
       setCommissionRate(res.data.commissionRate);
       setCommissionInput(String(res.data.commissionRate));
-    } catch {}
+    } catch { }
   }, [revFromDate, revToDate]);
 
   const fetchRevenueChart = useCallback(async () => {
     try {
       const res = await api.get(`/admin/revenue/chart?period=${revChartPeriod}&year=${revChartYear}`);
       setRevChart(res.data);
-    } catch {}
+    } catch { }
   }, [revChartPeriod, revChartYear]);
 
   const fetchRevenueBySeller = useCallback(async () => {
@@ -381,7 +381,7 @@ const AdminDashboard = () => {
       if (revToDate) params.set('to', revToDate);
       const res = await api.get(`/admin/revenue/by-seller?${params}`);
       setRevBySeller(res.data);
-    } catch {}
+    } catch { }
   }, [revFromDate, revToDate]);
 
   const fetchRevenueOrders = useCallback(async (page = 1) => {
@@ -393,7 +393,7 @@ const AdminDashboard = () => {
       setRevOrders(res.data.data);
       setRevOrdersTotal(res.data.total);
       setRevOrdersPage(page);
-    } catch {}
+    } catch { }
   }, [revFromDate, revToDate]);
 
   const loadAllRevenue = useCallback(async () => {
@@ -431,7 +431,7 @@ const AdminDashboard = () => {
       setWithdrawals(res.data.data || []);
       setWdTotal(res.data.total || 0);
       setWdPage(page);
-    } catch {} finally { setWdLoading(false); }
+    } catch { } finally { setWdLoading(false); }
   }, []);
 
   const DS_PAGE_SIZE = 10;
@@ -442,7 +442,7 @@ const AdminDashboard = () => {
       setDisputes(res.data.data || []);
       setDsTotal(res.data.total || 0);
       setDsPage(page);
-    } catch {} finally { setDsLoading(false); }
+    } catch { } finally { setDsLoading(false); }
   }, []);
 
   useEffect(() => {
@@ -492,7 +492,7 @@ const AdminDashboard = () => {
     try {
       await api.put(`/admin/withdrawals/${rejectWithdrawModal.requestId}/reject`, { note: rejectWithdrawModal.note });
       setAlertModal({ isOpen: true, message: 'Đã từ chối yêu cầu rút tiền và hoàn trả số dư.', type: 'success' });
-      setRejectWithdrawModal({isOpen: false, requestId: null, note: ''});
+      setRejectWithdrawModal({ isOpen: false, requestId: null, note: '' });
       fetchWithdrawals(wdPage);
     } catch (e: any) {
       setAlertModal({ isOpen: true, message: e.response?.data?.message || 'Lỗi từ chối', type: 'error' });
@@ -505,7 +505,7 @@ const AdminDashboard = () => {
     try {
       await api.put(url, { note: resolveDisputeModal.note });
       setAlertModal({ isOpen: true, message: resolveDisputeModal.action === 'resolve' ? 'Đã chấp nhận khiếu nại.' : 'Đã bác khiếu nại.', type: 'success' });
-      setResolveDisputeModal({isOpen: false, disputeId: null, note: '', action: 'resolve'});
+      setResolveDisputeModal({ isOpen: false, disputeId: null, note: '', action: 'resolve' });
       fetchDisputes(dsPage);
     } catch (e: any) {
       setAlertModal({ isOpen: true, message: e.response?.data?.message || 'Lỗi xử lý', type: 'error' });
@@ -517,6 +517,7 @@ const AdminDashboard = () => {
   const [payoutHours, setPayoutHours] = useState<number>(0);
   const [payoutMinutes, setPayoutMinutes] = useState<number>(0);
   const [payoutNote, setPayoutNote] = useState<string>('');
+  const [reviewDeadlineDays, setReviewDeadlineDays] = useState<number>(7);
   const [payoutPendingOrders, setPayoutPendingOrders] = useState<any[]>([]);
   const [loadingPayoutConfig, setLoadingPayoutConfig] = useState<boolean>(false);
   const [triggeringPayout, setTriggeringPayout] = useState<boolean>(false);
@@ -529,6 +530,7 @@ const AdminDashboard = () => {
         setPayoutDays(res.data.config.payoutDelayDays ?? 3);
         setPayoutHours(res.data.config.payoutDelayHours ?? 0);
         setPayoutMinutes(res.data.config.payoutDelayMinutes ?? 0);
+        setReviewDeadlineDays(res.data.config.reviewDeadlineDays ?? 7);
       }
       setPayoutPendingOrders(res.data?.orders || []);
     } catch (err) {
@@ -538,8 +540,11 @@ const AdminDashboard = () => {
     }
   }, []);
 
+  // ========== REVIEW CONFIG STATE ==========
+  const [savingReviewConfig, setSavingReviewConfig] = useState<boolean>(false);
+
   useEffect(() => {
-    if (activeTab === 'PAYOUT_CONFIG') {
+    if (activeTab === 'PAYOUT_CONFIG' || activeTab === 'REVIEW_CONFIG') {
       fetchPayoutConfigAndOrders();
     }
   }, [activeTab, fetchPayoutConfigAndOrders]);
@@ -555,6 +560,7 @@ const AdminDashboard = () => {
         payoutDelayDays: d,
         payoutDelayHours: h,
         payoutDelayMinutes: m,
+        reviewDeadlineDays: Math.max(1, Number(reviewDeadlineDays) || 7),
         note: payoutNote || undefined
       });
       setAlertModal({ isOpen: true, message: `Đã lưu cấu hình thời gian chờ: ${d} ngày ${h} giờ ${m} phút!`, type: 'success' });
@@ -577,6 +583,28 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleSaveReviewConfig = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const days = Math.max(1, Number(reviewDeadlineDays) || 7);
+    setSavingReviewConfig(true);
+    try {
+      await api.put('/admin/commission-config', {
+        commissionRate: commissionRate,
+        payoutDelayDays: payoutDays,
+        payoutDelayHours: payoutHours,
+        payoutDelayMinutes: payoutMinutes,
+        reviewDeadlineDays: days,
+        note: 'Cập nhật thời hạn đánh giá sản phẩm'
+      });
+      setAlertModal({ isOpen: true, message: `Đã lưu thời hạn đánh giá: ${days} ngày kể từ khi đơn hàng hoàn thành!`, type: 'success' });
+      fetchPayoutConfigAndOrders();
+    } catch (err: any) {
+      setAlertModal({ isOpen: true, message: err.response?.data?.message || 'Lỗi khi lưu cấu hình', type: 'error' });
+    } finally {
+      setSavingReviewConfig(false);
+    }
+  };
+
   const handleReleaseOrder = async (orderId: number, orderCode: string) => {
     if (!window.confirm(`Xác nhận giải ngân ngay cho đơn hàng ${orderCode}? Tiền sẽ được cộng vào ví người bán (sau khi trừ phí sàn).`)) return;
     try {
@@ -589,72 +617,146 @@ const AdminDashboard = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-      <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
-        <h1 className="text-xl md:text-2xl font-bold text-gray-900 whitespace-nowrap shrink-0">Quản Trị Hệ Thống</h1>
-        <div className="flex space-x-2 bg-gray-100 p-1 rounded-lg">
-          <button 
-            onClick={() => setActiveTab('USERS')} 
-            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'USERS' ? 'bg-white text-emerald-700 shadow' : 'text-gray-500 hover:text-gray-700'}`}
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* 1. Tiêu đề Quản Trị Hệ Thống ở trên */}
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-4 border-b border-gray-200/80">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight">
+            Quản Trị Hệ Thống
+          </h1>
+          <p className="text-xs sm:text-sm text-gray-500 mt-1">
+            Trung tâm quản trị vận hành, người dùng, tài chính và cấu hình sàn FurniMatch
+          </p>
+        </div>
+        <div className="inline-flex items-center gap-2 self-start sm:self-auto px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-xs font-semibold text-emerald-800">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span>Hệ thống hoạt động</span>
+        </div>
+      </div>
+
+      {/* 2. Thanh navbar ở dưới, căn chỉnh gọn gàng không tràn màn hình */}
+      <div className="w-full bg-gray-100/90 p-1.5 rounded-2xl border border-gray-200/80 mb-8 shadow-sm">
+        <div className="flex flex-wrap lg:flex-nowrap items-center justify-between gap-1.5 w-full">
+          <button
+            type="button"
+            onClick={() => setActiveTab('USERS')}
+            className={`flex-1 min-w-[110px] h-10 px-3 inline-flex items-center justify-center gap-1.5 text-xs sm:text-sm font-semibold rounded-xl whitespace-nowrap transition-all ${
+              activeTab === 'USERS'
+                ? 'bg-white text-emerald-800 shadow-sm border border-emerald-200/70 font-bold'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-white/60'
+            }`}
           >
-            Quản lý Người Dùng
+            <span>👥</span>
+            <span>Người Dùng</span>
           </button>
-          <button 
-            onClick={() => setActiveTab('PENDING_SELLERS')} 
-            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'PENDING_SELLERS' ? 'bg-white text-emerald-700 shadow' : 'text-gray-500 hover:text-gray-700'}`}
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('PENDING_SELLERS')}
+            className={`flex-1 min-w-[115px] h-10 px-3 inline-flex items-center justify-center gap-1.5 text-xs sm:text-sm font-semibold rounded-xl whitespace-nowrap transition-all ${
+              activeTab === 'PENDING_SELLERS'
+                ? 'bg-white text-emerald-800 shadow-sm border border-emerald-200/70 font-bold'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-white/60'
+            }`}
           >
-            Duyệt Nhà Sản Xuất
+            <span>🏭</span>
+            <span>Duyệt Xưởng</span>
           </button>
-          <button 
-            onClick={() => setActiveTab('CATEGORIES')} 
-            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'CATEGORIES' ? 'bg-white text-emerald-700 shadow' : 'text-gray-500 hover:text-gray-700'}`}
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('CATEGORIES')}
+            className={`flex-1 min-w-[110px] h-10 px-3 inline-flex items-center justify-center gap-1.5 text-xs sm:text-sm font-semibold rounded-xl whitespace-nowrap transition-all ${
+              activeTab === 'CATEGORIES'
+                ? 'bg-white text-emerald-800 shadow-sm border border-emerald-200/70 font-bold'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-white/60'
+            }`}
           >
-            Quản lý Danh Mục
+            <span>📁</span>
+            <span>Danh Mục</span>
           </button>
-          <button 
-            onClick={() => setActiveTab('BANNERS')} 
-            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'BANNERS' ? 'bg-white text-emerald-700 shadow' : 'text-gray-500 hover:text-gray-700'}`}
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('BANNERS')}
+            className={`flex-1 min-w-[110px] h-10 px-3 inline-flex items-center justify-center gap-1.5 text-xs sm:text-sm font-semibold rounded-xl whitespace-nowrap transition-all ${
+              activeTab === 'BANNERS'
+                ? 'bg-white text-emerald-800 shadow-sm border border-emerald-200/70 font-bold'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-white/60'
+            }`}
           >
-            Quản lý Slide Trang Chủ
+            <span>🖼️</span>
+            <span>Slide Banner</span>
           </button>
-          <button 
-            onClick={() => setActiveTab('REVENUE')} 
-            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'REVENUE' ? 'bg-white text-emerald-700 shadow' : 'text-gray-500 hover:text-gray-700'}`}
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('REVENUE')}
+            className={`flex-1 min-w-[110px] h-10 px-3 inline-flex items-center justify-center gap-1.5 text-xs sm:text-sm font-semibold rounded-xl whitespace-nowrap transition-all ${
+              activeTab === 'REVENUE'
+                ? 'bg-white text-emerald-800 shadow-sm border border-emerald-200/70 font-bold'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-white/60'
+            }`}
           >
-            📊 Báo Cáo Doanh Thu
+            <span>📊</span>
+            <span>Doanh Thu</span>
           </button>
-          <button 
-            onClick={() => setActiveTab('WITHDRAWALS')} 
-            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'WITHDRAWALS' ? 'bg-white text-emerald-700 shadow' : 'text-gray-500 hover:text-gray-700'}`}
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('WITHDRAWALS')}
+            className={`flex-1 min-w-[105px] h-10 px-3 inline-flex items-center justify-center gap-1.5 text-xs sm:text-sm font-semibold rounded-xl whitespace-nowrap transition-all ${
+              activeTab === 'WITHDRAWALS'
+                ? 'bg-white text-emerald-800 shadow-sm border border-emerald-200/70 font-bold'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-white/60'
+            }`}
           >
-            🏧 Yêu Cầu Rút Tiền
+            <span>🏧</span>
+            <span>Rút Tiền</span>
           </button>
-          <button 
-            onClick={() => setActiveTab('DISPUTES')} 
-            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'DISPUTES' ? 'bg-white text-emerald-700 shadow' : 'text-gray-500 hover:text-gray-700'}`}
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('DISPUTES')}
+            className={`flex-1 min-w-[105px] h-10 px-3 inline-flex items-center justify-center gap-1.5 text-xs sm:text-sm font-semibold rounded-xl whitespace-nowrap transition-all ${
+              activeTab === 'DISPUTES'
+                ? 'bg-white text-emerald-800 shadow-sm border border-emerald-200/70 font-bold'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-white/60'
+            }`}
           >
-            ⚠️ Khiếu Nại
+            <span>⚠️</span>
+            <span>Khiếu Nại</span>
           </button>
-          <div className="relative">
-            <button 
-              onClick={() => setIsSettingsDropdownOpen(!isSettingsDropdownOpen)} 
-              className={`flex items-center gap-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${(activeTab === 'FOOTER' || activeTab === 'HOME_SETTINGS' || activeTab === 'PAYOUT_CONFIG') ? 'bg-white text-emerald-700 shadow' : 'text-gray-500 hover:text-gray-700'}`}
+
+          <div className="relative flex-1 min-w-[125px]">
+            <button
+              type="button"
+              onClick={() => setIsSettingsDropdownOpen(!isSettingsDropdownOpen)}
+              className={`w-full h-10 px-3 inline-flex items-center justify-center gap-1 text-xs sm:text-sm font-semibold rounded-xl whitespace-nowrap transition-all ${
+                (activeTab === 'FOOTER' || activeTab === 'HOME_SETTINGS' || activeTab === 'PAYOUT_CONFIG' || activeTab === 'REVIEW_CONFIG')
+                  ? 'bg-white text-emerald-800 shadow-sm border border-emerald-200/70 font-bold'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-white/60'
+              }`}
             >
-              ⚙️ Cấu Hình Hệ Thống
-              <svg className={`w-4 h-4 transition-transform ${isSettingsDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+              <span>⚙️</span>
+              <span>Cấu Hình</span>
+              <svg className={`w-3.5 h-3.5 transition-transform duration-200 ${isSettingsDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
+              </svg>
             </button>
+
             {isSettingsDropdownOpen && (
-              <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl py-2 z-50 border border-gray-100 divide-y divide-gray-50">
+              <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-2xl py-2 z-50 border border-gray-100 divide-y divide-gray-100 animate-in fade-in slide-in-from-top-2 duration-150">
                 <div className="py-1">
                   <button
                     onClick={() => { setActiveTab('HOME_SETTINGS'); setIsSettingsDropdownOpen(false); }}
-                    className={`block w-full text-left px-4 py-2.5 text-sm ${activeTab === 'HOME_SETTINGS' ? 'bg-emerald-50 text-emerald-700 font-semibold' : 'text-gray-700 hover:bg-gray-50'}`}
+                    className={`block w-full text-left px-4 py-2.5 text-xs sm:text-sm transition-colors ${activeTab === 'HOME_SETTINGS' ? 'bg-emerald-50 text-emerald-700 font-bold' : 'text-gray-700 hover:bg-gray-50'}`}
                   >
                     🏠 Cấu hình Trang chủ
                   </button>
                   <button
                     onClick={() => { setActiveTab('FOOTER'); setIsSettingsDropdownOpen(false); }}
-                    className={`block w-full text-left px-4 py-2.5 text-sm ${activeTab === 'FOOTER' ? 'bg-emerald-50 text-emerald-700 font-semibold' : 'text-gray-700 hover:bg-gray-50'}`}
+                    className={`block w-full text-left px-4 py-2.5 text-xs sm:text-sm transition-colors ${activeTab === 'FOOTER' ? 'bg-emerald-50 text-emerald-700 font-bold' : 'text-gray-700 hover:bg-gray-50'}`}
                   >
                     📄 Cấu hình Footer
                   </button>
@@ -662,9 +764,15 @@ const AdminDashboard = () => {
                 <div className="py-1">
                   <button
                     onClick={() => { setActiveTab('PAYOUT_CONFIG'); setIsSettingsDropdownOpen(false); }}
-                    className={`block w-full text-left px-4 py-2.5 text-sm ${activeTab === 'PAYOUT_CONFIG' ? 'bg-emerald-50 text-emerald-700 font-semibold' : 'text-gray-700 hover:bg-gray-50'}`}
+                    className={`block w-full text-left px-4 py-2.5 text-xs sm:text-sm transition-colors ${activeTab === 'PAYOUT_CONFIG' ? 'bg-emerald-50 text-emerald-700 font-bold' : 'text-gray-700 hover:bg-gray-50'}`}
                   >
                     ⏱️ Thời Gian Chờ Hoàn Đơn / Giải Ngân
+                  </button>
+                  <button
+                    onClick={() => { setActiveTab('REVIEW_CONFIG'); setIsSettingsDropdownOpen(false); }}
+                    className={`block w-full text-left px-4 py-2.5 text-xs sm:text-sm transition-colors ${activeTab === 'REVIEW_CONFIG' ? 'bg-emerald-50 text-emerald-700 font-bold' : 'text-gray-700 hover:bg-gray-50'}`}
+                  >
+                    ⭐ Cấu Hình Đánh Giá Sản Phẩm
                   </button>
                 </div>
               </div>
@@ -688,101 +796,101 @@ const AdminDashboard = () => {
               <option value="SELLER">Nhà Sản Xuất</option>
             </select>
           </div>
-          
+
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        {loading ? (
-          <div className="p-8 text-center text-gray-500">Đang tải dữ liệu...</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Họ Tên</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vai Trò</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Liên Hệ</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ngày Đăng Ký</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Trạng Thái</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Hành Động</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {currentUsers.map((user) => (
-                  <tr key={user.userId}>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{user.fullName}</div>
-                      {user.roleName === 'SELLER' && (
-                        <div className="text-sm text-gray-500">Cửa hàng: {user.shopName}</div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${user.roleName === 'SELLER' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'}`}>
-                        {user.roleName === 'SELLER' ? 'Xưởng Mộc' : 'Khách Hàng'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      <div>{user.email}</div>
-                      <div>{user.phone}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(user.createdAt).toLocaleDateString('vi-VN')}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${user.status === 'ACTIVE' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                        {user.status === 'ACTIVE' ? 'Hoạt động' : 'Bị Khóa'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <button
-                        onClick={() => toggleStatus(user.userId, user.status)}
-                        className={`text-${user.status === 'ACTIVE' ? 'red' : 'green'}-600 hover:text-${user.status === 'ACTIVE' ? 'red' : 'green'}-900 mr-4`}
-                      >
-                        {user.status === 'ACTIVE' ? 'Khóa Tài Khoản' : 'Mở Khóa'}
-                      </button>
-                      <button
-                        onClick={() => confirmDeleteUser(user.userId)}
-                        className="text-gray-500 hover:text-red-700"
-                      >
-                        Xóa
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {users.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
-                      Không tìm thấy tài khoản nào.
-                    </td>
-                  </tr>
+            {loading ? (
+              <div className="p-8 text-center text-gray-500">Đang tải dữ liệu...</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Họ Tên</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vai Trò</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Liên Hệ</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ngày Đăng Ký</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Trạng Thái</th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Hành Động</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {currentUsers.map((user) => (
+                      <tr key={user.userId}>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium text-gray-900">{user.fullName}</div>
+                          {user.roleName === 'SELLER' && (
+                            <div className="text-sm text-gray-500">Cửa hàng: {user.shopName}</div>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${user.roleName === 'SELLER' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'}`}>
+                            {user.roleName === 'SELLER' ? 'Xưởng Mộc' : 'Khách Hàng'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <div>{user.email}</div>
+                          <div>{user.phone}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {new Date(user.createdAt).toLocaleDateString('vi-VN')}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${user.status === 'ACTIVE' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                            {user.status === 'ACTIVE' ? 'Hoạt động' : 'Bị Khóa'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <button
+                            onClick={() => toggleStatus(user.userId, user.status)}
+                            className={`text-${user.status === 'ACTIVE' ? 'red' : 'green'}-600 hover:text-${user.status === 'ACTIVE' ? 'red' : 'green'}-900 mr-4`}
+                          >
+                            {user.status === 'ACTIVE' ? 'Khóa Tài Khoản' : 'Mở Khóa'}
+                          </button>
+                          <button
+                            onClick={() => confirmDeleteUser(user.userId)}
+                            className="text-gray-500 hover:text-red-700"
+                          >
+                            Xóa
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {users.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                          Không tìm thấy tài khoản nào.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+
+                {/* Pagination Controls */}
+                {totalPages > 0 && (
+                  <div className="flex justify-center items-center gap-4 py-5 border-t border-gray-100 bg-gray-50">
+                    <button
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1 || totalPages <= 1}
+                      className="px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:text-emerald-600 disabled:opacity-50 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed font-semibold shadow-sm transition-all"
+                    >
+                      Trước
+                    </button>
+                    <div className="flex items-center justify-center min-w-[80px] px-3 py-2 rounded-lg bg-gray-50 border border-gray-100 text-gray-700 font-medium">
+                      {currentPage} / {Math.max(1, totalPages)}
+                    </div>
+                    <button
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      disabled={currentPage >= totalPages || totalPages <= 1}
+                      className="px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:text-emerald-600 disabled:opacity-50 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed font-semibold shadow-sm transition-all"
+                    >
+                      Sau
+                    </button>
+                  </div>
                 )}
-              </tbody>
-            </table>
-            
-            {/* Pagination Controls */}
-            {totalPages > 0 && (
-              <div className="flex justify-center items-center gap-4 py-5 border-t border-gray-100 bg-gray-50">
-                <button 
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                  disabled={currentPage === 1 || totalPages <= 1}
-                  className="px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:text-emerald-600 disabled:opacity-50 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed font-semibold shadow-sm transition-all"
-                >
-                  Trước
-                </button>
-                <div className="flex items-center justify-center min-w-[80px] px-3 py-2 rounded-lg bg-gray-50 border border-gray-100 text-gray-700 font-medium">
-                  {currentPage} / {Math.max(1, totalPages)}
-                </div>
-                <button 
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                  disabled={currentPage >= totalPages || totalPages <= 1}
-                  className="px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:text-emerald-600 disabled:opacity-50 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed font-semibold shadow-sm transition-all"
-                >
-                  Sau
-                </button>
               </div>
             )}
           </div>
-        )}
-      </div>
-      </>
+        </>
       )}
 
       {activeTab === 'PENDING_SELLERS' && (
@@ -886,7 +994,7 @@ const AdminDashboard = () => {
                   <div className="absolute top-2 left-2 bg-black bg-opacity-50 text-white w-8 h-8 flex items-center justify-center rounded-full font-bold z-10">
                     {index + 1}
                   </div>
-                  <button 
+                  <button
                     onClick={() => confirmDeleteBanner(banner.bannerId)}
                     className="absolute top-2 right-2 bg-red-500 text-white w-8 h-8 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10 hover:bg-red-600"
                     title="Xóa ảnh này"
@@ -894,9 +1002,9 @@ const AdminDashboard = () => {
                     &times;
                   </button>
                   <div className="aspect-[21/9] w-full">
-                    <img 
-                      src={banner.imageUrl.startsWith('http') ? banner.imageUrl : `http://localhost:5234${banner.imageUrl}`} 
-                      alt={`Banner ${index + 1}`} 
+                    <img
+                      src={banner.imageUrl.startsWith('http') ? banner.imageUrl : `http://localhost:5234${banner.imageUrl}`}
+                      alt={`Banner ${index + 1}`}
                       className="w-full h-full object-cover"
                     />
                   </div>
@@ -910,8 +1018,8 @@ const AdminDashboard = () => {
       {activeTab === 'CATEGORIES' && (
         <>
           <div className="flex justify-end mb-4">
-            <button 
-              onClick={() => setCategoryModal({isOpen: true, isEdit: false, data: {name: '', description: ''}})}
+            <button
+              onClick={() => setCategoryModal({ isOpen: true, isEdit: false, data: { name: '', description: '' } })}
               className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium transition-colors shadow-sm"
             >
               + Thêm Danh Mục Mới
@@ -938,7 +1046,7 @@ const AdminDashboard = () => {
                       <td className="px-6 py-4 text-sm text-gray-500">{cat.description || 'Không có mô tả'}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <button
-                          onClick={() => setCategoryModal({isOpen: true, isEdit: true, data: {categoryId: cat.categoryId, name: cat.name, description: cat.description || ''}})}
+                          onClick={() => setCategoryModal({ isOpen: true, isEdit: true, data: { categoryId: cat.categoryId, name: cat.name, description: cat.description || '' } })}
                           className="text-indigo-600 hover:text-indigo-900 mr-4"
                         >
                           Sửa
@@ -973,66 +1081,66 @@ const AdminDashboard = () => {
             <form onSubmit={handleSaveFooter} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Mô tả về FurniMatch</label>
-                <textarea 
+                <textarea
                   rows={2}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
                   value={footerSetting.description}
-                  onChange={e => setFooterSetting({...footerSetting, description: e.target.value})}
+                  onChange={e => setFooterSetting({ ...footerSetting, description: e.target.value })}
                 />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Địa chỉ</label>
-                  <input 
+                  <input
                     type="text"
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
                     value={footerSetting.address}
-                    onChange={e => setFooterSetting({...footerSetting, address: e.target.value})}
+                    onChange={e => setFooterSetting({ ...footerSetting, address: e.target.value })}
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Số điện thoại</label>
-                  <input 
+                  <input
                     type="text"
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
                     value={footerSetting.phone}
-                    onChange={e => setFooterSetting({...footerSetting, phone: e.target.value})}
+                    onChange={e => setFooterSetting({ ...footerSetting, phone: e.target.value })}
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                  <input 
+                  <input
                     type="text"
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
                     value={footerSetting.email}
-                    onChange={e => setFooterSetting({...footerSetting, email: e.target.value})}
+                    onChange={e => setFooterSetting({ ...footerSetting, email: e.target.value })}
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Link Facebook</label>
-                  <input 
+                  <input
                     type="text"
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
                     value={footerSetting.facebookLink}
-                    onChange={e => setFooterSetting({...footerSetting, facebookLink: e.target.value})}
+                    onChange={e => setFooterSetting({ ...footerSetting, facebookLink: e.target.value })}
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Link Instagram</label>
-                  <input 
+                  <input
                     type="text"
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
                     value={footerSetting.instagramLink}
-                    onChange={e => setFooterSetting({...footerSetting, instagramLink: e.target.value})}
+                    onChange={e => setFooterSetting({ ...footerSetting, instagramLink: e.target.value })}
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Link Zalo</label>
-                  <input 
+                  <input
                     type="text"
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
                     value={footerSetting.zaloLink}
-                    onChange={e => setFooterSetting({...footerSetting, zaloLink: e.target.value})}
+                    onChange={e => setFooterSetting({ ...footerSetting, zaloLink: e.target.value })}
                   />
                 </div>
               </div>
@@ -1055,21 +1163,21 @@ const AdminDashboard = () => {
             <form onSubmit={handleSaveFooter} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Tiêu đề chính (Title)</label>
-                <input 
+                <input
                   type="text"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
                   value={footerSetting.homeTitle}
-                  onChange={e => setFooterSetting({...footerSetting, homeTitle: e.target.value})}
+                  onChange={e => setFooterSetting({ ...footerSetting, homeTitle: e.target.value })}
                   placeholder="VD: Đặt Làm Nội Thất Theo Yêu Cầu"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Mô tả phụ (Subtitle)</label>
-                <textarea 
+                <textarea
                   rows={3}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
                   value={footerSetting.homeSubtitle}
-                  onChange={e => setFooterSetting({...footerSetting, homeSubtitle: e.target.value})}
+                  onChange={e => setFooterSetting({ ...footerSetting, homeSubtitle: e.target.value })}
                   placeholder="VD: Kết nối bạn với những xưởng sản xuất uy tín nhất..."
                 />
               </div>
@@ -1188,6 +1296,7 @@ const AdminDashboard = () => {
                   </div>
                 </div>
               </div>
+
 
               {/* Presets Chips */}
               <div>
@@ -1406,6 +1515,143 @@ const AdminDashboard = () => {
         </div>
       )}
 
+      {/* ===================== PRODUCT REVIEW CONFIGURATION TAB ===================== */}
+      {activeTab === 'REVIEW_CONFIG' && (
+        <div className="space-y-8 max-w-6xl mx-auto">
+          {/* Header Card */}
+          <div className="bg-gradient-to-r from-amber-700 via-yellow-700 to-amber-900 rounded-2xl p-6 text-white shadow-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+              <div className="inline-flex items-center gap-2 px-3 py-1 bg-amber-600/70 rounded-full text-xs font-semibold text-amber-100 mb-2">
+                <span>⭐ Cấu Hình Hệ Thống</span>
+                <span>•</span>
+                <span>Đánh Giá & Phản Hồi</span>
+              </div>
+              <h2 className="text-2xl font-bold">Cấu Hình Thời Hạn Đánh Giá Sản Phẩm</h2>
+              <p className="text-amber-100 text-sm mt-1 max-w-2xl">
+                Thiết lập thời hạn (số ngày) cho phép người mua viết đánh giá sau khi đơn hàng hoàn tất. Sau thời gian này, tính năng đánh giá sẽ tự động vô hiệu hóa.
+              </p>
+            </div>
+            <div className="bg-white/10 backdrop-blur-md px-4 py-3 rounded-xl border border-white/20 text-center shrink-0">
+              <span className="block text-xs uppercase tracking-wider text-amber-200 font-medium">Thời hạn hiện tại</span>
+              <span className="text-2xl font-black text-white">{reviewDeadlineDays} ngày</span>
+            </div>
+          </div>
+
+          {/* Main Setting Card */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8">
+            <h3 className="text-lg font-bold text-gray-900 mb-1 flex items-center gap-2">
+              <span>⏱️ Thiết lập thời hạn đánh giá sau hoàn thành</span>
+            </h3>
+            <p className="text-sm text-gray-500 mb-6">
+              Số ngày tối đa kể từ thời điểm Người bán bấm hoàn tất đơn (<code>CompletedAt</code>) mà khách hàng được phép gửi đánh giá sao, nhận xét và upload hình ảnh/video.
+            </p>
+
+            <form onSubmit={handleSaveReviewConfig} className="space-y-6">
+              <div className="max-w-md bg-amber-50/60 p-6 rounded-2xl border border-amber-200/80 focus-within:border-amber-500 focus-within:bg-white transition-all">
+                <div className="flex justify-between items-center mb-2">
+                  <label className="text-sm font-bold text-gray-800">📅 Số Ngày Cho Phép Đánh Giá</label>
+                  <span className="text-xs text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full font-semibold">Tối thiểu: 1 ngày</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    min="1"
+                    max="90"
+                    value={reviewDeadlineDays}
+                    onChange={e => setReviewDeadlineDays(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="w-full text-3xl font-black text-gray-900 bg-transparent border-0 outline-none"
+                  />
+                  <span className="text-lg font-bold text-gray-500">ngày</span>
+                </div>
+              </div>
+
+              {/* Quick Presets */}
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">
+                  ⚡ Mẫu thời gian gợi ý nhanh:
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { label: '3 ngày (Gấp / Ngắn hạn)', days: 3 },
+                    { label: '7 ngày (Khuyên dùng / Tiêu chuẩn)', days: 7 },
+                    { label: '14 ngày (2 tuần)', days: 14 },
+                    { label: '30 ngày (1 tháng)', days: 30 }
+                  ].map(preset => (
+                    <button
+                      key={preset.days}
+                      type="button"
+                      onClick={() => setReviewDeadlineDays(preset.days)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${reviewDeadlineDays === preset.days
+                          ? 'bg-amber-600 text-white border-amber-600 shadow-sm'
+                          : 'bg-white text-gray-700 border-gray-200 hover:border-amber-400 hover:bg-amber-50/50'
+                        }`}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  disabled={savingReviewConfig}
+                  className="px-6 py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-bold rounded-xl shadow-md transition-all flex items-center gap-2"
+                >
+                  {savingReviewConfig ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                      <span>Đang lưu...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>💾 Lưu Cấu Hình Thời Hạn Đánh Giá</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Workflow Explanation Cards */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-gray-700 mb-4">
+              📌 Quy trình & Cơ chế hoạt động của Đánh Giá Sản Phẩm:
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 font-bold flex items-center justify-center mb-2">1</div>
+                <h4 className="text-sm font-bold text-gray-900">Đơn Hoàn Thành</h4>
+                <p className="text-xs text-gray-500 mt-1">
+                  Khi Người bán đánh dấu hoàn tất đơn, mốc thời gian <code>CompletedAt</code> bắt đầu được tính giờ.
+                </p>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 font-bold flex items-center justify-center mb-2">2</div>
+                <h4 className="text-sm font-bold text-gray-900">Thời Hạn {reviewDeadlineDays} Ngày</h4>
+                <p className="text-xs text-gray-500 mt-1">
+                  Khách hàng thấy nút <strong>⭐ Viết đánh giá</strong> trong mục đơn mua, có đếm ngược số ngày còn lại.
+                </p>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 font-bold flex items-center justify-center mb-2">3</div>
+                <h4 className="text-sm font-bold text-gray-900">Đánh Giá Từng Sản Phẩm</h4>
+                <p className="text-xs text-gray-500 mt-1">
+                  Khách chấm sao (1-5★), viết cảm nhận, upload ảnh/video thực tế. Đánh giá được đồng bộ lên trang sản phẩm.
+                </p>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                <div className="w-8 h-8 rounded-lg bg-rose-100 text-rose-700 font-bold flex items-center justify-center mb-2">4</div>
+                <h4 className="text-sm font-bold text-gray-900">Tự Động Khóa Quá Hạn</h4>
+                <p className="text-xs text-gray-500 mt-1">
+                  Sau {reviewDeadlineDays} ngày, nút chuyển thành màu xám <strong>Đã quá thời hạn</strong> và API từ chối gửi review.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Category Edit/Create Modal */}
       {categoryModal.isOpen && (
         <div className="fixed inset-0 flex items-center justify-center bg-gray-900 bg-opacity-50 z-50 transition-opacity">
@@ -1414,31 +1660,31 @@ const AdminDashboard = () => {
             <form onSubmit={handleSaveCategory}>
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Tên Danh Mục *</label>
-                <input 
-                  type="text" required 
+                <input
+                  type="text" required
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
                   value={categoryModal.data.name}
-                  onChange={e => setCategoryModal({...categoryModal, data: {...categoryModal.data, name: e.target.value}})}
+                  onChange={e => setCategoryModal({ ...categoryModal, data: { ...categoryModal.data, name: e.target.value } })}
                 />
               </div>
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Mô tả</label>
-                <textarea 
+                <textarea
                   rows={3}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
                   value={categoryModal.data.description}
-                  onChange={e => setCategoryModal({...categoryModal, data: {...categoryModal.data, description: e.target.value}})}
+                  onChange={e => setCategoryModal({ ...categoryModal, data: { ...categoryModal.data, description: e.target.value } })}
                 />
               </div>
               <div className="flex justify-end space-x-3">
-                <button 
+                <button
                   type="button"
                   onClick={() => setCategoryModal({ isOpen: false, isEdit: false, data: { name: '', description: '' } })}
                   className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
                 >
                   Hủy
                 </button>
-                <button 
+                <button
                   type="submit"
                   className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors shadow-md"
                 >
@@ -1579,20 +1825,20 @@ const AdminDashboard = () => {
       {/* Image Viewer Modal */}
       {imageModal.isOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-90 flex flex-col items-center justify-center z-[60]">
-          <button 
+          <button
             onClick={() => setImageModal({ isOpen: false, images: [], currentIndex: 0 })}
             className="absolute top-4 right-4 text-white hover:text-gray-300 p-2"
           >
             <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
           </button>
-          
+
           <div className="relative w-full max-w-4xl max-h-[80vh] flex justify-center px-12">
-            <img 
-              src={`http://localhost:5234${imageModal.images[imageModal.currentIndex]}`} 
-              alt="Document" 
+            <img
+              src={`http://localhost:5234${imageModal.images[imageModal.currentIndex]}`}
+              alt="Document"
               className="max-w-full max-h-[80vh] object-contain"
             />
-            
+
             {imageModal.images.length > 1 && (
               <>
                 <button
@@ -1610,7 +1856,7 @@ const AdminDashboard = () => {
               </>
             )}
           </div>
-          
+
           {imageModal.images.length > 1 && (
             <div className="text-white mt-4 text-lg font-medium">
               Ảnh {imageModal.currentIndex + 1} / {imageModal.images.length}
@@ -1639,7 +1885,7 @@ const AdminDashboard = () => {
                 className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors">
                 🔍 Lọc
               </button>
-              <button onClick={() => { setRevFromDate(''); setRevToDate(''); }} 
+              <button onClick={() => { setRevFromDate(''); setRevToDate(''); }}
                 className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors">
                 Xóa lọc
               </button>
@@ -1714,10 +1960,10 @@ const AdminDashboard = () => {
                   <BarChart data={revChart} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                     <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#6b7280' }} />
-                    <YAxis tickFormatter={(v: number) => v >= 1000000 ? `${(v/1000000).toFixed(0)}M` : String(v)} tick={{ fontSize: 11, fill: '#6b7280' }} />
+                    <YAxis tickFormatter={(v: number) => v >= 1000000 ? `${(v / 1000000).toFixed(0)}M` : String(v)} tick={{ fontSize: 11, fill: '#6b7280' }} />
                     <Tooltip formatter={(val: any) => [money(val), '']} contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }} />
                     <Legend />
-                    <Bar dataKey="gmv" name="Doanh thu (VND)" fill="#10b981" radius={[4,4,0,0]} />
+                    <Bar dataKey="gmv" name="Doanh thu (VND)" fill="#10b981" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -1800,7 +2046,7 @@ const AdminDashboard = () => {
                 {/* Pagination */}
                 {revOrders.length > 0 && (
                   <div className="flex justify-center items-center gap-4 py-5 border-t border-gray-100">
-                    <button 
+                    <button
                       onClick={() => fetchRevenueOrders(Math.max(1, revOrdersPage - 1))}
                       disabled={revOrdersPage <= 1}
                       className="px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:text-emerald-600 disabled:opacity-50 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed font-semibold shadow-sm transition-all"
@@ -1810,7 +2056,7 @@ const AdminDashboard = () => {
                     <div className="flex items-center justify-center min-w-[80px] px-3 py-2 rounded-lg bg-gray-50 border border-gray-100 text-gray-700 font-medium">
                       {revOrdersPage} / {Math.max(1, revTotalOrderPages)}
                     </div>
-                    <button 
+                    <button
                       onClick={() => fetchRevenueOrders(Math.min(revTotalOrderPages, revOrdersPage + 1))}
                       disabled={revOrdersPage >= revTotalOrderPages || revTotalOrderPages <= 1}
                       className="px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:text-emerald-600 disabled:opacity-50 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed font-semibold shadow-sm transition-all"
@@ -1884,7 +2130,7 @@ const AdminDashboard = () => {
                                     className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700 transition-colors shadow-sm">
                                     ✅ Duyệt & Đính kèm Bill
                                   </button>
-                                  <button onClick={() => setRejectWithdrawModal({isOpen: true, requestId: w.withdrawalRequestId, note: ''})}
+                                  <button onClick={() => setRejectWithdrawModal({ isOpen: true, requestId: w.withdrawalRequestId, note: '' })}
                                     className="px-3 py-1.5 bg-red-100 text-red-700 text-xs font-semibold rounded-lg hover:bg-red-200 transition-colors">
                                     ❌ Từ chối
                                   </button>
@@ -1923,9 +2169,9 @@ const AdminDashboard = () => {
               )}
               {wdTotal > 0 && (
                 <div className="flex justify-center items-center gap-4 py-5 border-t border-gray-100">
-                  <button 
-                    disabled={wdPage <= 1} 
-                    onClick={() => fetchWithdrawals(wdPage - 1)} 
+                  <button
+                    disabled={wdPage <= 1}
+                    onClick={() => fetchWithdrawals(wdPage - 1)}
                     className="px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:text-emerald-600 disabled:opacity-50 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed font-semibold shadow-sm transition-all"
                   >
                     Trước
@@ -1933,9 +2179,9 @@ const AdminDashboard = () => {
                   <div className="flex items-center justify-center min-w-[80px] px-3 py-2 rounded-lg bg-gray-50 border border-gray-100 text-gray-700 font-medium">
                     {wdPage} / {Math.max(1, Math.ceil(wdTotal / WD_PAGE_SIZE))}
                   </div>
-                  <button 
-                    disabled={wdPage >= Math.ceil(wdTotal / WD_PAGE_SIZE) || Math.ceil(wdTotal / WD_PAGE_SIZE) <= 1} 
-                    onClick={() => fetchWithdrawals(wdPage + 1)} 
+                  <button
+                    disabled={wdPage >= Math.ceil(wdTotal / WD_PAGE_SIZE) || Math.ceil(wdTotal / WD_PAGE_SIZE) <= 1}
+                    onClick={() => fetchWithdrawals(wdPage + 1)}
                     className="px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:text-emerald-600 disabled:opacity-50 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed font-semibold shadow-sm transition-all"
                   >
                     Sau
@@ -1953,12 +2199,12 @@ const AdminDashboard = () => {
                 <p className="text-sm text-gray-600 mb-3">Vui lòng nhập lý do từ chối để thông báo cho seller:</p>
                 <textarea
                   value={rejectWithdrawModal.note}
-                  onChange={e => setRejectWithdrawModal(m => ({...m, note: e.target.value}))}
+                  onChange={e => setRejectWithdrawModal(m => ({ ...m, note: e.target.value }))}
                   rows={3} placeholder="Lý do từ chối..."
                   className="w-full px-4 py-2.5 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-red-400 resize-none text-sm"
                 />
                 <div className="flex gap-3 mt-4">
-                  <button onClick={() => setRejectWithdrawModal({isOpen: false, requestId: null, note: ''})} className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-gray-600 font-medium hover:bg-gray-50">Huỷ</button>
+                  <button onClick={() => setRejectWithdrawModal({ isOpen: false, requestId: null, note: '' })} className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-gray-600 font-medium hover:bg-gray-50">Huỷ</button>
                   <button onClick={rejectWithdrawal} className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700">Xác nhận từ chối</button>
                 </div>
               </div>
@@ -2184,11 +2430,11 @@ const AdminDashboard = () => {
                             <td className="px-5 py-4 text-center">
                               {d.status === 'OPEN' && (
                                 <div className="flex items-center justify-center gap-2">
-                                  <button onClick={() => setResolveDisputeModal({isOpen: true, disputeId: d.orderDisputeId, note: '', action: 'resolve'})}
+                                  <button onClick={() => setResolveDisputeModal({ isOpen: true, disputeId: d.orderDisputeId, note: '', action: 'resolve' })}
                                     className="px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 transition-colors">
                                     ✅ Chấp nhận
                                   </button>
-                                  <button onClick={() => setResolveDisputeModal({isOpen: true, disputeId: d.orderDisputeId, note: '', action: 'reject'})}
+                                  <button onClick={() => setResolveDisputeModal({ isOpen: true, disputeId: d.orderDisputeId, note: '', action: 'reject' })}
                                     className="px-3 py-1.5 bg-gray-100 text-gray-700 text-xs font-semibold rounded-lg hover:bg-gray-200 transition-colors">
                                     ❌ Bác khiếu nại
                                   </button>
@@ -2205,9 +2451,9 @@ const AdminDashboard = () => {
               )}
               {dsTotal > 0 && (
                 <div className="flex justify-center items-center gap-4 py-5 border-t border-gray-100">
-                  <button 
-                    disabled={dsPage <= 1} 
-                    onClick={() => fetchDisputes(dsPage - 1)} 
+                  <button
+                    disabled={dsPage <= 1}
+                    onClick={() => fetchDisputes(dsPage - 1)}
                     className="px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:text-emerald-600 disabled:opacity-50 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed font-semibold shadow-sm transition-all"
                   >
                     Trước
@@ -2215,9 +2461,9 @@ const AdminDashboard = () => {
                   <div className="flex items-center justify-center min-w-[80px] px-3 py-2 rounded-lg bg-gray-50 border border-gray-100 text-gray-700 font-medium">
                     {dsPage} / {Math.max(1, Math.ceil(dsTotal / DS_PAGE_SIZE))}
                   </div>
-                  <button 
-                    disabled={dsPage >= Math.ceil(dsTotal / DS_PAGE_SIZE) || Math.ceil(dsTotal / DS_PAGE_SIZE) <= 1} 
-                    onClick={() => fetchDisputes(dsPage + 1)} 
+                  <button
+                    disabled={dsPage >= Math.ceil(dsTotal / DS_PAGE_SIZE) || Math.ceil(dsTotal / DS_PAGE_SIZE) <= 1}
+                    onClick={() => fetchDisputes(dsPage + 1)}
                     className="px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:text-emerald-600 disabled:opacity-50 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed font-semibold shadow-sm transition-all"
                   >
                     Sau
@@ -2241,12 +2487,12 @@ const AdminDashboard = () => {
                 </p>
                 <textarea
                   value={resolveDisputeModal.note}
-                  onChange={e => setResolveDisputeModal(m => ({...m, note: e.target.value}))}
+                  onChange={e => setResolveDisputeModal(m => ({ ...m, note: e.target.value }))}
                   rows={3} placeholder="Ghi chú của Admin..."
                   className="w-full px-4 py-2.5 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-400 resize-none text-sm"
                 />
                 <div className="flex gap-3 mt-4">
-                  <button onClick={() => setResolveDisputeModal({isOpen: false, disputeId: null, note: '', action: 'resolve'})} className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-gray-600 font-medium hover:bg-gray-50">Huỷ</button>
+                  <button onClick={() => setResolveDisputeModal({ isOpen: false, disputeId: null, note: '', action: 'resolve' })} className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-gray-600 font-medium hover:bg-gray-50">Huỷ</button>
                   <button onClick={handleDisputeAction} className={`flex-1 px-4 py-2.5 text-white rounded-xl font-semibold ${resolveDisputeModal.action === 'resolve' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-emerald-600 hover:bg-emerald-700'}`}>Xác nhận</button>
                 </div>
               </div>

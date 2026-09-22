@@ -931,8 +931,20 @@ export default function SellerDashboard() {
                               const imageUrl = x.imageUrl || x.ImageUrl;
                               return (
                                 <div key={i} className="flex gap-4">
-                                  <div className="h-16 w-16 shrink-0 rounded-lg border bg-white overflow-hidden">
-                                    {imageUrl ? <img src={imageUrl.startsWith('http') ? imageUrl : `http://localhost:5234${imageUrl}`} className="h-full w-full object-cover" alt="" /> : <Package className="h-full w-full p-4 text-gray-200" />}
+                                  <div className="h-16 w-16 shrink-0 rounded-lg border border-gray-200 bg-gray-50 overflow-hidden flex items-center justify-center">
+                                    {imageUrl ? (
+                                      <img 
+                                        src={imageUrl.startsWith('http') ? imageUrl : `http://localhost:5234${imageUrl.startsWith('/') ? '' : '/'}${imageUrl}`} 
+                                        className="h-full w-full object-cover" 
+                                        alt={name || 'Sản phẩm'}
+                                        onError={(e) => {
+                                          e.currentTarget.onerror = null;
+                                          e.currentTarget.src = 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&q=80&w=300';
+                                        }}
+                                      />
+                                    ) : (
+                                      <Package className="h-8 w-8 text-gray-300" />
+                                    )}
                                   </div>
                                   <div className="flex-1 min-w-0">
                                     <p className="text-sm font-medium text-gray-900 truncate">{name}</p>

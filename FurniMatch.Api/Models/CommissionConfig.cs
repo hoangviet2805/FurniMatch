@@ -34,6 +34,12 @@ namespace FurniMatch.Api.Models
 
         public int PayoutDelayMinutes { get; set; } = 0;
 
+        /// <summary>
+        /// Số ngày Customer được phép viết đánh giá kể từ lúc Seller đánh dấu đơn COMPLETED.
+        /// Admin có thể thay đổi. Mặc định: 7 ngày.
+        /// </summary>
+        public int ReviewDeadlineDays { get; set; } = 7;
+
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
         public string? Note { get; set; }

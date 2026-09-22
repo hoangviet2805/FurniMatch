@@ -29,6 +29,7 @@ namespace FurniMatch.Api.Data
         public DbSet<CommissionConfig> CommissionConfigs { get; set; }
         public DbSet<OrderDispute> OrderDisputes { get; set; }
         public DbSet<WithdrawalRequest> WithdrawalRequests { get; set; }
+        public DbSet<OrderReview> OrderReviews { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -158,6 +159,30 @@ namespace FurniMatch.Api.Data
                 .WithMany()
                 .HasForeignKey(t => t.OrderId)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            // OrderReview
+            modelBuilder.Entity<OrderReview>()
+                .HasOne(r => r.Order)
+                .WithMany()
+                .HasForeignKey(r => r.OrderId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<OrderReview>()
+                .HasOne(r => r.Customer)
+                .WithMany()
+                .HasForeignKey(r => r.CustomerId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<OrderReview>()
+                .HasOne(r => r.Product)
+                .WithMany()
+                .HasForeignKey(r => r.ProductId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Mỗi customer chỉ review 1 lần mỗi sản phẩm trong 1 đơn
+            modelBuilder.Entity<OrderReview>()
+                .HasIndex(r => new { r.OrderId, r.ProductId, r.CustomerId })
+                .IsUnique();
         }
     }
 }

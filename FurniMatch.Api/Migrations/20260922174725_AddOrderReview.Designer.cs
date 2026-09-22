@@ -4,6 +4,7 @@ using FurniMatch.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace FurniMatch.Api.Migrations
 {
     [DbContext(typeof(FurniMatchDbContext))]
-    partial class FurniMatchDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260922174725_AddOrderReview")]
+    partial class AddOrderReview
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -97,9 +100,6 @@ namespace FurniMatch.Api.Migrations
                         .HasColumnType("int");
 
                     b.Property<int>("PayoutDelayMinutes")
-                        .HasColumnType("int");
-
-                    b.Property<int>("ReviewDeadlineDays")
                         .HasColumnType("int");
 
                     b.Property<DateTime>("UpdatedAt")
@@ -475,53 +475,6 @@ namespace FurniMatch.Api.Migrations
                     b.HasIndex("OrderId");
 
                     b.ToTable("OrderDisputes");
-                });
-
-            modelBuilder.Entity("FurniMatch.Api.Models.OrderReview", b =>
-                {
-                    b.Property<int>("ReviewId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ReviewId"));
-
-                    b.Property<string>("Comment")
-                        .HasMaxLength(300)
-                        .HasColumnType("nvarchar(300)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("CustomerId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("MediaJson")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("OrderId")
-                        .HasColumnType("int");
-
-                    b.Property<int>("ProductId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("ProductName")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<int>("Rating")
-                        .HasColumnType("int");
-
-                    b.HasKey("ReviewId");
-
-                    b.HasIndex("CustomerId");
-
-                    b.HasIndex("ProductId");
-
-                    b.HasIndex("OrderId", "ProductId", "CustomerId")
-                        .IsUnique();
-
-                    b.ToTable("OrderReviews");
                 });
 
             modelBuilder.Entity("FurniMatch.Api.Models.PaymentQrConfig", b =>
@@ -1157,33 +1110,6 @@ namespace FurniMatch.Api.Migrations
                     b.Navigation("Customer");
 
                     b.Navigation("Order");
-                });
-
-            modelBuilder.Entity("FurniMatch.Api.Models.OrderReview", b =>
-                {
-                    b.HasOne("FurniMatch.Api.Models.User", "Customer")
-                        .WithMany()
-                        .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("FurniMatch.Api.Models.Order", "Order")
-                        .WithMany()
-                        .HasForeignKey("OrderId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("FurniMatch.Api.Models.Product", "Product")
-                        .WithMany()
-                        .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Customer");
-
-                    b.Navigation("Order");
-
-                    b.Navigation("Product");
                 });
 
             modelBuilder.Entity("FurniMatch.Api.Models.Product", b =>

@@ -14,10 +14,18 @@ const Products = () => {
   const [sort, setSort] = useState(searchParams.get('sort') ?? 'diverse');
   const [favorites, setFavorites] = useState<number[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 10;
+  const ITEMS_PER_PAGE = 16;
+  const [minutesToNextHour, setMinutesToNextHour] = useState<number>(60 - new Date().getMinutes());
 
   useEffect(() => {
     setFavorites(JSON.parse(localStorage.getItem('favoriteProductIds') ?? '[]'));
+    const updateMinutes = () => {
+      const now = new Date();
+      setMinutesToNextHour(60 - now.getMinutes());
+    };
+    updateMinutes();
+    const interval = setInterval(updateMinutes, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -38,7 +46,9 @@ const Products = () => {
       if (categoryIdParam) params.set('categoryId', categoryIdParam);
       if (keyword.trim()) params.set('search', keyword.trim());
       if (sort) params.set('sort', sort);
-      const url = `/products${params.size ? `?${params.toString()}` : ''}`;
+      // Đồng bộ theo mốc giờ hiện tại để backend và client tự động luân phiên đổi mới mỗi 1 tiếng
+      params.set('_h', Math.floor(Date.now() / 3600000).toString());
+      const url = `/products?${params.toString()}`;
       const response = await api.get(url);
       setProducts(response.data);
     } catch (err) {
@@ -136,7 +146,15 @@ const Products = () => {
                   ? categories.find(c => c.categoryId.toString() === categoryIdParam)?.name || 'Danh sách Sản phẩm' 
                   : 'Tất cả Sản phẩm'}
               </h1>
-              <p className="text-gray-500 text-sm mt-1">{products.length} sản phẩm phù hợp</p>
+              <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                <p className="text-gray-500 text-sm">{products.length} sản phẩm phù hợp (16 sản phẩm/trang)</p>
+                {sort === 'diverse' && (
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2.5 py-0.5 rounded-full">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    Đa dạng xưởng (đổi mới sau {minutesToNextHour}p)
+                  </span>
+                )}
+              </div>
             </div>
             <select 
               value={sort} 
@@ -167,11 +185,21 @@ const Products = () => {
                   <Link to={`/products/${product.productId}`} className="flex flex-col flex-1">
                   <div className="h-48 bg-gray-100 relative overflow-hidden shrink-0">
                     {product.productImages && product.productImages.length > 0 ? (
-                      <img 
-                        src={product.productImages[0].imageUrl.startsWith('http') ? product.productImages[0].imageUrl : `http://localhost:5234${product.productImages[0].imageUrl}`} 
-                        alt={product.name} 
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
-                      />
+                      (() => {
+                        const thumb = product.productImages.find((img: any) => img.isThumbnail) || product.productImages[0];
+                        const imgUrl = thumb.imageUrl.startsWith('http') ? thumb.imageUrl : `http://localhost:5234${thumb.imageUrl.startsWith('/') ? '' : '/'}${thumb.imageUrl}`;
+                        return (
+                          <img 
+                            src={imgUrl} 
+                            alt={product.name} 
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                            onError={(e) => {
+                              e.currentTarget.onerror = null;
+                              e.currentTarget.src = 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&q=80&w=300';
+                            }}
+                          />
+                        );
+                      })()
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-gray-400">Không có ảnh</div>
                     )}

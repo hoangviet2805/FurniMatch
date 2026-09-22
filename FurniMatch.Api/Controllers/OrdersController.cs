@@ -54,6 +54,7 @@ public class OrdersController : ControllerBase
                 o.PaymentStatus,
                 o.OrderStatus,
                 o.PaymentExpiredAt,
+                o.CompletedAt,
                 o.CreatedAt,
                 o.UpdatedAt,
                 ShopName = o.Seller != null ? (o.Seller.ShopName ?? o.Seller.FullName) : "Xưởng nội thất"

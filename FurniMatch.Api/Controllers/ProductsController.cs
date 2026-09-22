@@ -106,9 +106,9 @@ namespace FurniMatch.Api.Controllers
                         var list = g.OrderByDescending(p => p.CreatedAt).ToList();
                         int offset = Math.Abs(rng.Next()) % Math.Max(1, list.Count);
                         var rotated = list.Skip(offset).Concat(list.Take(offset)).ToList();
-                        return new { SellerId = g.Key, Queue = new Queue<Product>(rotated) };
+                        return new { SellerId = g.Key, Queue = new Queue<Product>(rotated), OrderKey = rng.Next() };
                     })
-                    .OrderBy(g => rng.Next())
+                    .OrderBy(g => g.OrderKey)
                     .ToList();
 
                 var diverseList = new List<Product>();
