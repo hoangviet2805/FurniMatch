@@ -14,6 +14,8 @@ namespace FurniMatch.Api.DTOs
 
         public string? Description { get; set; }
 
+        public string? Material { get; set; }
+
         public bool CustomSizeSupported { get; set; }
 
         [Required]

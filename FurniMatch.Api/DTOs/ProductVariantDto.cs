@@ -8,5 +8,6 @@ namespace FurniMatch.Api.DTOs
         public double? Length { get; set; }
         public decimal Price { get; set; }
         public int ProductionDays { get; set; }
+        public int Stock { get; set; }
     }
 }

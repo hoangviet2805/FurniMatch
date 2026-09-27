@@ -174,6 +174,7 @@ namespace FurniMatch.Api.Controllers
                 CategoryId = request.CategoryId,
                 Name = request.Name,
                 Description = request.Description,
+                Material = request.Material,
                 CustomSizeSupported = request.CustomSizeSupported,
                 Status = "ACTIVE"
             };
@@ -202,7 +203,8 @@ namespace FurniMatch.Api.Controllers
                                 Height = v.Height,
                                 Length = v.Length,
                                 Price = v.Price,
-                                ProductionDays = v.ProductionDays
+                                ProductionDays = v.ProductionDays,
+                                Stock = v.Stock
                             };
                             _context.ProductVariants.Add(variant);
                         }
@@ -273,6 +275,7 @@ namespace FurniMatch.Api.Controllers
             product.Name = request.Name;
             product.Description = request.Description;
             product.CategoryId = request.CategoryId;
+            product.Material = request.Material;
             product.CustomSizeSupported = request.CustomSizeSupported;
             product.UpdatedAt = DateTime.UtcNow;
 
@@ -282,6 +285,11 @@ namespace FurniMatch.Api.Controllers
                 try
                 {
                     var variantDtos = JsonSerializer.Deserialize<List<ProductVariantDto>>(request.VariantsJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    
+                    if (product.Status == "OUT_OF_STOCK" && variantDtos != null && variantDtos.Any(v => v.Stock > 0))
+                    {
+                        product.Status = "ACTIVE";
+                    }
                     if (variantDtos != null)
                     {
                         // Remove existing variants
@@ -298,7 +306,8 @@ namespace FurniMatch.Api.Controllers
                                 Height = v.Height,
                                 Length = v.Length,
                                 Price = v.Price,
-                                ProductionDays = v.ProductionDays
+                                ProductionDays = v.ProductionDays,
+                                Stock = v.Stock
                             });
                         }
                     }

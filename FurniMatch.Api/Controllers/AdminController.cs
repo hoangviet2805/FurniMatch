@@ -329,7 +329,7 @@ namespace FurniMatch.Api.Controllers
 
             var total = await query.CountAsync();
             var orders = await query
-                .OrderByDescending(o => o.CreatedAt)
+                .OrderByDescending(o => o.UpdatedAt)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .Select(o => new

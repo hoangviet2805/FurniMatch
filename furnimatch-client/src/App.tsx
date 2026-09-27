@@ -16,7 +16,6 @@ import ProductDetail from './pages/ProductDetail';
 import Favorites from './pages/Favorites';
 import CompareProducts from './pages/CompareProducts';
 import SpacePlanner from './pages/SpacePlanner';
-import MyRequests from './pages/MyRequests';
 import Checkout from './pages/Checkout';
 import Orders from './pages/Orders';
 import Wallet from './pages/Wallet';
@@ -36,7 +35,6 @@ function App() {
             <Route path="/favorites" element={<Favorites />} />
             <Route path="/compare" element={<CompareProducts />} />
             <Route path="/space-planner" element={<SpacePlanner />} />
-            <Route path="/my-requests" element={<MyRequests />} />
             <Route path="/checkout" element={<Checkout />} />
             <Route path="/orders" element={<Orders />} />
             <Route path="/wallet" element={<Wallet />} />

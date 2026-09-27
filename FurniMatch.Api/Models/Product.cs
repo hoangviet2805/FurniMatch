@@ -22,6 +22,8 @@ namespace FurniMatch.Api.Models
 
         public decimal Price { get; set; }
 
+        public string? Material { get; set; }
+
         public int ProductionDays { get; set; }
 
         public bool CustomSizeSupported { get; set; }

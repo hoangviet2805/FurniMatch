@@ -56,7 +56,7 @@ const Header = () => {
     if (user?.role === 'SELLER') return [...common, { to: `/shop/${user.userId}`, label: 'Gian hàng' }, { to: '/seller/dashboard', label: 'Quản lý đơn hàng' }, { to: '/seller/products', label: 'Sản phẩm' }];
     if (user?.role === 'ADMIN') return [...common, { to: '/admin/dashboard', label: 'Quản trị hệ thống' }];
     const browse = [{ to: '/products', label: 'Danh mục' }, { to: '/compare', label: `So sánh${comparisonCount ? ` (${comparisonCount})` : ''}` }, { to: '/space-planner', label: 'Tính không gian' }];
-    if (user?.role === 'CUSTOMER') return [...common, ...browse, { to: '/favorites', label: 'Yêu thích' }, { to: '/my-requests', label: 'Yêu cầu của tôi' }, { to: '/orders', label: 'Đơn mua' }];
+    if (user?.role === 'CUSTOMER') return [...common, ...browse, { to: '/favorites', label: 'Yêu thích' }, { to: '/orders', label: 'Đơn mua' }];
     return [...common, ...browse];
   };
 

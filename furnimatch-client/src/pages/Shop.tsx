@@ -13,14 +13,11 @@ interface ShopInfo {
   shopDescription: string;
   avatarUrl: string;
   coverUrl: string;
-  isCustomSizeSupported: boolean;
   province: string;
   district: string;
   ward: string;
   addressDetail: string;
   phone?: string;
-  latitude?: number | null;
-  longitude?: number | null;
 }
 
 interface Product {
@@ -58,9 +55,7 @@ const EditShopModal: React.FC<EditShopModalProps> = ({ isOpen, onClose, shop, on
     province: shop.province || '',
     district: shop.district || '',
     ward: shop.ward || '',
-    addressDetail: shop.addressDetail || '',
-    latitude: shop.latitude || null,
-    longitude: shop.longitude || null
+    addressDetail: shop.addressDetail || ''
   });
 
   const [saving, setSaving] = useState(false);
@@ -68,7 +63,6 @@ const EditShopModal: React.FC<EditShopModalProps> = ({ isOpen, onClose, shop, on
   const [uploadingCover, setUploadingCover] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
-  const [locationStatus, setLocationStatus] = useState('');
 
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
@@ -127,28 +121,6 @@ const EditShopModal: React.FC<EditShopModalProps> = ({ isOpen, onClose, shop, on
     }
   };
 
-  const handleGetLocation = () => {
-    if (navigator.geolocation) {
-      setLocationStatus('Đang lấy tọa độ GPS...');
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setFormData(prev => ({
-            ...prev,
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude
-          }));
-          setLocationStatus('✓ Đã cập nhật tọa độ GPS thành công');
-          setTimeout(() => setLocationStatus(''), 3000);
-        },
-        () => {
-          setLocationStatus('⚠️ Không thể lấy vị trí. Vui lòng cho phép quyền định vị.');
-          setTimeout(() => setLocationStatus(''), 4000);
-        }
-      );
-    } else {
-      setLocationStatus('Trình duyệt không hỗ trợ định vị.');
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -375,18 +347,6 @@ const EditShopModal: React.FC<EditShopModalProps> = ({ isOpen, onClose, shop, on
               />
             </div>
 
-            <label className="flex items-center gap-3 p-3.5 bg-emerald-50/60 border border-emerald-100 rounded-xl cursor-pointer hover:bg-emerald-50 transition-colors">
-              <input
-                type="checkbox"
-                checked={formData.isCustomSizeSupported}
-                onChange={(e) => setFormData(prev => ({ ...prev, isCustomSizeSupported: e.target.checked }))}
-                className="w-4 h-4 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500"
-              />
-              <div>
-                <p className="text-sm font-bold text-emerald-950">Nhận gia công / đóng theo kích thước yêu cầu</p>
-                <p className="text-xs text-emerald-700">Khách hàng có thể gửi yêu cầu báo giá kích thước riêng đến xưởng của bạn.</p>
-              </div>
-            </label>
           </div>
 
           <hr className="border-gray-100" />
@@ -398,21 +358,7 @@ const EditShopModal: React.FC<EditShopModalProps> = ({ isOpen, onClose, shop, on
                 <MapPin className="w-4 h-4 text-emerald-600" />
                 Vị trí & Địa chỉ xưởng
               </h3>
-              <button
-                type="button"
-                onClick={handleGetLocation}
-                className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-lg border border-emerald-200 transition-colors cursor-pointer"
-              >
-                <MapPin className="w-3.5 h-3.5" />
-                <span>📍 Định vị GPS</span>
-              </button>
             </div>
-
-            {locationStatus && (
-              <p className="text-xs font-medium text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100">
-                {locationStatus}
-              </p>
-            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
@@ -667,12 +613,7 @@ const Shop: React.FC = () => {
             )}
 
             <div className="flex flex-wrap justify-center md:justify-start gap-2 mb-4">
-              {shop.isCustomSizeSupported && (
-                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
-                  <span className="mr-1.5 h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                  Nhận đóng theo yêu cầu
-                </span>
-              )}
+
               <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
                 {products.length} Sản phẩm
               </span>

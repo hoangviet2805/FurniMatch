@@ -12,18 +12,43 @@ namespace FurniMatch.Api.Controllers;
 [ApiController, Route("api/orders"), Authorize]
 public class OrdersController : ControllerBase
 {
-    private readonly FurniMatchDbContext _db; private readonly SePayPaymentService _sepay;
-    public OrdersController(FurniMatchDbContext db, SePayPaymentService sepay) { _db = db; _sepay = sepay; }
+    private readonly FurniMatchDbContext _db; private readonly SePayPaymentService _sepay; private readonly IEmailService _emailService;
+    public OrdersController(FurniMatchDbContext db, SePayPaymentService sepay, IEmailService emailService) { _db = db; _sepay = sepay; _emailService = emailService; }
     private int UserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     [HttpPost, Authorize(Roles = "CUSTOMER")]
     public async Task<IActionResult> Create(CreateOrderRequest request)
     {
         if (request.Items.Count == 0 || string.IsNullOrWhiteSpace(request.RecipientName) || string.IsNullOrWhiteSpace(request.Phone) || string.IsNullOrWhiteSpace(request.Address)) return BadRequest(new { message = "Vui lòng điền đủ thông tin nhận hàng." });
         var productIds = request.Items.Select(x => x.ProductId).Distinct().ToArray();
-        var products = await _db.Products.Where(x => productIds.Contains(x.ProductId) && x.Status == "ACTIVE").ToListAsync();
-        if (products.Count != productIds.Length) return BadRequest(new { message = "Một số sản phẩm không còn được bán." });
+        var products = await _db.Products.Include(p => p.ProductVariants).Where(x => productIds.Contains(x.ProductId) && x.Status == "ACTIVE").ToListAsync();
+        if (products.Count != productIds.Length) return BadRequest(new { message = "Một số sản phẩm không còn được bán hoặc đã hết hàng." });
         var sellerId = products.First().SellerId;
         if (products.Any(x => x.SellerId != sellerId)) return BadRequest(new { message = "Vui lòng thanh toán riêng các sản phẩm từ những xưởng khác nhau." });
+        
+        foreach (var item in request.Items)
+        {
+            var product = products.First(p => p.ProductId == item.ProductId);
+            var variant = item.VariantId.HasValue 
+                ? product.ProductVariants.FirstOrDefault(v => v.VariantId == item.VariantId.Value)
+                : product.ProductVariants.FirstOrDefault();
+
+            if (variant == null) return BadRequest(new { message = $"Không tìm thấy phân loại sản phẩm cho {item.Name}." });
+            
+            if (variant.Stock < item.Quantity)
+            {
+                return BadRequest(new { message = $"Sản phẩm {item.Name} ({(string.IsNullOrEmpty(item.SizeLabel) ? "Tiêu chuẩn" : item.SizeLabel)}) chỉ còn {variant.Stock} sản phẩm trong kho." });
+            }
+            
+            variant.Stock -= item.Quantity;
+        }
+
+        foreach (var product in products)
+        {
+            if (product.ProductVariants.All(v => v.Stock <= 0))
+            {
+                product.Status = "OUT_OF_STOCK";
+            }
+        }
         var subtotal = request.Items.Sum(x => x.Price * x.Quantity); var shipping = 0m;
         if (!string.Equals(request.PaymentMethod, "SEPAY", StringComparison.OrdinalIgnoreCase)) return BadRequest(new { message = "Chỉ hỗ trợ thanh toán qua SePay." });
         var order = new Order { OrderCode = $"FM{DateTime.UtcNow:yyyyMMdd}{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}", CustomerId = UserId, SellerId = sellerId, ItemsJson = JsonSerializer.Serialize(request.Items, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }), RecipientName = request.RecipientName.Trim(), RecipientPhone = request.Phone.Trim(), Address = request.Address.Trim(), LegacyShippingAddress = request.Address.Trim(), Note = request.Note?.Trim(), Subtotal = subtotal, ShippingFee = shipping, TotalAmount = subtotal + shipping, PaymentMethod = "SEPAY", PaymentStatus = "PENDING", OrderStatus = "WAITING_PAYMENT", LegacyStatus = "WAITING_PAYMENT", PaymentExpiredAt = DateTime.UtcNow.AddMinutes(_sepay.PaymentTimeoutMinutes) };
@@ -34,9 +59,17 @@ public class OrdersController : ControllerBase
     [HttpGet("my"), Authorize(Roles = "CUSTOMER")]
     public async Task<IActionResult> Mine()
     {
+        var now = DateTime.UtcNow;
+        var expiredOrders = await _db.Orders.Where(x => x.CustomerId == UserId && x.PaymentStatus == "PENDING" && x.PaymentExpiredAt <= now).ToListAsync();
+        if (expiredOrders.Any())
+        {
+            foreach (var o in expiredOrders) { o.PaymentStatus = "EXPIRED"; o.OrderStatus = "CANCELLED"; o.LegacyStatus = "CANCELLED"; }
+            await _db.SaveChangesAsync();
+        }
+
         var orders = await _db.Orders
             .Where(x => x.CustomerId == UserId)
-            .OrderByDescending(x => x.CreatedAt)
+            .OrderByDescending(x => x.UpdatedAt)
             .Select(o => new {
                 o.OrderId,
                 o.OrderCode,
@@ -76,7 +109,18 @@ public class OrdersController : ControllerBase
             .ToListAsync();
         return Ok(orders);
     }
-    [HttpGet("seller"), Authorize(Roles = "SELLER")] public async Task<IActionResult> Seller() => Ok(await _db.Orders.Where(x => x.SellerId == UserId).OrderByDescending(x => x.CreatedAt).ToListAsync());
+    [HttpGet("seller"), Authorize(Roles = "SELLER")]
+    public async Task<IActionResult> Seller()
+    {
+        var now = DateTime.UtcNow;
+        var expiredOrders = await _db.Orders.Where(x => x.SellerId == UserId && x.PaymentStatus == "PENDING" && x.PaymentExpiredAt <= now).ToListAsync();
+        if (expiredOrders.Any())
+        {
+            foreach (var o in expiredOrders) { o.PaymentStatus = "EXPIRED"; o.OrderStatus = "CANCELLED"; o.LegacyStatus = "CANCELLED"; }
+            await _db.SaveChangesAsync();
+        }
+        return Ok(await _db.Orders.Where(x => x.SellerId == UserId).OrderByDescending(x => x.UpdatedAt).ToListAsync());
+    }
     [HttpGet("{id:int}")] public async Task<IActionResult> Get(int id)
     {
         var order = await _db.Orders.FindAsync(id);
@@ -115,7 +159,7 @@ public class OrdersController : ControllerBase
     public async Task<IActionResult> Status(int id, UpdateOrderStatusRequest request)
     {
         var allowed = new[] { "PREPARING", "PRODUCING", "SHIPPED", "COMPLETED" };
-        var order = await _db.Orders.FirstOrDefaultAsync(x => x.OrderId == id && x.SellerId == UserId);
+        var order = await _db.Orders.Include(x => x.Customer).FirstOrDefaultAsync(x => x.OrderId == id && x.SellerId == UserId);
         if (order == null) return NotFound();
         if (!allowed.Contains(request.Status)) return BadRequest(new { message = "Trạng thái không hợp lệ." });
 
@@ -128,6 +172,75 @@ public class OrdersController : ControllerBase
             order.CompletedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
+
+        try
+        {
+            if (order.Customer != null && !string.IsNullOrWhiteSpace(order.Customer.Email))
+            {
+                string statusText = request.Status switch
+                {
+                    "PREPARING" => "Đang chuẩn bị hàng",
+                    "PRODUCING" => "Đang sản xuất",
+                    "SHIPPED" => "Đang giao hàng",
+                    "COMPLETED" => "Hoàn thành",
+                    _ => request.Status
+                };
+
+                var body = $@"
+<div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);'>
+    <div style='background-color: #0b6e4f; padding: 24px; text-align: center; color: white;'>
+        <h1 style='margin: 0; font-size: 26px; letter-spacing: 1px;'>FurniMatch</h1>
+    </div>
+    <div style='padding: 32px; color: #374151;'>
+        <h2 style='margin-top: 0; color: #111827; font-size: 20px;'>Cập nhật trạng thái đơn hàng</h2>
+        <p style='font-size: 16px; line-height: 1.5;'>Xin chào <strong>{order.Customer.FullName ?? order.RecipientName}</strong>,</p>
+        <p style='font-size: 16px; line-height: 1.5;'>Đơn hàng <strong>{order.OrderCode}</strong> của bạn vừa được cập nhật trạng thái thành:</p>
+        
+        <div style='background-color: #ecfdf5; border-left: 4px solid #10b981; padding: 16px; margin: 24px 0; border-radius: 0 8px 8px 0;'>
+            <strong style='color: #047857; font-size: 18px;'>{statusText}</strong>
+        </div>
+        
+        <h3 style='margin: 32px 0 16px 0; color: #111827; border-bottom: 2px solid #f3f4f6; padding-bottom: 8px; font-size: 18px;'>Chi tiết đơn hàng</h3>
+        <table style='width: 100%; border-collapse: collapse; font-size: 15px;'>
+            <tr>
+                <td style='padding: 10px 0; color: #6b7280; width: 130px;'>Mã đơn hàng:</td>
+                <td style='padding: 10px 0; font-weight: 600; color: #111827;'>{order.OrderCode}</td>
+            </tr>
+            <tr>
+                <td style='padding: 10px 0; color: #6b7280;'>Người nhận:</td>
+                <td style='padding: 10px 0; font-weight: 600; color: #111827;'>{order.RecipientName}</td>
+            </tr>
+            <tr>
+                <td style='padding: 10px 0; color: #6b7280;'>Số điện thoại:</td>
+                <td style='padding: 10px 0; font-weight: 600; color: #111827;'>{order.RecipientPhone}</td>
+            </tr>
+            <tr>
+                <td style='padding: 10px 0; color: #6b7280;'>Địa chỉ:</td>
+                <td style='padding: 10px 0; font-weight: 600; color: #111827; line-height: 1.4;'>{order.Address}</td>
+            </tr>
+            <tr>
+                <td style='padding: 10px 0; color: #6b7280;'>Tổng tiền:</td>
+                <td style='padding: 10px 0; font-weight: 700; color: #0b6e4f; font-size: 16px;'>{order.TotalAmount:N0} đ</td>
+            </tr>
+        </table>
+        
+        <p style='margin-top: 32px; font-size: 15px; color: #4b5563; line-height: 1.5; padding-top: 24px; border-top: 1px solid #f3f4f6;'>
+            Bạn có thể theo dõi chi tiết quá trình vận chuyển trong mục <strong>Đơn mua của tôi</strong> trên website của chúng tôi.
+        </p>
+    </div>
+    <div style='background-color: #f9fafb; padding: 20px; text-align: center; font-size: 13px; color: #9ca3af; border-top: 1px solid #e5e7eb;'>
+        <p style='margin: 0;'>&copy; {DateTime.UtcNow.Year} FurniMatch. Cảm ơn bạn đã tin tưởng và đồng hành.</p>
+    </div>
+</div>";
+
+                await _emailService.SendEmailAsync(order.Customer.Email, $"[FurniMatch] Cập nhật đơn hàng {order.OrderCode}", body);
+            }
+        }
+        catch
+        {
+            // Ignore email sending errors
+        }
+
         return Ok(order);
     }
 

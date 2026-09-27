@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import api from '../utils/api';
-import LocationPicker from '../components/LocationPicker';
 import { useProvinces } from '../hooks/useProvinces';
 
 const Profile = () => {
@@ -10,9 +9,6 @@ const Profile = () => {
     phone: '',
     shopName: '',
     shopDescription: '',
-    isCustomSizeSupported: false,
-    latitude: null as number | null,
-    longitude: null as number | null,
     province: '',
     district: '',
     ward: '',
@@ -21,7 +17,6 @@ const Profile = () => {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [message, setMessage] = useState('');
-  const [locationMsg, setLocationMsg] = useState({ text: '', type: '' });
 
   useEffect(() => {
     const userData = localStorage.getItem('user');
@@ -33,9 +28,6 @@ const Profile = () => {
         phone: parsedUser.phone || '',
         shopName: parsedUser.shopName || '',
         shopDescription: parsedUser.shopDescription || '',
-        isCustomSizeSupported: parsedUser.isCustomSizeSupported || false,
-        latitude: parsedUser.latitude || null,
-        longitude: parsedUser.longitude || null,
         province: parsedUser.province || '',
         district: parsedUser.district || '',
         ward: parsedUser.ward || '',
@@ -78,28 +70,6 @@ const Profile = () => {
     }
   };
 
-  const handleGetLocation = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setFormData(prev => ({
-            ...prev,
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude
-          }));
-          setLocationMsg({ text: "Lấy vị trí thành công!", type: 'success' });
-          setTimeout(() => setLocationMsg({ text: '', type: '' }), 3000);
-        },
-        (error) => {
-          console.error("Error getting location", error);
-          setLocationMsg({ text: "Không thể lấy vị trí. Vui lòng cho phép trình duyệt truy cập vị trí.", type: 'error' });
-          setTimeout(() => setLocationMsg({ text: '', type: '' }), 5000);
-        }
-      );
-    } else {
-      alert("Trình duyệt của bạn không hỗ trợ định vị.");
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -258,22 +228,6 @@ const Profile = () => {
               />
             </div>
 
-            <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm font-medium text-gray-700">Vị trí trên bản đồ</label>
-              <button
-                type="button"
-                onClick={handleGetLocation}
-                className="px-3 py-1 bg-blue-50 text-blue-600 rounded-md hover:bg-blue-100 transition-colors text-xs font-medium border border-blue-200 flex items-center"
-              >
-                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                Lấy vị trí hiện tại
-              </button>
-            </div>
-            <LocationPicker 
-              latitude={formData.latitude} 
-              longitude={formData.longitude} 
-              onChange={(lat, lng) => setFormData(prev => ({ ...prev, latitude: lat, longitude: lng }))} 
-            />
           </div>
 
           {user.role === 'SELLER' && (
@@ -302,43 +256,10 @@ const Profile = () => {
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
                 />
               </div>
-
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  name="isCustomSizeSupported"
-                  id="isCustomSizeSupported"
-                  checked={formData.isCustomSizeSupported}
-                  onChange={handleChange}
-                  className="h-4 w-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
-                />
-                <label htmlFor="isCustomSizeSupported" className="ml-2 block text-sm text-gray-900">
-                  Nhận làm hàng theo kích thước yêu cầu (Custom-made)
-                </label>
-              </div>
             </>
           )}
 
-          <div className="bg-gray-50 rounded-lg p-6">
-            <h4 className="text-md font-semibold text-gray-900 mb-4">Vị trí của bạn (Phục vụ tìm kiếm gần nhất)</h4>
-            <div className="flex items-center gap-4">
-              <p className="text-sm text-gray-600">
-                Vĩ độ: {formData.latitude || 'Chưa có'} | Kinh độ: {formData.longitude || 'Chưa có'}
-              </p>
-              <button
-                type="button"
-                onClick={handleGetLocation}
-                className="px-4 py-2 bg-emerald-100 text-emerald-700 rounded-md text-sm font-medium hover:bg-emerald-200"
-              >
-                Cập nhật vị trí
-              </button>
-            </div>
-            {locationMsg.text && (
-              <p className={`text-sm mt-2 font-medium ${locationMsg.type === 'success' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                {locationMsg.text}
-              </p>
-            )}
-          </div>
+
 
           <div className="flex justify-end pt-4">
             <button

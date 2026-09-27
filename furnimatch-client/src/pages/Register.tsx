@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api, { verifyRegistration } from '../utils/api';
-import LocationPicker from '../components/LocationPicker';
 import { useProvinces } from '../hooks/useProvinces';
 
 const Register = () => {
@@ -16,9 +15,6 @@ const Register = () => {
     roleName: 'CUSTOMER', // Default
     shopName: '',
     shopDescription: '',
-    isCustomSizeSupported: false,
-    latitude: null as number | null,
-    longitude: null as number | null,
     province: '',
     district: '',
     ward: '',
@@ -29,7 +25,6 @@ const Register = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [locationStatus, setLocationStatus] = useState('');
 
   const {
     provinces,
@@ -41,26 +36,6 @@ const Register = () => {
     setSelectedDistrictCode
   } = useProvinces();
 
-  const getLocation = () => {
-    if (!navigator.geolocation) {
-      setLocationStatus('Trình duyệt của bạn không hỗ trợ định vị.');
-      return;
-    }
-    setLocationStatus('Đang xác định vị trí...');
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setFormData(prev => ({
-          ...prev,
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude
-        }));
-        setLocationStatus('Đã lấy vị trí thành công!');
-      },
-      () => {
-        setLocationStatus('Không thể lấy vị trí. Vui lòng cấp quyền truy cập vị trí.');
-      }
-    );
-  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
@@ -381,30 +356,6 @@ const Register = () => {
                 required
               />
 
-              {/* Map Location Picker */}
-              <div className="mt-3 bg-gray-50 p-3.5 rounded-2xl border border-gray-200/70">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-gray-700">Tọa độ trên bản đồ (Giao hàng)</span>
-                  <button
-                    type="button"
-                    onClick={getLocation}
-                    className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg transition-colors text-[11px] font-semibold border border-emerald-200/80 flex items-center gap-1"
-                  >
-                    <svg className="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    Lấy vị trí hiện tại
-                  </button>
-                </div>
-                
-                <LocationPicker 
-                  latitude={formData.latitude} 
-                  longitude={formData.longitude} 
-                  onChange={(lat, lng) => setFormData(prev => ({ ...prev, latitude: lat, longitude: lng }))} 
-                />
-                {locationStatus && <p className="text-xs text-emerald-700 mt-1.5 font-medium">{locationStatus}</p>}
-              </div>
             </div>
 
             {/* Seller Specific Extra Fields */}
@@ -442,19 +393,6 @@ const Register = () => {
                   />
                 </div>
 
-                <div className="flex items-center gap-2.5 bg-white p-3 rounded-xl border border-emerald-200/80">
-                  <input
-                    id="custom-size-cb"
-                    name="isCustomSizeSupported"
-                    type="checkbox"
-                    className="h-4 w-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500 cursor-pointer"
-                    checked={formData.isCustomSizeSupported}
-                    onChange={handleChange}
-                  />
-                  <label htmlFor="custom-size-cb" className="text-xs font-semibold text-gray-800 cursor-pointer">
-                    Xưởng có nhận đóng theo kích thước yêu cầu của khách hàng
-                  </label>
-                </div>
 
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1">

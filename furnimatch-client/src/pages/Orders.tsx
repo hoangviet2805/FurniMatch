@@ -199,9 +199,10 @@ export default function Orders() {
   // ── Review helpers ──────────────────────────────────────────────────────────
   const getReviewStatus = (order: any) => {
     if (order.orderStatus !== 'COMPLETED') return 'not_applicable';
-    const completedAt = order.completedAt ? getUtcDate(order.completedAt) : null;
-    if (!completedAt) return 'not_applicable';
-    const deadline = new Date(completedAt.getTime() + reviewDeadlineDays * 24 * 60 * 60 * 1000);
+    const referenceDateStr = order.createdAt;
+    const referenceDate = referenceDateStr ? getUtcDate(referenceDateStr) : null;
+    if (!referenceDate) return 'not_applicable';
+    const deadline = new Date(referenceDate.getTime() + reviewDeadlineDays * 24 * 60 * 60 * 1000);
     const isExpired = Date.now() > deadline.getTime();
 
     let items: any[] = [];
@@ -683,10 +684,14 @@ export default function Orders() {
                       </span>
                     )}
                     {reviewStatus === 'expired' && (
-                      <span className="flex-1 sm:flex-none rounded-xl bg-gray-50 border border-gray-200 px-5 py-2.5 text-sm font-medium text-gray-400 flex items-center gap-2 cursor-not-allowed" title={`Hết hạn đánh giá sau ${reviewDeadlineDays} ngày`}>
-                        <Clock className="w-4 h-4" />
-                        Hết hạn đánh giá
-                      </span>
+                      <button
+                        disabled
+                        className="flex-1 sm:flex-none rounded-xl bg-gray-100 border border-gray-200 px-5 py-2.5 text-sm font-semibold text-gray-400 cursor-not-allowed flex items-center gap-2"
+                        title={`Đã qua thời hạn ${reviewDeadlineDays} ngày để đánh giá`}
+                      >
+                        <Star className="w-4 h-4" />
+                        Viết đánh giá
+                      </button>
                     )}
 
                     {/* ── Nút / Trạng thái Khiếu nại (trong vòng 3 ngày sau hoàn thành) ── */}

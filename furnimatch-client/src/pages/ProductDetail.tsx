@@ -29,8 +29,10 @@ const ProductDetail = () => {
   const [compared, setCompared] = useState(false);
   const [compareMessage, setCompareMessage] = useState('');
   const [actionMessage, setActionMessage] = useState('');
+  const [buyError, setBuyError] = useState('');
   const [selectedVariantId, setSelectedVariantId] = useState<number | null>(null);
   const [quantity, setQuantity] = useState(1);
+  const [materialNote, setMaterialNote] = useState('');
   const user = JSON.parse(localStorage.getItem('user') || 'null');
 
   // ========== REVIEWS STATE ==========
@@ -74,12 +76,19 @@ const ProductDetail = () => {
   const variantLabel = (variant: any) => `${variant.sizeName || 'Tiêu chuẩn'}${variant.length || variant.width || variant.height ? ` · ${variant.length ?? '-'} × ${variant.width ?? '-'} × ${variant.height ?? '-'} cm` : ''}`;
 
   const buyNow = () => {
-    if (variants.length && !selectedVariant) { setActionMessage('Vui lòng chọn kích thước trước khi mua.'); return; }
+    setBuyError('');
+    if (variants.length && !selectedVariant) { setBuyError('Vui lòng chọn kích thước trước khi mua.'); return; }
+    if (product?.material && !materialNote.trim()) { setBuyError('Vui lòng nhập chất liệu bạn muốn đặt trước khi mua.'); return; }
     if (!localStorage.getItem('token')) { navigate(`/login?redirect=/products/${product.productId}`); return; }
     const stock = selectedVariant?.stock;
-    if (typeof stock === 'number' && stock > 0 && quantity > stock) { setActionMessage(`Số lượng tối đa hiện có là ${stock}.`); return; }
+    if (typeof stock === 'number') {
+      if (stock <= 0) { setBuyError('Sản phẩm này đã hết hàng.'); return; }
+      if (quantity > stock) { setBuyError(`Số lượng tối đa hiện có là ${stock}.`); return; }
+    }
     const thumbImg = product.productImages?.find((img: any) => img.isThumbnail)?.imageUrl || product.productImages?.[0]?.imageUrl;
-    saveCart([{ productId: product.productId, variantId: selectedVariant?.productVariantId ?? selectedVariant?.variantId, name: product.name, sizeLabel: selectedVariant ? variantLabel(selectedVariant) : 'Tiêu chuẩn', price: selectedPrice, quantity, imageUrl: thumbImg, sellerName: product.seller?.shopName || product.seller?.fullName }]);
+    const sizeLabel = selectedVariant ? variantLabel(selectedVariant) : 'Tiêu chuẩn';
+    const fullLabel = materialNote.trim() ? `${sizeLabel} · Chất liệu: ${materialNote.trim()}` : sizeLabel;
+    saveCart([{ productId: product.productId, variantId: selectedVariant?.productVariantId ?? selectedVariant?.variantId, name: product.name, sizeLabel: fullLabel, price: selectedPrice, quantity, imageUrl: thumbImg, sellerName: product.seller?.shopName || product.seller?.fullName }]);
     navigate('/checkout');
   };
 
@@ -199,15 +208,41 @@ const ProductDetail = () => {
           
           <div className="grid grid-cols-2 gap-3 mt-6 text-sm">
             <div className="bg-gray-50 rounded-lg p-3"><span className="block text-gray-500">Xưởng sản xuất</span><Link to={`/shop/${product.sellerId}`} className="font-semibold text-gray-900 hover:text-emerald-600">{product.seller?.shopName || product.seller?.fullName || 'Nhà sản xuất'}</Link></div>
-            <div className="bg-gray-50 rounded-lg p-3"><span className="block text-gray-500">Đặt theo kích thước</span><span className="font-semibold text-gray-900">{product.customSizeSupported ? 'Có hỗ trợ' : 'Không hỗ trợ'}</span></div>
+            {product.material && (() => { try { const mats = JSON.parse(product.material); return Array.isArray(mats) && mats.length > 0 ? (<div className="bg-emerald-50 rounded-lg p-3"><span className="block text-gray-500 mb-1">Chất liệu</span>{mats.map((m: string, i: number) => <span key={i} className="block font-semibold text-emerald-800 text-xs">{i+1}. {m}</span>)}</div>) : null; } catch { return (<div className="bg-emerald-50 rounded-lg p-3"><span className="block text-gray-500">Chất liệu</span><span className="font-semibold text-emerald-800">{product.material}</span></div>); } })()}
           </div>
 
-          <div className="mt-7"><h2 className="font-bold text-gray-900 mb-3">Chọn kích thước <span className="text-rose-600">*</span></h2>{variants.length > 0 ? <div className="space-y-2">{variants.map((variant: any) => { const variantId = variant.productVariantId ?? variant.variantId; const selected = selectedVariantId === variantId; return <button type="button" key={variantId} onClick={() => { setSelectedVariantId(variantId); setActionMessage(''); }} className={`w-full flex justify-between items-center rounded-lg border px-4 py-3 text-left text-sm transition-colors ${selected ? 'border-emerald-600 bg-emerald-50 ring-1 ring-emerald-200' : 'border-gray-200 hover:border-emerald-300'}`}><span><strong>{variantLabel(variant)}</strong>{variant.productionDays ? <small className="block text-gray-500 mt-1">Sản xuất dự kiến {variant.productionDays} ngày{typeof variant.stock === 'number' ? ` · Còn ${variant.stock}` : ''}</small> : null}</span><span className="font-bold text-emerald-600">{money(variant.price)}</span></button>; })}</div> : <div className="rounded-lg border border-emerald-600 bg-emerald-50 px-4 py-3 text-sm font-medium">Tiêu chuẩn</div>}</div>
+          <div className="mt-7"><h2 className="font-bold text-gray-900 mb-3">Chọn kích thước <span className="text-rose-600">*</span></h2>{variants.length > 0 ? <div className="space-y-2">{variants.map((variant: any) => { const variantId = variant.productVariantId ?? variant.variantId; const selected = selectedVariantId === variantId; const isOutOfStock = typeof variant.stock === 'number' && variant.stock <= 0; return <button type="button" key={variantId} onClick={() => { setSelectedVariantId(variantId); setActionMessage(''); setBuyError(''); }} className={`w-full flex justify-between items-center rounded-lg border px-4 py-3 text-left text-sm transition-colors ${selected ? 'border-emerald-600 bg-emerald-50 ring-1 ring-emerald-200' : 'border-gray-200 hover:border-emerald-300'} ${isOutOfStock ? 'opacity-60 bg-gray-50 cursor-not-allowed' : ''}`}><span><strong className="flex items-center gap-2">{variantLabel(variant)}{isOutOfStock && <span className="text-xs font-semibold text-rose-600 bg-rose-100 px-2 py-0.5 rounded">Hết hàng</span>}</strong>{variant.productionDays ? <small className="block text-gray-500 mt-1">Sản xuất dự kiến {variant.productionDays} ngày{!isOutOfStock && typeof variant.stock === 'number' ? ` · Còn ${variant.stock}` : ''}</small> : null}</span><span className="font-bold text-emerald-600">{money(variant.price)}</span></button>; })}</div> : <div className="rounded-lg border border-emerald-600 bg-emerald-50 px-4 py-3 text-sm font-medium">Tiêu chuẩn</div>}</div>
           
           {(!user || user.role === 'CUSTOMER') && (
             <>
-              <div className="mt-6 flex items-center justify-between gap-4"><div><h2 className="font-bold text-gray-900">Số lượng <span className="text-rose-600">*</span></h2><p className="mt-1 text-xs text-gray-500">Chọn số sản phẩm cần mua</p></div><div className="flex items-center rounded-lg border border-gray-300"><button type="button" aria-label="Giảm số lượng" onClick={() => setQuantity(value => Math.max(1, value - 1))} className="px-4 py-2 text-lg hover:bg-gray-50">−</button><span className="min-w-10 text-center font-semibold">{quantity}</span><button type="button" aria-label="Tăng số lượng" onClick={() => setQuantity(value => value + 1)} className="px-4 py-2 text-lg hover:bg-gray-50">+</button></div></div>
+              <div className="mt-6 flex items-center justify-between gap-4"><div><h2 className="font-bold text-gray-900">Số lượng <span className="text-rose-600">*</span></h2><p className="mt-1 text-xs text-gray-500">Chọn số sản phẩm cần mua</p></div><div className="flex items-center rounded-lg border border-gray-300"><button type="button" aria-label="Giảm số lượng" onClick={() => { setQuantity(value => Math.max(1, value - 1)); setBuyError(''); }} className="px-4 py-2 text-lg hover:bg-gray-50">−</button><span className="min-w-10 text-center font-semibold">{quantity}</span><button type="button" aria-label="Tăng số lượng" onClick={() => { setQuantity(value => value + 1); setBuyError(''); }} className="px-4 py-2 text-lg hover:bg-gray-50">+</button></div></div>
+              {product?.material && (() => {
+                let mats: string[] = [];
+                try { const parsed = JSON.parse(product.material); mats = Array.isArray(parsed) ? parsed.filter((m: string) => m.trim()) : [product.material]; }
+                catch { mats = [product.material]; }
+                return mats.length > 0 ? (
+                  <div className="mt-5">
+                    <h2 className="font-bold text-gray-900 mb-1">Chất liệu <span className="text-rose-600">*</span></h2>
+                    <p className="text-xs text-gray-500 mb-2">Chọn chất liệu bạn muốn đặt:</p>
+                    <div className="space-y-2">
+                      {mats.map((mat: string, idx: number) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => { setMaterialNote(mat); setBuyError(''); }}
+                          className={`w-full flex items-center gap-3 rounded-lg border px-4 py-2.5 text-left text-sm transition-colors ${materialNote === mat ? 'border-emerald-600 bg-emerald-50 ring-1 ring-emerald-200' : 'border-gray-200 hover:border-emerald-300'}`}
+                        >
+                          <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold flex items-center justify-center shrink-0">{idx+1}</span>
+                          <span className="font-medium text-gray-800">{mat}</span>
+                          {materialNote === mat && <span className="ml-auto text-emerald-600 text-xs font-semibold">✓ Đã chọn</span>}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null;
+              })()}
               <div className="mt-6 rounded-xl bg-emerald-50 p-4 flex items-center justify-between"><span className="text-sm text-gray-700">Tạm tính</span><strong className="text-xl text-emerald-700">{money(selectedPrice * quantity)}</strong></div>
+              {buyError && <p className="mt-5 text-lg font-bold text-rose-600" role="status">{buyError}</p>}
               <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3"><button type="button" onClick={buyNow} className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-5 py-3 font-semibold transition-colors">Mua ngay</button><button onClick={updateComparison} className="rounded-lg border border-emerald-600 px-5 py-3 font-semibold text-emerald-700 hover:bg-emerald-50 transition-colors">{compared ? 'Bỏ so sánh' : 'Thêm so sánh'}</button></div>
             </>
           )}
