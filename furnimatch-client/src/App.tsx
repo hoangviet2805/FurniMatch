@@ -19,6 +19,7 @@ import SpacePlanner from './pages/SpacePlanner';
 import MyRequests from './pages/MyRequests';
 import Checkout from './pages/Checkout';
 import Orders from './pages/Orders';
+import Wallet from './pages/Wallet';
 
 function App() {
   return (
@@ -38,6 +39,7 @@ function App() {
             <Route path="/my-requests" element={<MyRequests />} />
             <Route path="/checkout" element={<Checkout />} />
             <Route path="/orders" element={<Orders />} />
+            <Route path="/wallet" element={<Wallet />} />
             <Route path="/request-quotation" element={<RequestQuotation />} />
             <Route path="/admin/dashboard" element={<AdminDashboard />} />
             <Route path="/seller/dashboard" element={<SellerDashboard />} />

@@ -54,7 +54,8 @@ const AdminDashboard = () => {
   const [dsTotal, setDsTotal] = useState(0);
   const [dsPage, setDsPage] = useState(1);
   const [dsLoading, setDsLoading] = useState(false);
-  const [resolveDisputeModal, setResolveDisputeModal] = useState<{ isOpen: boolean, disputeId: number | null, note: string, action: 'resolve' | 'reject' }>({ isOpen: false, disputeId: null, note: '', action: 'resolve' });
+  const [dsStatusFilter, setDsStatusFilter] = useState<string>('ALL');
+  const [resolveDisputeModal, setResolveDisputeModal] = useState<{ isOpen: boolean, disputeId: number | null, item: any | null, note: string, action: 'resolve' | 'reject' }>({ isOpen: false, disputeId: null, item: null, note: '', action: 'resolve' });
 
   // ========== REVENUE STATE ==========
   const [revSummary, setRevSummary] = useState<any>(null);
@@ -435,20 +436,20 @@ const AdminDashboard = () => {
   }, []);
 
   const DS_PAGE_SIZE = 10;
-  const fetchDisputes = useCallback(async (page = 1) => {
+  const fetchDisputes = useCallback(async (page = 1, status = dsStatusFilter) => {
     setDsLoading(true);
     try {
-      const res = await api.get(`/admin/disputes?page=${page}&pageSize=${DS_PAGE_SIZE}`);
+      const res = await api.get(`/admin/disputes?page=${page}&pageSize=${DS_PAGE_SIZE}&status=${status}`);
       setDisputes(res.data.data || []);
       setDsTotal(res.data.total || 0);
       setDsPage(page);
     } catch { } finally { setDsLoading(false); }
-  }, []);
+  }, [dsStatusFilter]);
 
   useEffect(() => {
     if (activeTab === 'WITHDRAWALS') fetchWithdrawals(1);
-    if (activeTab === 'DISPUTES') fetchDisputes(1);
-  }, [activeTab]);
+    if (activeTab === 'DISPUTES') fetchDisputes(1, dsStatusFilter);
+  }, [activeTab, dsStatusFilter]);
 
   const openApproveModal = (item: any) => {
     setApproveWithdrawModal({
@@ -504,9 +505,15 @@ const AdminDashboard = () => {
     const url = `/admin/disputes/${resolveDisputeModal.disputeId}/${resolveDisputeModal.action}`;
     try {
       await api.put(url, { note: resolveDisputeModal.note });
-      setAlertModal({ isOpen: true, message: resolveDisputeModal.action === 'resolve' ? 'Đã chấp nhận khiếu nại.' : 'Đã bác khiếu nại.', type: 'success' });
-      setResolveDisputeModal({ isOpen: false, disputeId: null, note: '', action: 'resolve' });
-      fetchDisputes(dsPage);
+      setAlertModal({ 
+        isOpen: true, 
+        message: resolveDisputeModal.action === 'resolve' 
+          ? 'Đã chấp nhận khiếu nại và hoàn tiền thành công vào ví khách hàng!' 
+          : 'Đã hủy khiếu nại. Đơn hàng sẽ được giải ngân theo lịch tự động.', 
+        type: 'success' 
+      });
+      setResolveDisputeModal({ isOpen: false, disputeId: null, item: null, note: '', action: 'resolve' });
+      fetchDisputes(dsPage, dsStatusFilter);
     } catch (e: any) {
       setAlertModal({ isOpen: true, message: e.response?.data?.message || 'Lỗi xử lý', type: 'error' });
     }
@@ -2380,16 +2387,41 @@ const AdminDashboard = () => {
       {/* ===================== DISPUTES TAB ===================== */}
       {activeTab === 'DISPUTES' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-xl font-bold text-gray-900">⚠️ Khiếu Nại Đơn Hàng</h2>
-            <span className="text-sm text-gray-500">{dsTotal} khiếu nại đang mở</span>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">⚠️ Khiếu Nại Đơn Hàng</h2>
+              <p className="text-xs text-gray-500 mt-0.5">Xử lý khiếu nại của khách hàng trong vòng 3 ngày sau khi hoàn thành đơn</p>
+            </div>
+            
+            {/* Status Filter Tabs */}
+            <div className="flex items-center gap-1.5 bg-gray-100 p-1 rounded-xl text-xs font-semibold">
+              {[
+                { key: 'ALL', label: 'Tất cả' },
+                { key: 'OPEN', label: 'Chờ xử lý (OPEN)' },
+                { key: 'RESOLVED', label: 'Đã chấp nhận' },
+                { key: 'REJECTED', label: 'Đã hủy' }
+              ].map(tab => (
+                <button
+                  key={tab.key}
+                  onClick={() => { setDsStatusFilter(tab.key); fetchDisputes(1, tab.key); }}
+                  className={`px-3 py-1.5 rounded-lg transition-all ${
+                    dsStatusFilter === tab.key
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
           </div>
+
           {dsLoading ? (
             <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-amber-500" /></div>
           ) : (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
               {disputes.length === 0 ? (
-                <div className="py-12 text-center text-gray-400">✅ Không có khiếu nại nào đang mở.</div>
+                <div className="py-12 text-center text-gray-400">✅ Không có khiếu nại nào trong mục này.</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-100">
@@ -2397,22 +2429,29 @@ const AdminDashboard = () => {
                       <tr>
                         <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Ngày tạo</th>
                         <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Mã Đơn</th>
-                        <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Giá trị</th>
+                        <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Giá trị hoàn</th>
                         <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Khách hàng</th>
                         <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Lý do khiếu nại</th>
+                        <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Bằng chứng</th>
                         <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Trạng thái</th>
                         <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Thao tác</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
                       {disputes.map((d: any) => {
-                        const statusCls: Record<string, string> = { OPEN: 'bg-amber-100 text-amber-700', RESOLVED: 'bg-blue-100 text-blue-700', REJECTED: 'bg-emerald-100 text-emerald-700' };
-                        const statusLabel: Record<string, string> = { OPEN: 'Đang mở', RESOLVED: 'Đã chấp nhận', REJECTED: 'Đã bác' };
+                        const statusCls: Record<string, string> = { OPEN: 'bg-amber-100 text-amber-700', RESOLVED: 'bg-blue-100 text-blue-700', REJECTED: 'bg-rose-100 text-rose-700' };
+                        const statusLabel: Record<string, string> = { OPEN: 'Đang mở', RESOLVED: 'Đã hoàn tiền', REJECTED: 'Đã hủy' };
+                        
+                        let images: string[] = [];
+                        try {
+                          if (d.evidenceImages) images = JSON.parse(d.evidenceImages);
+                        } catch {}
+
                         return (
                           <tr key={d.orderDisputeId} className="hover:bg-gray-50/50">
                             <td className="px-5 py-4 text-sm text-gray-600 whitespace-nowrap">{new Date(d.createdAt).toLocaleDateString('vi-VN')}</td>
                             <td className="px-5 py-4 text-sm font-mono font-semibold text-gray-900">{d.orderCode}</td>
-                            <td className="px-5 py-4 text-sm font-bold text-right text-gray-900 whitespace-nowrap">
+                            <td className="px-5 py-4 text-sm font-bold text-right text-emerald-600 whitespace-nowrap">
                               {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(d.orderAmount)}
                             </td>
                             <td className="px-5 py-4">
@@ -2420,7 +2459,29 @@ const AdminDashboard = () => {
                               <p className="text-xs text-gray-400">{d.customerEmail}</p>
                             </td>
                             <td className="px-5 py-4 text-sm text-gray-700 max-w-xs">
-                              <p className="truncate" title={d.reason}>{d.reason}</p>
+                              <p className="line-clamp-2" title={d.reason}>{d.reason}</p>
+                            </td>
+                            <td className="px-5 py-4 text-center">
+                              {images.length > 0 ? (
+                                <div className="flex items-center justify-center gap-1.5 flex-wrap max-w-[140px] mx-auto">
+                                  {images.map((img: string, idx: number) => {
+                                    const fullUrl = img.startsWith('http') ? img : `http://localhost:5234${img.startsWith('/') ? '' : '/'}${img}`;
+                                    return (
+                                      <button
+                                        key={idx}
+                                        type="button"
+                                        onClick={() => setViewReceiptModal({ isOpen: true, url: fullUrl, title: `Bằng chứng khiếu nại đơn #${d.orderCode} (Ảnh ${idx + 1}/${images.length})` })}
+                                        className="relative group w-10 h-10 rounded-lg overflow-hidden border border-gray-200 hover:border-amber-500 shadow-xs cursor-pointer bg-gray-50 flex items-center justify-center"
+                                        title="Nhấn để phóng to ảnh bằng chứng"
+                                      >
+                                        <img src={fullUrl} alt={`Evidence ${idx + 1}`} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <span className="text-xs text-gray-400 italic">Không có ảnh</span>
+                              )}
                             </td>
                             <td className="px-5 py-4 text-center">
                               <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold ${statusCls[d.status] ?? 'bg-gray-100 text-gray-600'}`}>
@@ -2430,17 +2491,26 @@ const AdminDashboard = () => {
                             <td className="px-5 py-4 text-center">
                               {d.status === 'OPEN' && (
                                 <div className="flex items-center justify-center gap-2">
-                                  <button onClick={() => setResolveDisputeModal({ isOpen: true, disputeId: d.orderDisputeId, note: '', action: 'resolve' })}
-                                    className="px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 transition-colors">
-                                    ✅ Chấp nhận
+                                  <button
+                                    onClick={() => setResolveDisputeModal({ isOpen: true, disputeId: d.orderDisputeId, item: d, note: '', action: 'resolve' })}
+                                    className="px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 transition-colors shadow-xs"
+                                  >
+                                    ✅ Chấp nhận & Hoàn tiền
                                   </button>
-                                  <button onClick={() => setResolveDisputeModal({ isOpen: true, disputeId: d.orderDisputeId, note: '', action: 'reject' })}
-                                    className="px-3 py-1.5 bg-gray-100 text-gray-700 text-xs font-semibold rounded-lg hover:bg-gray-200 transition-colors">
-                                    ❌ Bác khiếu nại
+                                  <button
+                                    onClick={() => setResolveDisputeModal({ isOpen: true, disputeId: d.orderDisputeId, item: d, note: '', action: 'reject' })}
+                                    className="px-3 py-1.5 bg-gray-100 text-gray-700 text-xs font-semibold rounded-lg hover:bg-gray-200 transition-colors"
+                                  >
+                                    ❌ Hủy khiếu nại
                                   </button>
                                 </div>
                               )}
-                              {d.status !== 'OPEN' && <span className="text-xs text-gray-400">{d.adminNote || '—'}</span>}
+                              {d.status !== 'OPEN' && (
+                                <div className="text-xs text-left max-w-[180px] mx-auto text-gray-500">
+                                  <p className="font-semibold text-gray-700">Admin phản hồi:</p>
+                                  <p className="line-clamp-2 italic">{d.adminNote || 'Không có ghi chú'}</p>
+                                </div>
+                              )}
                             </td>
                           </tr>
                         );
@@ -2453,7 +2523,7 @@ const AdminDashboard = () => {
                 <div className="flex justify-center items-center gap-4 py-5 border-t border-gray-100">
                   <button
                     disabled={dsPage <= 1}
-                    onClick={() => fetchDisputes(dsPage - 1)}
+                    onClick={() => fetchDisputes(dsPage - 1, dsStatusFilter)}
                     className="px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:text-emerald-600 disabled:opacity-50 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed font-semibold shadow-sm transition-all"
                   >
                     Trước
@@ -2463,7 +2533,7 @@ const AdminDashboard = () => {
                   </div>
                   <button
                     disabled={dsPage >= Math.ceil(dsTotal / DS_PAGE_SIZE) || Math.ceil(dsTotal / DS_PAGE_SIZE) <= 1}
-                    onClick={() => fetchDisputes(dsPage + 1)}
+                    onClick={() => fetchDisputes(dsPage + 1, dsStatusFilter)}
                     className="px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:text-emerald-600 disabled:opacity-50 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed font-semibold shadow-sm transition-all"
                   >
                     Sau
@@ -2476,24 +2546,107 @@ const AdminDashboard = () => {
           {/* Resolve/Reject Dispute Modal */}
           {resolveDisputeModal.isOpen && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
-                <h3 className="text-lg font-bold text-gray-900 mb-2">
-                  {resolveDisputeModal.action === 'resolve' ? '✅ Chấp nhận khiếu nại' : '❌ Bác khiếu nại'}
-                </h3>
-                <p className="text-sm text-gray-600 mb-3">
-                  {resolveDisputeModal.action === 'resolve'
-                    ? 'Khiếu nại sẽ được chấp nhận. Tiền sẽ không giải ngân cho seller và cần xử lý thủ công.'
-                    : 'Khiếu nại sẽ bị bác. Đơn hàng sẽ được giải ngân về ví seller theo lịch tự động.'}
-                </p>
-                <textarea
-                  value={resolveDisputeModal.note}
-                  onChange={e => setResolveDisputeModal(m => ({ ...m, note: e.target.value }))}
-                  rows={3} placeholder="Ghi chú của Admin..."
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-400 resize-none text-sm"
-                />
-                <div className="flex gap-3 mt-4">
-                  <button onClick={() => setResolveDisputeModal({ isOpen: false, disputeId: null, note: '', action: 'resolve' })} className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-gray-600 font-medium hover:bg-gray-50">Huỷ</button>
-                  <button onClick={handleDisputeAction} className={`flex-1 px-4 py-2.5 text-white rounded-xl font-semibold ${resolveDisputeModal.action === 'resolve' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-emerald-600 hover:bg-emerald-700'}`}>Xác nhận</button>
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6">
+                <div className="flex items-center justify-between pb-3 border-b border-gray-100 mb-4">
+                  <h3 className="text-lg font-bold text-gray-900">
+                    {resolveDisputeModal.action === 'resolve' ? '💰 Chấp nhận khiếu nại & Hoàn tiền' : '❌ Hủy khiếu nại'}
+                  </h3>
+                  <button
+                    onClick={() => setResolveDisputeModal({ isOpen: false, disputeId: null, item: null, note: '', action: 'resolve' })}
+                    className="text-gray-400 hover:text-gray-600 text-lg"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Dispute details: Reason & Evidence Images */}
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-3.5 mb-3 space-y-2 text-xs">
+                  <div>
+                    <span className="font-semibold text-gray-500 uppercase tracking-wider block mb-0.5">Lý do khiếu nại:</span>
+                    <p className="text-gray-800 italic bg-white p-2.5 rounded-lg border border-gray-100">
+                      "{resolveDisputeModal.item?.reason}"
+                    </p>
+                  </div>
+
+                  {(() => {
+                    let modalImgs: string[] = [];
+                    try {
+                      if (resolveDisputeModal.item?.evidenceImages) modalImgs = JSON.parse(resolveDisputeModal.item.evidenceImages);
+                    } catch {}
+                    if (modalImgs.length === 0) return null;
+                    return (
+                      <div>
+                        <span className="font-semibold text-gray-500 uppercase tracking-wider block mb-1">
+                          Hình ảnh minh chứng ({modalImgs.length}):
+                        </span>
+                        <div className="flex gap-2 flex-wrap">
+                          {modalImgs.map((img: string, i: number) => {
+                            const fullUrl = img.startsWith('http') ? img : `http://localhost:5234${img.startsWith('/') ? '' : '/'}${img}`;
+                            return (
+                              <button
+                                key={i}
+                                type="button"
+                                onClick={() => setViewReceiptModal({
+                                  isOpen: true,
+                                  url: fullUrl,
+                                  title: `Bằng chứng khiếu nại - Đơn #${resolveDisputeModal.item?.orderCode} (Ảnh ${i + 1}/${modalImgs.length})`
+                                })}
+                                className="w-14 h-14 rounded-lg overflow-hidden border border-gray-200 hover:border-amber-500 transition shadow-xs cursor-pointer bg-white"
+                                title="Nhấp để phóng to"
+                              >
+                                <img src={fullUrl} alt={`Evidence ${i + 1}`} className="w-full h-full object-cover" />
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {resolveDisputeModal.action === 'resolve' ? (
+                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-3.5 mb-4 text-xs text-blue-900 space-y-1">
+                    <p className="font-semibold text-blue-950 text-sm">Xác nhận hoàn tiền vào ví người dùng:</p>
+                    <p>• Mã đơn hàng: <strong className="font-mono text-gray-900">{resolveDisputeModal.item?.orderCode}</strong></p>
+                    <p>• Khách hàng: <strong>{resolveDisputeModal.item?.customerName}</strong> ({resolveDisputeModal.item?.customerEmail})</p>
+                    <p>• Số tiền sẽ hoàn vào ví: <strong className="text-emerald-700 text-sm">{money(resolveDisputeModal.item?.orderAmount || 0)}</strong></p>
+                    <p className="text-blue-800 pt-1">Sau khi duyệt, tiền sẽ lập tức vào số dư khả dụng của khách hàng và họ có thể tạo yêu cầu rút tiền. Tiền đơn hàng sẽ không giải ngân cho người bán.</p>
+                  </div>
+                ) : (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 mb-4 text-xs text-amber-900 space-y-1">
+                    <p className="font-semibold text-amber-950 text-sm">Hủy khiếu nại đơn hàng:</p>
+                    <p>Khiếu nại sẽ bị hủy. Đơn hàng sẽ tiếp tục chu trình giải ngân tự động cho người bán.</p>
+                  </div>
+                )}
+
+                <div className="mb-4">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                    Ghi chú phản hồi của Admin {resolveDisputeModal.action === 'reject' ? <span className="text-red-500">*</span> : '(tuỳ chọn)'}
+                  </label>
+                  <textarea
+                    value={resolveDisputeModal.note}
+                    onChange={e => setResolveDisputeModal(m => ({ ...m, note: e.target.value }))}
+                    rows={3}
+                    placeholder={resolveDisputeModal.action === 'resolve' ? 'Ví dụ: Đã xác nhận hàng lỗi qua hình ảnh, đồng ý hoàn tiền toàn phần.' : 'Vui lòng nhập lý do hủy khiếu nại...'}
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-400 resize-none text-sm"
+                  />
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setResolveDisputeModal({ isOpen: false, disputeId: null, item: null, note: '', action: 'resolve' })}
+                    className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-gray-600 font-medium hover:bg-gray-50"
+                  >
+                    Huỷ
+                  </button>
+                  <button
+                    onClick={handleDisputeAction}
+                    className={`flex-1 px-4 py-2.5 text-white rounded-xl font-semibold transition-colors ${
+                      resolveDisputeModal.action === 'resolve' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-red-600 hover:bg-red-700'
+                    }`}
+                  >
+                    {resolveDisputeModal.action === 'resolve' ? 'Xác nhận Hoàn tiền' : 'Xác nhận Hủy khiếu nại'}
+                  </button>
                 </div>
               </div>
             </div>

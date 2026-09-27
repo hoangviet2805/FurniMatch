@@ -12,24 +12,29 @@ namespace FurniMatch.Api.Controllers
 {
     [ApiController]
     [Route("api/seller/withdrawals")]
-    [Authorize(Roles = "SELLER")]
+    [Authorize(Roles = "SELLER,CUSTOMER")]
     public class WithdrawalController : ControllerBase
     {
         private readonly FurniMatchDbContext _db;
         public WithdrawalController(FurniMatchDbContext db) { _db = db; }
-        private int SellerId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        private int UserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-        /// <summary>Seller xem số dư ví</summary>
+        /// <summary>Xem số dư ví (hỗ trợ cả Seller và Customer)</summary>
         [HttpGet("~/api/seller/wallet")]
+        [HttpGet("~/api/wallet")]
+        [HttpGet("~/api/user/wallet")]
         public async Task<IActionResult> GetWallet()
         {
-            var wallet = await _db.EscrowWallets.FirstOrDefaultAsync(w => w.UserId == SellerId);
+            var wallet = await _db.EscrowWallets.FirstOrDefaultAsync(w => w.UserId == UserId);
 
-            // Tổng tiền đang chờ giải ngân (đơn COMPLETED nhưng chưa RELEASED)
-            var commissionRate = await GetCurrentCommissionRate();
-            var pendingPayout = await _db.Orders
-                .Where(o => o.SellerId == SellerId && o.OrderStatus == "COMPLETED" && o.PayoutStatus == "PENDING")
-                .SumAsync(o => (decimal?)(o.Subtotal - o.Subtotal * commissionRate / 100)) ?? 0;
+            decimal pendingPayout = 0;
+            if (User.IsInRole("SELLER"))
+            {
+                var commissionRate = await GetCurrentCommissionRate();
+                pendingPayout = await _db.Orders
+                    .Where(o => o.SellerId == UserId && o.OrderStatus == "COMPLETED" && o.PayoutStatus == "PENDING")
+                    .SumAsync(o => (decimal?)(o.Subtotal - o.Subtotal * commissionRate / 100)) ?? 0;
+            }
 
             return Ok(new
             {
@@ -40,11 +45,13 @@ namespace FurniMatch.Api.Controllers
             });
         }
 
-        /// <summary>Seller xem lịch sử giao dịch EscrowWallet</summary>
+        /// <summary>Xem lịch sử giao dịch EscrowWallet</summary>
         [HttpGet("~/api/seller/transactions")]
+        [HttpGet("~/api/wallet/transactions")]
+        [HttpGet("~/api/user/transactions")]
         public async Task<IActionResult> GetTransactions([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
         {
-            var wallet = await _db.EscrowWallets.FirstOrDefaultAsync(w => w.UserId == SellerId);
+            var wallet = await _db.EscrowWallets.FirstOrDefaultAsync(w => w.UserId == UserId);
             if (wallet == null) return Ok(new { total = 0, data = Array.Empty<object>() });
 
             var query = _db.EscrowTransactions
@@ -69,14 +76,16 @@ namespace FurniMatch.Api.Controllers
             return Ok(new { total, page, pageSize, data });
         }
 
-        /// <summary>Seller tạo yêu cầu rút tiền</summary>
+        /// <summary>Tạo yêu cầu rút tiền (Seller hoặc Customer)</summary>
         [HttpPost]
+        [HttpPost("~/api/wallet/withdrawals")]
+        [HttpPost("~/api/user/withdrawals")]
         public async Task<IActionResult> CreateWithdrawal([FromBody] CreateWithdrawalDto dto)
         {
             if (dto.Amount < 10000)
                 return BadRequest(new { message = "Số tiền rút tối thiểu là 10,000đ." });
 
-            var wallet = await _db.EscrowWallets.FirstOrDefaultAsync(w => w.UserId == SellerId);
+            var wallet = await _db.EscrowWallets.FirstOrDefaultAsync(w => w.UserId == UserId);
             var available = wallet?.AvailableBalance ?? 0;
 
             if (available < 10000)
@@ -87,7 +96,7 @@ namespace FurniMatch.Api.Controllers
 
             // Kiểm tra không có yêu cầu đang chờ duyệt
             var hasPending = await _db.WithdrawalRequests
-                .AnyAsync(w => w.SellerId == SellerId && w.Status == "PENDING");
+                .AnyAsync(w => w.SellerId == UserId && w.Status == "PENDING");
             if (hasPending)
                 return BadRequest(new { message = "Bạn đang có yêu cầu rút tiền chờ xử lý. Vui lòng đợi Admin duyệt trước khi tạo yêu cầu mới." });
 
@@ -98,7 +107,7 @@ namespace FurniMatch.Api.Controllers
 
             var request = new WithdrawalRequest
             {
-                SellerId = SellerId,
+                SellerId = UserId,
                 Amount = dto.Amount,
                 BankName = dto.BankName.Trim(),
                 BankAccountNumber = dto.BankAccountNumber.Trim(),
@@ -112,12 +121,14 @@ namespace FurniMatch.Api.Controllers
             return Ok(new { message = "Yêu cầu rút tiền đã được gửi. Admin sẽ xử lý trong vòng 1-3 ngày làm việc.", requestId = request.WithdrawalRequestId });
         }
 
-        /// <summary>Seller xem lịch sử yêu cầu rút tiền</summary>
+        /// <summary>Xem lịch sử yêu cầu rút tiền</summary>
         [HttpGet]
+        [HttpGet("~/api/wallet/withdrawals")]
+        [HttpGet("~/api/user/withdrawals")]
         public async Task<IActionResult> GetWithdrawals([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
         {
             var query = _db.WithdrawalRequests
-                .Where(w => w.SellerId == SellerId)
+                .Where(w => w.SellerId == UserId)
                 .OrderByDescending(w => w.CreatedAt);
 
             var total = await query.CountAsync();

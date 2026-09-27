@@ -25,6 +25,9 @@ namespace FurniMatch.Api.Models
         /// <summary>Ghi chú của Admin khi xử lý khiếu nại</summary>
         public string? AdminNote { get; set; }
 
+        /// <summary>Danh sách URL hình ảnh bằng chứng người dùng đính kèm (dạng JSON)</summary>
+        public string? EvidenceImages { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? ResolvedAt { get; set; }
     }

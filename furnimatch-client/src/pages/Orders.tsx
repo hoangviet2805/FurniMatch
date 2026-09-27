@@ -4,7 +4,8 @@ import api from '../utils/api';
 import {
   CheckCircle2, Clock, XCircle, Package, Truck, Hammer,
   ClipboardList, Store, Info, Star, Upload, X, ChevronRight,
-  Image as ImageIcon, Video, Loader2
+  Image as ImageIcon, Video, Loader2, ShieldAlert, AlertTriangle, Wallet,
+  MapPin, Edit3
 } from 'lucide-react';
 
 const money = (n: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n);
@@ -83,6 +84,31 @@ export default function Orders() {
   const [reviewUploading, setReviewUploading] = useState(false);
   const [orderReviews, setOrderReviews] = useState<Record<number, any[]>>({}); // orderId → reviews array
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Dispute states ──
+  const [disputeOrder, setDisputeOrder] = useState<any | null>(null);
+  const [disputeReason, setDisputeReason] = useState('');
+  const [disputeFiles, setDisputeFiles] = useState<{ file: File; preview: string }[]>([]);
+  const [disputeSubmitting, setDisputeSubmitting] = useState(false);
+  const [viewDisputeModal, setViewDisputeModal] = useState<{ isOpen: boolean; order: any | null; dispute: any | null }>({
+    isOpen: false,
+    order: null,
+    dispute: null
+  });
+  const [viewDisputeImageModal, setViewDisputeImageModal] = useState<{ isOpen: boolean; url: string; title: string }>({
+    isOpen: false,
+    url: '',
+    title: ''
+  });
+  const disputeFileInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Edit shipping info states ──
+  const [editShippingOrder, setEditShippingOrder] = useState<any | null>(null);
+  const [editShippingName, setEditShippingName] = useState('');
+  const [editShippingPhone, setEditShippingPhone] = useState('');
+  const [editShippingAddress, setEditShippingAddress] = useState('');
+  const [editShippingNote, setEditShippingNote] = useState('');
+  const [editShippingSaving, setEditShippingSaving] = useState(false);
 
   const ITEMS_PER_PAGE = 10;
 
@@ -269,6 +295,153 @@ export default function Orders() {
     }
   };
 
+  // ── Dispute helpers ──────────────────────────────────────────────────────────
+  const getDisputeEligibility = (order: any) => {
+    if (order.orderStatus !== 'COMPLETED') return { canDispute: false };
+    if (order.dispute) return { canDispute: false, hasDispute: true, dispute: order.dispute };
+
+    const completedAt = order.completedAt ? getUtcDate(order.completedAt) : (order.updatedAt ? getUtcDate(order.updatedAt) : null);
+    if (!completedAt) return { canDispute: false };
+
+    const deadline = new Date(completedAt.getTime() + 3 * 24 * 60 * 60 * 1000);
+    const diffMs = deadline.getTime() - Date.now();
+
+    if (diffMs <= 0) {
+      return { canDispute: false, isExpired: true };
+    }
+
+    const remainingHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const remainingDays = Math.floor(remainingHours / 24);
+    const remHours = remainingHours % 24;
+
+    const timeLabel = remainingDays > 0 ? `${remainingDays} ngày ${remHours} giờ` : `${remHours} giờ`;
+    return { canDispute: true, timeLabel, deadline };
+  };
+
+  const handleOpenDispute = (order: any) => {
+    setDisputeOrder(order);
+    setDisputeReason('');
+    setDisputeFiles([]);
+  };
+
+  const handleDisputeFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const newFiles: { file: File; preview: string }[] = [];
+    Array.from(files).forEach(f => {
+      if (f.type.startsWith('image/')) {
+        newFiles.push({ file: f, preview: URL.createObjectURL(f) });
+      }
+    });
+    setDisputeFiles(prev => [...prev, ...newFiles].slice(0, 5));
+    if (disputeFileInputRef.current) disputeFileInputRef.current.value = '';
+  };
+
+  const handleRemoveDisputeFile = (idx: number) => {
+    setDisputeFiles(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleSubmitDispute = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!disputeOrder) return;
+    if (!disputeReason.trim()) {
+      setAlertModal({ type: 'error', title: 'Thiếu lý do', message: 'Vui lòng nhập lý do khiếu nại.' });
+      return;
+    }
+    setDisputeSubmitting(true);
+    try {
+      const formData = new FormData();
+      formData.append('reason', disputeReason.trim());
+      disputeFiles.forEach(item => {
+        formData.append('images', item.file);
+      });
+
+      await api.post(`/orders/${disputeOrder.orderId}/dispute`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      setAlertModal({
+        type: 'success',
+        title: 'Đã gửi khiếu nại thành công!',
+        message: 'Khiếu nại kèm hình ảnh của bạn đã được chuyển tới Admin để xem xét. Khi được chấp thuận, số tiền sẽ được hoàn vào ví của bạn để bạn có thể rút về tài khoản ngân hàng.'
+      });
+      setDisputeOrder(null);
+      setDisputeReason('');
+      setDisputeFiles([]);
+      fetchOrders();
+    } catch (err: any) {
+      setAlertModal({
+        type: 'error',
+        title: 'Gửi khiếu nại thất bại',
+        message: err.response?.data?.message || 'Có lỗi xảy ra khi gửi khiếu nại. Vui lòng thử lại.'
+      });
+    } finally {
+      setDisputeSubmitting(false);
+    }
+  };
+
+  // ── Shipping Update helpers ──────────────────────────────────────────────────
+  const canUpdateShipping = (order: any) => {
+    // Cho phép cập nhật khi đơn hàng đang ở bước chuẩn bị hàng (chưa bàn giao giao hàng)
+    const allowed = ['PREPARING', 'PRODUCING', 'CONFIRMED'];
+    return allowed.includes(order.orderStatus);
+  };
+
+  const handleOpenEditShipping = (order: any) => {
+    setEditShippingOrder(order);
+    setEditShippingName(order.recipientName || '');
+    setEditShippingPhone(order.recipientPhone || '');
+    setEditShippingAddress(order.address || '');
+    setEditShippingNote(order.note || '');
+  };
+
+  const handleSaveShipping = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editShippingOrder) return;
+    if (!editShippingName.trim() || !editShippingPhone.trim() || !editShippingAddress.trim()) {
+      setAlertModal({
+        type: 'error',
+        title: 'Thiếu thông tin',
+        message: 'Vui lòng điền đầy đủ Tên người nhận, Số điện thoại và Địa chỉ giao hàng.'
+      });
+      return;
+    }
+
+    setEditShippingSaving(true);
+    try {
+      await api.put(`/orders/${editShippingOrder.orderId}/shipping-info`, {
+        recipientName: editShippingName.trim(),
+        phone: editShippingPhone.trim(),
+        address: editShippingAddress.trim(),
+        note: editShippingNote.trim()
+      });
+
+      // Cập nhật state đơn hàng cục bộ để hiển thị ngay
+      setOrders(prev => prev.map(o => o.orderId === editShippingOrder.orderId ? {
+        ...o,
+        recipientName: editShippingName.trim(),
+        recipientPhone: editShippingPhone.trim(),
+        address: editShippingAddress.trim(),
+        note: editShippingNote.trim()
+      } : o));
+
+      setAlertModal({
+        type: 'success',
+        title: 'Cập nhật thành công!',
+        message: 'Thông tin nhận hàng đã được lưu và gửi thông báo cập nhật tới xưởng sản xuất.'
+      });
+      setEditShippingOrder(null);
+    } catch (err: any) {
+      setAlertModal({
+        type: 'error',
+        title: 'Cập nhật thất bại',
+        message: err.response?.data?.message || 'Có lỗi xảy ra khi cập nhật địa chỉ giao hàng. Vui lòng thử lại.'
+      });
+    } finally {
+      setEditShippingSaving(false);
+    }
+  };
+
   const currentReviewItem = reviewItems[reviewStep];
   const resolveImgUrl = (url?: string) => !url ? '' : url.startsWith('http') ? url : `http://localhost:5234${url}`;
 
@@ -391,6 +564,7 @@ export default function Orders() {
             try { items = JSON.parse(o.itemsJson); } catch {}
             const StatusIcon = statusConfig[o.orderStatus]?.icon || Clock;
             const reviewStatus = getReviewStatus(o);
+            const disputeInfo = getDisputeEligibility(o);
             
             return (
               <article key={o.orderId} className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm hover:shadow-md transition-shadow">
@@ -448,6 +622,34 @@ export default function Orders() {
                   })}
                 </div>
 
+                {/* ── Thông tin nhận hàng & Nút cập nhật địa chỉ khi đang chuẩn bị hàng ── */}
+                <div className="mb-4 p-3.5 bg-gray-50/80 rounded-2xl border border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="inline-flex items-center gap-1 font-bold text-gray-800">
+                        <MapPin className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>Giao tới:</span>
+                      </span>
+                      <span className="font-semibold text-gray-900">{o.recipientName || o.RecipientName}</span>
+                      <span className="text-gray-300">|</span>
+                      <span className="font-mono text-gray-700">{o.recipientPhone || o.RecipientPhone}</span>
+                    </div>
+                    <p className="text-gray-600 leading-relaxed pl-5">{o.address || o.Address}</p>
+                  </div>
+
+                  {canUpdateShipping(o) && (
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEditShipping(o)}
+                      className="shrink-0 self-start sm:self-center px-3 py-1.5 bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-300 hover:border-emerald-400 rounded-xl font-semibold text-xs transition shadow-2xs cursor-pointer flex items-center gap-1.5"
+                      title="Cập nhật tên, SĐT hoặc địa chỉ nhận hàng"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                      <span>Đổi địa chỉ nhận</span>
+                    </button>
+                  )}
+                </div>
+
                 {(o.note || o.Note) && (
                   <div className="mb-4 px-4 py-2.5 bg-amber-50/70 border border-amber-200/70 rounded-xl text-xs text-amber-900 flex items-start gap-2">
                     <span className="font-semibold shrink-0 text-amber-800">📝 Ghi chú:</span>
@@ -485,6 +687,52 @@ export default function Orders() {
                         <Clock className="w-4 h-4" />
                         Hết hạn đánh giá
                       </span>
+                    )}
+
+                    {/* ── Nút / Trạng thái Khiếu nại (trong vòng 3 ngày sau hoàn thành) ── */}
+                    {o.orderStatus === 'COMPLETED' && (
+                      <>
+                        {o.dispute ? (
+                          <button
+                            onClick={() => setViewDisputeModal({ isOpen: true, order: o, dispute: o.dispute })}
+                            className={`flex-1 sm:flex-none rounded-xl px-4 py-2.5 text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5 ${
+                              o.dispute.status === 'OPEN'
+                                ? 'bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200'
+                                : o.dispute.status === 'RESOLVED'
+                                ? 'bg-blue-100 text-blue-900 border border-blue-300 hover:bg-blue-200'
+                                : 'bg-rose-50 text-rose-800 border border-rose-200 hover:bg-rose-100'
+                            }`}
+                            title="Xem chi tiết khiếu nại"
+                          >
+                            <ShieldAlert className="w-4 h-4 shrink-0" />
+                            <span>
+                              {o.dispute.status === 'OPEN' && '⚠️ Đang khiếu nại'}
+                              {o.dispute.status === 'RESOLVED' && '💰 Khiếu nại được chấp thuận (Đã hoàn tiền)'}
+                              {o.dispute.status === 'REJECTED' && '❌ Khiếu nại đã bị hủy'}
+                            </span>
+                          </button>
+                        ) : (
+                          <>
+                            {disputeInfo.canDispute ? (
+                              <button
+                                onClick={() => handleOpenDispute(o)}
+                                className="flex-1 sm:flex-none rounded-xl border border-amber-300 bg-amber-50 hover:bg-amber-100 px-4 py-2.5 text-xs font-bold text-amber-900 transition-colors shadow-xs cursor-pointer flex items-center gap-1.5"
+                                title={`Chỉ được khiếu nại trong vòng 3 ngày sau khi hoàn thành. Thời hạn còn lại: ${disputeInfo.timeLabel}`}
+                              >
+                                <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
+                                <span>Khiếu nại</span>
+                                <span className="text-[10px] bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded-full font-medium">
+                                  Còn {disputeInfo.timeLabel}
+                                </span>
+                              </button>
+                            ) : (
+                              <span className="text-xs text-gray-400 self-center hidden sm:inline italic">
+                                (Hết hạn 3 ngày khiếu nại)
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </>
                     )}
 
                     {o.orderStatus === 'WAITING_PAYMENT' && getUtcDate(o.paymentExpiredAt).getTime() > Date.now() && (
@@ -860,6 +1108,425 @@ export default function Orders() {
             >
               Đóng
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ────────────────────── DISPUTE FORM MODAL ─────────────────────────── */}
+      {disputeOrder && (
+        <div className="fixed inset-0 z-[85] flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm" onClick={() => setDisputeOrder(null)}>
+          <div
+            className="bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl animate-[fadeInScale_0.2s_ease]"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="px-6 py-5 bg-gradient-to-r from-amber-600 via-amber-700 to-orange-700 text-white flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold flex items-center gap-2">
+                  <ShieldAlert className="w-5 h-5" />
+                  Khiếu Nại Đơn Hàng #{disputeOrder.orderCode}
+                </h2>
+                <p className="text-xs text-amber-100 mt-0.5">
+                  Thời hạn: Trong vòng 3 ngày sau khi hoàn thành đơn
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDisputeOrder(null)}
+                className="p-1 hover:bg-white/10 rounded-lg transition text-white cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitDispute} className="p-6 space-y-4 text-sm max-h-[80vh] overflow-y-auto">
+              <div className="bg-amber-50/80 border border-amber-200 rounded-2xl p-4 text-xs text-amber-900 space-y-1">
+                <p className="font-bold text-amber-950 flex items-center gap-1.5">
+                  <AlertTriangle className="w-4 h-4 text-amber-600" />
+                  Chính sách giải quyết khiếu nại:
+                </p>
+                <p>• Giá trị đơn hàng cần khiếu nại: <strong className="text-gray-900 font-semibold">{money(disputeOrder.totalAmount)}</strong></p>
+                <p>• Vui lòng cung cấp lý do cụ thể và tải lên hình ảnh chụp thực tế rõ nét (hàng bị móp méo, bể vỡ, sai màu sắc hoặc kích thước...).</p>
+                <p className="text-amber-800 pt-1">
+                  💡 <strong>Quyền lợi của bạn:</strong> Nếu Admin chấp thuận khiếu nại, tiền đơn hàng sẽ được hoàn trả tự động vào <strong>Ví số dư</strong> của bạn và bạn có thể tạo yêu cầu rút về tài khoản ngân hàng bất kỳ lúc nào.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1.5">
+                  Lý do khiếu nại chi tiết <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  rows={4}
+                  value={disputeReason}
+                  onChange={e => setDisputeReason(e.target.value)}
+                  placeholder="Mô tả chi tiết vấn đề bạn gặp phải với đơn hàng này..."
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none text-gray-900 resize-none text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1.5">
+                  Hình ảnh bằng chứng (Tối đa 5 ảnh)
+                </label>
+                
+                <input
+                  type="file"
+                  ref={disputeFileInputRef}
+                  onChange={handleDisputeFileChange}
+                  multiple
+                  accept="image/*"
+                  className="hidden"
+                />
+
+                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5 mb-2">
+                  {disputeFiles.map((fileObj, idx) => (
+                    <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-gray-200 group">
+                      <img src={fileObj.preview} alt={`Evidence ${idx + 1}`} className="w-full h-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveDisputeFile(idx)}
+                        className="absolute top-1 right-1 p-1 bg-black/60 hover:bg-black/80 text-white rounded-full transition cursor-pointer"
+                        title="Xoá ảnh này"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+
+                  {disputeFiles.length < 5 && (
+                    <button
+                      type="button"
+                      onClick={() => disputeFileInputRef.current?.click()}
+                      className="aspect-square rounded-xl border-2 border-dashed border-gray-300 hover:border-amber-500 hover:bg-amber-50/50 flex flex-col items-center justify-center gap-1 text-gray-500 hover:text-amber-700 transition cursor-pointer"
+                    >
+                      <Upload className="w-5 h-5" />
+                      <span className="text-[11px] font-medium">Tải ảnh</span>
+                    </button>
+                  )}
+                </div>
+                <p className="text-[11px] text-gray-400">Hỗ trợ các định dạng JPG, PNG, WEBP (tối đa 5MB mỗi ảnh)</p>
+              </div>
+
+              <div className="flex gap-3 pt-3 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setDisputeOrder(null)}
+                  className="flex-1 py-2.5 border border-gray-200 rounded-xl text-gray-600 font-semibold hover:bg-gray-50 transition cursor-pointer"
+                >
+                  Huỷ
+                </button>
+                <button
+                  type="submit"
+                  disabled={disputeSubmitting || !disputeReason.trim()}
+                  className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold transition flex items-center justify-center gap-2 shadow-md disabled:opacity-50 cursor-pointer"
+                >
+                  {disputeSubmitting ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Đang gửi khiếu nại...</span>
+                    </>
+                  ) : (
+                    <>
+                      <ShieldAlert className="w-4 h-4" />
+                      <span>Gửi khiếu nại</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ────────────────────── VIEW DISPUTE DETAILS MODAL ──────────────────── */}
+      {viewDisputeModal.isOpen && viewDisputeModal.dispute && (
+        <div className="fixed inset-0 z-[85] flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm" onClick={() => setViewDisputeModal({ isOpen: false, order: null, dispute: null })}>
+          <div
+            className="bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl animate-[fadeInScale_0.2s_ease]"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                  <ShieldAlert className="w-5 h-5 text-amber-600" />
+                  Chi Tiết Khiếu Nại Đơn #{viewDisputeModal.order?.orderCode}
+                </h3>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Ngày gửi: {new Date(viewDisputeModal.dispute.createdAt).toLocaleString('vi-VN')}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewDisputeModal({ isOpen: false, order: null, dispute: null })}
+                className="p-1 hover:bg-gray-100 rounded-lg transition text-gray-400 hover:text-gray-600 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto text-sm">
+              {/* Status Banner */}
+              <div className={`p-4 rounded-2xl border flex items-start gap-3 ${
+                viewDisputeModal.dispute.status === 'OPEN'
+                  ? 'bg-amber-50 border-amber-200 text-amber-900'
+                  : viewDisputeModal.dispute.status === 'RESOLVED'
+                  ? 'bg-blue-50 border-blue-200 text-blue-900'
+                  : 'bg-rose-50 border-rose-200 text-rose-900'
+              }`}>
+                <div className="mt-0.5 shrink-0">
+                  {viewDisputeModal.dispute.status === 'OPEN' && <Clock className="w-5 h-5 text-amber-600" />}
+                  {viewDisputeModal.dispute.status === 'RESOLVED' && <CheckCircle2 className="w-5 h-5 text-blue-600" />}
+                  {viewDisputeModal.dispute.status === 'REJECTED' && <XCircle className="w-5 h-5 text-rose-600" />}
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm">
+                    {viewDisputeModal.dispute.status === 'OPEN' && 'Khiếu nại đang chờ Admin xem xét'}
+                    {viewDisputeModal.dispute.status === 'RESOLVED' && 'Khiếu nại đã được chấp thuận & Đã hoàn tiền'}
+                    {viewDisputeModal.dispute.status === 'REJECTED' && 'Khiếu nại đã bị hủy'}
+                  </h4>
+                  <p className="text-xs mt-1 leading-relaxed opacity-90">
+                    {viewDisputeModal.dispute.status === 'OPEN' && 'Admin đang xác minh lý do và hình ảnh bằng chứng. Kết quả sẽ được cập nhật trong vòng 24h.'}
+                    {viewDisputeModal.dispute.status === 'RESOLVED' && `Số tiền ${money(viewDisputeModal.order?.totalAmount || 0)} đã được hoàn vào Ví số dư của bạn. Bạn có thể vào ví để rút về tài khoản ngân hàng bất cứ lúc nào.`}
+                    {viewDisputeModal.dispute.status === 'REJECTED' && 'Khiếu nại đã bị Admin hủy do không đủ điều kiện xử lý hoặc không có vi phạm từ phía người bán.'}
+                  </p>
+                  {viewDisputeModal.dispute.status === 'RESOLVED' && (
+                    <Link
+                      to="/wallet"
+                      className="inline-flex items-center gap-1.5 mt-3 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition"
+                    >
+                      <Wallet className="w-3.5 h-3.5" />
+                      Đi tới Ví & Rút tiền ngay ➔
+                    </Link>
+                  )}
+                </div>
+              </div>
+
+              {/* Customer Reason */}
+              <div>
+                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1">
+                  Lý do khiếu nại của bạn:
+                </span>
+                <p className="text-xs bg-gray-50 p-3.5 rounded-xl border border-gray-100 text-gray-800 leading-relaxed whitespace-pre-wrap">
+                  {viewDisputeModal.dispute.reason}
+                </p>
+              </div>
+
+              {/* Uploaded Evidence Images */}
+              {(() => {
+                let images: string[] = [];
+                try {
+                  if (viewDisputeModal.dispute.evidenceImages) {
+                    images = JSON.parse(viewDisputeModal.dispute.evidenceImages);
+                  }
+                } catch {}
+
+                if (images.length === 0) return null;
+
+                return (
+                  <div>
+                    <span className="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-2">
+                      Hình ảnh bằng chứng đã gửi ({images.length}):
+                    </span>
+                    <div className="flex gap-2 flex-wrap">
+                      {images.map((imgUrl, i) => {
+                        const fullUrl = imgUrl.startsWith('http') ? imgUrl : `http://localhost:5234${imgUrl.startsWith('/') ? '' : '/'}${imgUrl}`;
+                        return (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => setViewDisputeImageModal({
+                              isOpen: true,
+                              url: fullUrl,
+                              title: `Ảnh bằng chứng #${i + 1} - Đơn #${viewDisputeModal.order?.orderCode}`
+                            })}
+                            className="w-16 h-16 rounded-xl overflow-hidden border border-gray-200 hover:opacity-80 transition cursor-pointer bg-gray-50 flex items-center justify-center"
+                          >
+                            <img src={fullUrl} alt={`Evidence ${i + 1}`} className="w-full h-full object-cover" />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Admin Note if resolved or rejected */}
+              {viewDisputeModal.dispute.adminNote && (
+                <div>
+                  <span className="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1">
+                    Ghi chú phản hồi từ Admin:
+                  </span>
+                  <p className="text-xs bg-gray-50 p-3.5 rounded-xl border border-gray-100 text-gray-700 italic leading-relaxed">
+                    {viewDisputeModal.dispute.adminNote}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setViewDisputeModal({ isOpen: false, order: null, dispute: null })}
+                className="px-5 py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-bold transition cursor-pointer"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ────────────────────── DISPUTE IMAGE PREVIEW MODAL ────────────────── */}
+      {viewDisputeImageModal.isOpen && (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setViewDisputeImageModal({ isOpen: false, url: '', title: '' })}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden animate-[fadeInScale_0.2s_ease]" onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b border-gray-100 flex justify-between items-center">
+              <h3 className="font-bold text-gray-900 text-sm truncate">{viewDisputeImageModal.title}</h3>
+              <button
+                type="button"
+                onClick={() => setViewDisputeImageModal({ isOpen: false, url: '', title: '' })}
+                className="p-1 rounded-lg hover:bg-gray-100 text-gray-500 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 bg-gray-50 flex items-center justify-center max-h-[75vh] overflow-auto">
+              <img src={viewDisputeImageModal.url} alt="Evidence Preview" className="max-w-full max-h-[70vh] object-contain rounded-lg shadow-sm" />
+            </div>
+            <div className="p-3 border-t border-gray-100 flex justify-between items-center">
+              <a
+                href={viewDisputeImageModal.url}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs font-semibold text-emerald-600 hover:underline"
+              >
+                Mở ảnh gốc trong tab mới ↗
+              </a>
+              <button
+                type="button"
+                onClick={() => setViewDisputeImageModal({ isOpen: false, url: '', title: '' })}
+                className="px-4 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-semibold rounded-lg cursor-pointer"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ────────────────────── EDIT SHIPPING INFO MODAL ────────────────── */}
+      {editShippingOrder && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm" onClick={() => setEditShippingOrder(null)}>
+          <div
+            className="bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl animate-[fadeInScale_0.2s_ease]"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                  <MapPin className="w-5 h-5 text-emerald-600" />
+                  <span>Cập nhật địa chỉ nhận hàng</span>
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Đơn hàng: <strong className="font-mono text-gray-800">#{editShippingOrder.orderCode}</strong>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditShippingOrder(null)}
+                className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-full transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveShipping} className="p-6 space-y-4">
+              <div className="p-3 bg-cyan-50/70 border border-cyan-200/80 rounded-xl text-xs text-cyan-900 flex items-start gap-2">
+                <Info className="w-4 h-4 text-cyan-600 shrink-0 mt-0.5" />
+                <p className="leading-relaxed">
+                  Đơn hàng đang ở bước <strong>chuẩn bị hàng</strong> (chưa bàn giao shipper). Bạn có thể đổi tên người nhận, số điện thoại hoặc địa chỉ nhận hàng.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                  Họ và tên người nhận <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editShippingName}
+                  onChange={e => setEditShippingName(e.target.value)}
+                  placeholder="Ví dụ: Nguyễn Văn Khách"
+                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                  Số điện thoại người nhận <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="tel"
+                  required
+                  value={editShippingPhone}
+                  onChange={e => setEditShippingPhone(e.target.value)}
+                  placeholder="Ví dụ: 0901234567"
+                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                  Địa chỉ giao hàng chi tiết <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  value={editShippingAddress}
+                  onChange={e => setEditShippingAddress(e.target.value)}
+                  placeholder="Số nhà, tên đường, phường/xã, quận/huyện, tỉnh/thành phố..."
+                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                  Ghi chú cho xưởng / shipper (tuỳ chọn)
+                </label>
+                <input
+                  type="text"
+                  value={editShippingNote}
+                  onChange={e => setEditShippingNote(e.target.value)}
+                  placeholder="Ví dụ: Giao giờ hành chính, gọi trước khi đến..."
+                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
+                />
+              </div>
+
+              <div className="pt-2 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setEditShippingOrder(null)}
+                  className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 text-xs font-bold transition cursor-pointer"
+                >
+                  Huỷ bỏ
+                </button>
+                <button
+                  type="submit"
+                  disabled={editShippingSaving}
+                  className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-sm cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
+                >
+                  {editShippingSaving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Đang lưu...</span>
+                    </>
+                  ) : (
+                    <span>Lưu thông tin</span>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

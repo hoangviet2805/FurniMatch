@@ -3,7 +3,7 @@ import { useEffect, useState, useRef } from 'react';
 import logoImg from '../assets/logo.png';
 import { cartCount } from '../utils/cart';
 import { getComparisonIds } from '../utils/comparison';
-import { ChevronDown, User as UserIcon, Key, LogOut } from 'lucide-react';
+import { ChevronDown, User as UserIcon, Key, LogOut, Wallet } from 'lucide-react';
 import ChangePasswordModal from './ChangePasswordModal';
 
 type MenuItem = { to: string; label: string };
@@ -93,6 +93,15 @@ const Header = () => {
                     >
                       <UserIcon size={16} />
                       Thông tin cá nhân
+                    </Link>
+
+                    <Link 
+                      to="/wallet" 
+                      onClick={() => setIsDropdownOpen(false)}
+                      className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 transition"
+                    >
+                      <Wallet size={16} className="text-emerald-600" />
+                      Ví & Rút tiền
                     </Link>
                     
                     <button 

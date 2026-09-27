@@ -8,4 +8,12 @@ export default defineConfig({
     tailwindcss(),
     react()
   ],
+  server: {
+    proxy: {
+      '/uploads': {
+        target: 'http://localhost:5234',
+        changeOrigin: true,
+      }
+    }
+  }
 })

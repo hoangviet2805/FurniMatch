@@ -55,9 +55,23 @@ public class OrdersController : ControllerBase
                 o.OrderStatus,
                 o.PaymentExpiredAt,
                 o.CompletedAt,
+                o.PayoutStatus,
                 o.CreatedAt,
                 o.UpdatedAt,
-                ShopName = o.Seller != null ? (o.Seller.ShopName ?? o.Seller.FullName) : "Xưởng nội thất"
+                ShopName = o.Seller != null ? (o.Seller.ShopName ?? o.Seller.FullName) : "Xưởng nội thất",
+                Dispute = _db.OrderDisputes
+                    .Where(d => d.OrderId == o.OrderId)
+                    .OrderByDescending(d => d.CreatedAt)
+                    .Select(d => new {
+                        d.OrderDisputeId,
+                        d.Reason,
+                        d.Status,
+                        d.EvidenceImages,
+                        d.AdminNote,
+                        d.CreatedAt,
+                        d.ResolvedAt
+                    })
+                    .FirstOrDefault()
             })
             .ToListAsync();
         return Ok(orders);
@@ -128,9 +142,9 @@ public class OrdersController : ControllerBase
         return Ok(order);
     }
 
-    /// <summary>Customer gửi khiếu nại trong thời gian chờ giải ngân</summary>
+    /// <summary>Customer gửi khiếu nại trong vòng 3 ngày sau khi hoàn thành đơn</summary>
     [HttpPost("{id:int}/dispute"), Authorize(Roles = "CUSTOMER")]
-    public async Task<IActionResult> CreateDispute(int id, [FromBody] CreateDisputeRequest request)
+    public async Task<IActionResult> CreateDispute(int id, [FromForm] CreateDisputeForm form, [FromServices] IWebHostEnvironment env)
     {
         var order = await _db.Orders.FirstOrDefaultAsync(x => x.OrderId == id && x.CustomerId == UserId);
         if (order == null) return NotFound(new { message = "Không tìm thấy đơn hàng." });
@@ -139,25 +153,120 @@ public class OrdersController : ControllerBase
         if (order.PayoutStatus == "RELEASED")
             return BadRequest(new { message = "Đơn hàng đã được giải ngân, không thể khiếu nại." });
 
-        var existing = await _db.OrderDisputes.AnyAsync(d => d.OrderId == id && d.Status == "OPEN");
-        if (existing) return BadRequest(new { message = "Đã có khiếu nại đang xử lý cho đơn hàng này." });
+        var completedTime = order.CompletedAt ?? order.UpdatedAt;
+        if (DateTime.UtcNow > completedTime.AddDays(3))
+            return BadRequest(new { message = "Đã quá thời hạn khiếu nại. Bạn chỉ có thể khiếu nại trong vòng 3 ngày sau khi đơn hàng hoàn thành." });
+
+        var existing = await _db.OrderDisputes.AnyAsync(d => d.OrderId == id && (d.Status == "OPEN" || d.Status == "RESOLVED"));
+        if (existing) return BadRequest(new { message = "Đã có khiếu nại đang xử lý hoặc đã được chấp thuận cho đơn hàng này." });
+
+        if (string.IsNullOrWhiteSpace(form.Reason))
+            return BadRequest(new { message = "Vui lòng nhập lý do khiếu nại." });
+
+        var imageUrls = new List<string>();
+        if (form.Images != null && form.Images.Count > 0)
+        {
+            var uploadsFolder = Path.Combine(env.WebRootPath ?? Path.Combine(env.ContentRootPath, "wwwroot"), "uploads", "disputes");
+            if (!Directory.Exists(uploadsFolder)) Directory.CreateDirectory(uploadsFolder);
+
+            foreach (var file in form.Images)
+            {
+                if (file.Length > 0)
+                {
+                    var ext = Path.GetExtension(file.FileName).ToLower();
+                    var allowedExts = new[] { ".jpg", ".jpeg", ".png", ".webp" };
+                    if (!allowedExts.Contains(ext)) continue;
+
+                    var fileName = $"dispute_{id}_{Guid.NewGuid():N}{ext}";
+                    var filePath = Path.Combine(uploadsFolder, fileName);
+                    using (var stream = new FileStream(filePath, FileMode.Create))
+                    {
+                        await file.CopyToAsync(stream);
+                    }
+                    imageUrls.Add($"/uploads/disputes/{fileName}");
+                }
+            }
+        }
 
         var dispute = new FurniMatch.Api.Models.OrderDispute
         {
             OrderId = id,
             CustomerId = UserId,
-            Reason = request.Reason,
-            Status = "OPEN"
+            Reason = form.Reason.Trim(),
+            EvidenceImages = imageUrls.Count > 0 ? System.Text.Json.JsonSerializer.Serialize(imageUrls) : null,
+            Status = "OPEN",
+            CreatedAt = DateTime.UtcNow
         };
         _db.OrderDisputes.Add(dispute);
         order.PayoutStatus = "DISPUTED";
+
+        _db.Notifications.Add(new Notification
+        {
+            UserId = order.SellerId,
+            Title = "Đơn hàng có khiếu nại ⚠️",
+            Message = $"Đơn hàng #{order.OrderCode} có khiếu nại mới từ khách hàng. Khoản giải ngân tạm thời bị đóng băng để Admin xử lý.",
+            IsRead = false,
+            CreatedAt = DateTime.UtcNow
+        });
+
         await _db.SaveChangesAsync();
 
         return Ok(new { message = "Khiếu nại đã được ghi nhận. Admin sẽ xem xét và phản hồi sớm nhất." });
+    }
+
+    /// <summary>Customer cập nhật thông tin giao hàng khi đơn hàng đang ở bước chuẩn bị</summary>
+    [HttpPut("{id:int}/shipping-info"), Authorize(Roles = "CUSTOMER")]
+    public async Task<IActionResult> UpdateShippingInfo(int id, [FromBody] UpdateShippingInfoRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.RecipientName) ||
+            string.IsNullOrWhiteSpace(request.Phone) ||
+            string.IsNullOrWhiteSpace(request.Address))
+        {
+            return BadRequest(new { message = "Vui lòng nhập đầy đủ tên người nhận, số điện thoại và địa chỉ giao hàng." });
+        }
+
+        var order = await _db.Orders.FirstOrDefaultAsync(x => x.OrderId == id && x.CustomerId == UserId);
+        if (order == null) return NotFound(new { message = "Không tìm thấy đơn hàng." });
+
+        // Chỉ cho phép cập nhật khi đơn hàng đang ở bước chuẩn bị hàng (CONFIRMED, PREPARING, PRODUCING)
+        var allowedStatuses = new[] { "PREPARING", "PRODUCING", "CONFIRMED" };
+        if (!allowedStatuses.Contains(order.OrderStatus))
+        {
+            return BadRequest(new { message = "Chỉ có thể cập nhật thông tin giao hàng khi đơn hàng đang trong giai đoạn chuẩn bị hàng (chưa bàn giao vận chuyển)." });
+        }
+
+        order.RecipientName = request.RecipientName.Trim();
+        order.RecipientPhone = request.Phone.Trim();
+        order.Address = request.Address.Trim();
+        order.LegacyShippingAddress = request.Address.Trim();
+        if (request.Note != null) order.Note = request.Note.Trim();
+        order.UpdatedAt = DateTime.UtcNow;
+
+        _db.Notifications.Add(new Notification
+        {
+            UserId = order.SellerId,
+            Title = "Cập nhật thông tin giao hàng 📦",
+            Message = $"Khách hàng đã cập nhật thông tin nhận hàng cho đơn #{order.OrderCode}: {order.RecipientName} - {order.RecipientPhone} - {order.Address}",
+            IsRead = false,
+            CreatedAt = DateTime.UtcNow
+        });
+
+        await _db.SaveChangesAsync();
+
+        return Ok(new
+        {
+            message = "Cập nhật thông tin nhận hàng thành công!",
+            recipientName = order.RecipientName,
+            recipientPhone = order.RecipientPhone,
+            address = order.Address,
+            note = order.Note
+        });
     }
 }
 public sealed class CreateOrderRequest { public List<OrderLine> Items { get; set; } = []; public string RecipientName { get; set; } = ""; public string Phone { get; set; } = ""; public string Address { get; set; } = ""; public string? Note { get; set; } public decimal ShippingFee { get; set; } public string PaymentMethod { get; set; } = "SEPAY"; }
 public sealed class OrderLine { public int ProductId { get; set; } public int? VariantId { get; set; } public string Name { get; set; } = ""; public string SizeLabel { get; set; } = ""; public decimal Price { get; set; } public int Quantity { get; set; } public string? ImageUrl { get; set; } }
 public sealed class UpdateOrderStatusRequest { public string Status { get; set; } = ""; }
 public sealed class CreateDisputeRequest { public string Reason { get; set; } = ""; }
+public sealed class CreateDisputeForm { public string Reason { get; set; } = ""; public List<IFormFile>? Images { get; set; } }
+public sealed class UpdateShippingInfoRequest { public string RecipientName { get; set; } = ""; public string Phone { get; set; } = ""; public string Address { get; set; } = ""; public string? Note { get; set; } }
 

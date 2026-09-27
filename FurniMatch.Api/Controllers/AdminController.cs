@@ -536,10 +536,8 @@ namespace FurniMatch.Api.Controllers
                 .Include(d => d.Customer)
                 .AsQueryable();
 
-            if (!string.IsNullOrEmpty(status))
+            if (!string.IsNullOrEmpty(status) && status.ToUpper() != "ALL")
                 query = query.Where(d => d.Status == status.ToUpper());
-            else
-                query = query.Where(d => d.Status == "OPEN");
 
             var total = await query.CountAsync();
             var data = await query
@@ -551,10 +549,11 @@ namespace FurniMatch.Api.Controllers
                     d.OrderDisputeId,
                     d.OrderId,
                     OrderCode = d.Order != null ? d.Order.OrderCode : "N/A",
-                    OrderAmount = d.Order != null ? d.Order.Subtotal : 0,
+                    OrderAmount = d.Order != null ? (d.Order.TotalAmount > 0 ? d.Order.TotalAmount : d.Order.Subtotal) : 0,
                     CustomerName = d.Customer != null ? d.Customer.FullName : "N/A",
                     CustomerEmail = d.Customer != null ? d.Customer.Email : "N/A",
                     d.Reason,
+                    d.EvidenceImages,
                     d.Status,
                     d.AdminNote,
                     d.CreatedAt,
@@ -565,7 +564,7 @@ namespace FurniMatch.Api.Controllers
             return Ok(new { total, page, pageSize, data });
         }
 
-        /// <summary>Admin bác khiếu nại → đơn hàng được giải ngân bình thường</summary>
+        /// <summary>Admin hủy khiếu nại → đơn hàng được giải ngân bình thường</summary>
         [HttpPut("disputes/{id}/reject")]
         public async Task<IActionResult> RejectDispute(int id, [FromBody] AdminNoteDto dto)
         {
@@ -584,11 +583,22 @@ namespace FurniMatch.Api.Controllers
             if (dispute.Order != null && dispute.Order.PayoutStatus == "DISPUTED")
                 dispute.Order.PayoutStatus = "PENDING";
 
+            // Thông báo cho Customer
+            _context.Notifications.Add(new Notification
+            {
+                UserId = dispute.CustomerId,
+                Title = "Khiếu nại đã bị hủy",
+                Message = $"Khiếu nại cho đơn hàng #{dispute.Order?.OrderCode} đã bị Admin hủy." +
+                          (!string.IsNullOrWhiteSpace(dto.Note) ? $" Lý do: {dto.Note}" : ""),
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow
+            });
+
             await _context.SaveChangesAsync();
-            return Ok(new { message = "Đã bác khiếu nại. Đơn hàng sẽ được giải ngân theo lịch tự động." });
+            return Ok(new { message = "Đã hủy khiếu nại. Đơn hàng sẽ được giải ngân theo lịch tự động." });
         }
 
-        /// <summary>Admin duyệt khiếu nại → giải ngân bị đóng băng (xử lý thủ công)</summary>
+        /// <summary>Admin duyệt khiếu nại → hoàn tiền vào ví người dùng, chặn giải ngân cho seller</summary>
         [HttpPut("disputes/{id}/resolve")]
         public async Task<IActionResult> ResolveDispute(int id, [FromBody] AdminNoteDto dto)
         {
@@ -603,12 +613,61 @@ namespace FurniMatch.Api.Controllers
             dispute.AdminNote = dto.Note;
             dispute.ResolvedAt = DateTime.UtcNow;
 
-            // Đánh dấu đơn là DISPUTED — tiền không giải ngân tự động
+            var refundAmount = dispute.Order != null ? (dispute.Order.TotalAmount > 0 ? dispute.Order.TotalAmount : dispute.Order.Subtotal) : 0;
+            if (refundAmount > 0)
+            {
+                var wallet = await _context.EscrowWallets.FirstOrDefaultAsync(w => w.UserId == dispute.CustomerId);
+                if (wallet == null)
+                {
+                    wallet = new EscrowWallet { UserId = dispute.CustomerId, AvailableBalance = 0, FrozenBalance = 0, UpdatedAt = DateTime.UtcNow };
+                    _context.EscrowWallets.Add(wallet);
+                    await _context.SaveChangesAsync();
+                }
+
+                wallet.AvailableBalance += refundAmount;
+                wallet.UpdatedAt = DateTime.UtcNow;
+
+                _context.EscrowTransactions.Add(new EscrowTransaction
+                {
+                    EscrowWalletId = wallet.EscrowWalletId,
+                    OrderId = dispute.OrderId,
+                    Amount = refundAmount,
+                    TransactionType = "REFUND",
+                    Description = $"Hoàn tiền khiếu nại đơn hàng #{dispute.Order?.OrderCode}",
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+
+            // Đánh dấu đơn là REFUNDED — tiền không giải ngân cho seller
             if (dispute.Order != null)
-                dispute.Order.PayoutStatus = "DISPUTED";
+                dispute.Order.PayoutStatus = "REFUNDED";
+
+            // Thông báo cho Customer
+            _context.Notifications.Add(new Notification
+            {
+                UserId = dispute.CustomerId,
+                Title = "Khiếu nại được chấp thuận 💰",
+                Message = $"Khiếu nại cho đơn hàng #{dispute.Order?.OrderCode} đã được Admin chấp thuận. Số tiền {refundAmount:N0}đ đã được hoàn vào số dư ví của bạn." +
+                          (!string.IsNullOrWhiteSpace(dto.Note) ? $" Ghi chú Admin: {dto.Note}" : ""),
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow
+            });
+
+            // Thông báo cho Seller
+            if (dispute.Order != null)
+            {
+                _context.Notifications.Add(new Notification
+                {
+                    UserId = dispute.Order.SellerId,
+                    Title = "Khiếu nại đơn hàng đã được giải quyết",
+                    Message = $"Đơn hàng #{dispute.Order.OrderCode} đã được Admin chấp thuận khiếu nại và hoàn tiền cho người mua.",
+                    IsRead = false,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
 
             await _context.SaveChangesAsync();
-            return Ok(new { message = "Đã chấp nhận khiếu nại. Đơn hàng sẽ được xử lý thủ công." });
+            return Ok(new { message = "Đã chấp nhận khiếu nại. Số tiền đã được hoàn vào ví của khách hàng." });
         }
 
         /// <summary>
