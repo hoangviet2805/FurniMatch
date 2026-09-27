@@ -18,6 +18,7 @@ interface ShopInfo {
   ward: string;
   addressDetail: string;
   phone?: string;
+  isCustomSizeSupported?: boolean;
 }
 
 interface Product {

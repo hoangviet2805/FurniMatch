@@ -44,7 +44,7 @@ namespace FurniMatch.Api.Controllers
                 .Include(p => p.Seller)
                 .Include(p => p.ProductVariants)
                 .Include(p => p.ProductImages)
-                .Where(p => p.Status == "ACTIVE");
+                .Where(p => p.Status == "ACTIVE" || p.Status == "OUT_OF_STOCK");
 
             if (categoryId.HasValue)
             {
@@ -140,7 +140,7 @@ namespace FurniMatch.Api.Controllers
                 .Include(p => p.Seller)
                 .Include(p => p.ProductVariants)
                 .Include(p => p.ProductImages)
-                .FirstOrDefaultAsync(p => p.ProductId == id && p.Status == "ACTIVE");
+                .FirstOrDefaultAsync(p => p.ProductId == id && (p.Status == "ACTIVE" || p.Status == "OUT_OF_STOCK"));
 
             return product == null
                 ? NotFound(new { message = "Không tìm thấy sản phẩm." })
@@ -199,6 +199,7 @@ namespace FurniMatch.Api.Controllers
                             {
                                 ProductId = product.ProductId,
                                 SizeName = v.SizeName,
+                                MaterialName = v.MaterialName,
                                 Width = v.Width,
                                 Height = v.Height,
                                 Length = v.Length,
@@ -302,6 +303,7 @@ namespace FurniMatch.Api.Controllers
                             {
                                 ProductId = product.ProductId,
                                 SizeName = v.SizeName,
+                                MaterialName = v.MaterialName,
                                 Width = v.Width,
                                 Height = v.Height,
                                 Length = v.Length,

@@ -110,13 +110,6 @@ const Home = () => {
             <Link to="/products" className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-3 rounded-lg font-medium text-lg transition-colors shadow-md">
               Khám Phá Sản Phẩm
             </Link>
-            
-            {user?.role === 'CUSTOMER' && (
-              <Link to="/request-quotation" className="bg-white hover:bg-gray-50 text-emerald-700 border border-emerald-200 px-8 py-3 rounded-lg font-medium text-lg transition-colors shadow-sm">
-                Tạo Yêu Cầu Khảo Giá
-              </Link>
-            )}
-            
             {!user && (
               <Link to="/register" className="bg-white hover:bg-gray-50 text-emerald-700 border border-emerald-200 px-8 py-3 rounded-lg font-medium text-lg transition-colors shadow-sm">
                 Tham Gia Ngay

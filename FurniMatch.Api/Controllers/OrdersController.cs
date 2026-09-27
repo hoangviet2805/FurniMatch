@@ -40,6 +40,20 @@ public class OrdersController : ControllerBase
             }
             
             variant.Stock -= item.Quantity;
+            if (variant.Stock <= 0)
+            {
+                try
+                {
+                    var sellerEmail = (await _db.Users.FindAsync(sellerId))?.Email;
+                    if (!string.IsNullOrEmpty(sellerEmail))
+                    {
+                        string lbl = string.IsNullOrEmpty(item.SizeLabel) ? "Tiêu chuẩn" : item.SizeLabel;
+                        string subj = $"[FurniMatch] Thông báo hết hàng: {item.Name}";
+                        string body = $@"<div style='font-family: Arial; padding: 20px; color: #333;'><h2 style='color: #e11d48;'>Thông báo hết hàng</h2><p>Sản phẩm <strong>{item.Name}</strong> - phân loại <strong>{lbl}</strong> hiện đã hết số lượng trong kho.</p><p>Vui lòng đăng nhập vào trang quản trị để cập nhật thêm kho hàng nếu bạn muốn tiếp tục bán sản phẩm này.</p><br/><p>Trân trọng,<br/>FurniMatch</p></div>";
+                        await _emailService.SendEmailAsync(sellerEmail, subj, body);
+                    }
+                } catch { }
+            }
         }
 
         foreach (var product in products)
@@ -56,6 +70,22 @@ public class OrdersController : ControllerBase
         try { var qrCodeUrl = await _sepay.CreateQrUrlAsync(order); return Ok(new { orderId = order.OrderId, orderCode = order.OrderCode, qrCodeUrl, expiredAt = order.PaymentExpiredAt }); }
         catch (Exception ex) { order.PaymentStatus = "FAILED"; await _db.SaveChangesAsync(); return BadRequest(new { message = ex.Message }); }
     }
+    [HttpDelete("my/cancelled"), Authorize(Roles = "CUSTOMER")]
+    public async Task<IActionResult> DeleteCancelledOrders()
+    {
+        var cancelledOrders = await _db.Orders
+            .Where(x => x.CustomerId == UserId && x.OrderStatus == "CANCELLED")
+            .ToListAsync();
+            
+        if (cancelledOrders.Any())
+        {
+            _db.Orders.RemoveRange(cancelledOrders);
+            await _db.SaveChangesAsync();
+        }
+        
+        return Ok(new { message = "Đã xóa tất cả đơn hàng đã hủy" });
+    }
+
     [HttpGet("my"), Authorize(Roles = "CUSTOMER")]
     public async Task<IActionResult> Mine()
     {
@@ -63,13 +93,13 @@ public class OrdersController : ControllerBase
         var expiredOrders = await _db.Orders.Where(x => x.CustomerId == UserId && x.PaymentStatus == "PENDING" && x.PaymentExpiredAt <= now).ToListAsync();
         if (expiredOrders.Any())
         {
-            foreach (var o in expiredOrders) { o.PaymentStatus = "EXPIRED"; o.OrderStatus = "CANCELLED"; o.LegacyStatus = "CANCELLED"; }
+            foreach (var o in expiredOrders) { await CancelOrderAsync(o); }
             await _db.SaveChangesAsync();
         }
 
         var orders = await _db.Orders
             .Where(x => x.CustomerId == UserId)
-            .OrderByDescending(x => x.UpdatedAt)
+            .OrderByDescending(x => x.CreatedAt)
             .Select(o => new {
                 o.OrderId,
                 o.OrderCode,
@@ -116,10 +146,10 @@ public class OrdersController : ControllerBase
         var expiredOrders = await _db.Orders.Where(x => x.SellerId == UserId && x.PaymentStatus == "PENDING" && x.PaymentExpiredAt <= now).ToListAsync();
         if (expiredOrders.Any())
         {
-            foreach (var o in expiredOrders) { o.PaymentStatus = "EXPIRED"; o.OrderStatus = "CANCELLED"; o.LegacyStatus = "CANCELLED"; }
+            foreach (var o in expiredOrders) { await CancelOrderAsync(o); }
             await _db.SaveChangesAsync();
         }
-        return Ok(await _db.Orders.Where(x => x.SellerId == UserId).OrderByDescending(x => x.UpdatedAt).ToListAsync());
+        return Ok(await _db.Orders.Where(x => x.SellerId == UserId).OrderByDescending(x => x.CreatedAt).ToListAsync());
     }
     [HttpGet("{id:int}")] public async Task<IActionResult> Get(int id)
     {
@@ -127,7 +157,7 @@ public class OrdersController : ControllerBase
         if (order == null || (order.CustomerId != UserId && order.SellerId != UserId)) return NotFound();
         if (order.PaymentStatus == "PENDING" && order.PaymentExpiredAt <= DateTime.UtcNow)
         {
-            order.PaymentStatus = "EXPIRED"; order.OrderStatus = "CANCELLED"; order.LegacyStatus = "CANCELLED"; await _db.SaveChangesAsync();
+            await CancelOrderAsync(order); await _db.SaveChangesAsync();
         }
         else if (order.PaymentStatus == "PENDING")
         {
@@ -136,6 +166,7 @@ public class OrdersController : ControllerBase
                 if (await _sepay.HasMatchingPaymentAsync(order))
                 {
                     order.PaymentStatus = "PAID"; order.OrderStatus = "CONFIRMED"; order.LegacyStatus = "CONFIRMED"; order.UpdatedAt = DateTime.UtcNow; await _db.SaveChangesAsync();
+                    await SendOrderEmailToSeller(order.SellerId, order.OrderCode, order.TotalAmount);
                 }
             }
             catch { /* Keep the order pending; another poll can retry. */ }
@@ -244,13 +275,44 @@ public class OrdersController : ControllerBase
         return Ok(order);
     }
 
+    private async Task CancelOrderAsync(Order order)
+    {
+        if (order.OrderStatus == "CANCELLED") return;
+        order.PaymentStatus = "EXPIRED";
+        order.OrderStatus = "CANCELLED";
+        order.LegacyStatus = "CANCELLED";
+        if (!string.IsNullOrEmpty(order.ItemsJson))
+        {
+            try
+            {
+                var items = JsonSerializer.Deserialize<List<OrderLine>>(order.ItemsJson, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+                if (items != null)
+                {
+                    foreach (var item in items)
+                    {
+                        var variant = item.VariantId.HasValue 
+                            ? await _db.ProductVariants.FirstOrDefaultAsync(v => v.VariantId == item.VariantId.Value)
+                            : await _db.ProductVariants.FirstOrDefaultAsync(v => v.ProductId == item.ProductId);
+                        if (variant != null)
+                        {
+                            variant.Stock += item.Quantity;
+                            var product = await _db.Products.FindAsync(variant.ProductId);
+                            if (product != null && product.Status == "OUT_OF_STOCK") product.Status = "ACTIVE";
+                        }
+                    }
+                }
+            }
+            catch { }
+        }
+    }
+
     [HttpPatch("{id:int}/cancel"), Authorize(Roles = "CUSTOMER")]
     public async Task<IActionResult> Cancel(int id)
     {
         var order = await _db.Orders.FirstOrDefaultAsync(x => x.OrderId == id && x.CustomerId == UserId);
         if (order == null) return NotFound();
         if (order.PaymentStatus == "PAID") return BadRequest(new { message = "Đơn đã thanh toán, không thể hủy tại đây." });
-        order.PaymentStatus = "EXPIRED"; order.OrderStatus = "CANCELLED"; order.LegacyStatus = "CANCELLED";
+        await CancelOrderAsync(order);
         await _db.SaveChangesAsync();
         return Ok(order);
     }
@@ -374,6 +436,43 @@ public class OrdersController : ControllerBase
             address = order.Address,
             note = order.Note
         });
+    }
+
+    private async Task SendOrderEmailToSeller(int sellerId, string orderCode, decimal amount)
+    {
+        var seller = await _db.Users.FindAsync(sellerId);
+        if (seller != null && !string.IsNullOrEmpty(seller.Email))
+        {
+            string subject = $"🎉 Bạn có đơn hàng mới - {orderCode}";
+            string htmlBody = $@"
+            <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05);'>
+                <div style='background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 30px; text-align: center;'>
+                    <h1 style='color: white; margin: 0; font-size: 24px; font-weight: 700;'>Bạn vừa nhận được đơn hàng mới! 🎊</h1>
+                </div>
+                <div style='padding: 30px; background-color: #ffffff;'>
+                    <p style='font-size: 16px; color: #374151; line-height: 1.6; margin-top: 0;'>Chào <strong>{seller.FullName ?? "Nhà sản xuất"}</strong>,</p>
+                    <p style='font-size: 16px; color: #374151; line-height: 1.6;'>Khách hàng vừa hoàn tất thanh toán thành công cho đơn hàng <strong>{orderCode}</strong>.</p>
+                    
+                    <div style='background-color: #f3f4f6; border-left: 4px solid #10b981; padding: 15px 20px; border-radius: 4px; margin: 25px 0;'>
+                        <p style='margin: 0; font-size: 14px; color: #6b7280; text-transform: uppercase; font-weight: bold;'>Mã đơn hàng</p>
+                        <p style='margin: 5px 0 0 0; font-size: 20px; color: #111827; font-weight: 800;'>{orderCode}</p>
+                        
+                        <p style='margin: 15px 0 0 0; font-size: 14px; color: #6b7280; text-transform: uppercase; font-weight: bold;'>Tổng tiền thanh toán</p>
+                        <p style='margin: 5px 0 0 0; font-size: 20px; color: #10b981; font-weight: 800;'>{amount:N0} VNĐ</p>
+                    </div>
+
+                    <p style='font-size: 16px; color: #374151; line-height: 1.6;'>Vui lòng đăng nhập vào hệ thống để kiểm tra chi tiết đơn hàng và tiến hành chuẩn bị sản phẩm.</p>
+                    
+                    <div style='text-align: center; margin-top: 35px; margin-bottom: 20px;'>
+                        <a href='http://localhost:5173/seller/orders' style='background-color: #10b981; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block; box-shadow: 0 4px 6px rgba(16, 185, 129, 0.25);'>Xem Chi Tiết Đơn Hàng</a>
+                    </div>
+                </div>
+                <div style='background-color: #f9fafb; padding: 20px; text-align: center; border-top: 1px solid #e5e7eb;'>
+                    <p style='margin: 0; font-size: 13px; color: #6b7280;'>© 2026 FurniMatch. Trân trọng cảm ơn bạn đã hợp tác cùng chúng tôi.</p>
+                </div>
+            </div>";
+            await _emailService.SendEmailAsync(seller.Email, subject, htmlBody);
+        }
     }
 }
 public sealed class CreateOrderRequest { public List<OrderLine> Items { get; set; } = []; public string RecipientName { get; set; } = ""; public string Phone { get; set; } = ""; public string Address { get; set; } = ""; public string? Note { get; set; } public decimal ShippingFee { get; set; } public string PaymentMethod { get; set; } = "SEPAY"; }

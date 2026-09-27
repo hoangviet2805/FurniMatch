@@ -5,7 +5,7 @@ import {
   CheckCircle2, Clock, XCircle, Package, Truck, Hammer,
   ClipboardList, Store, Info, Star, Upload, X, ChevronRight,
   Image as ImageIcon, Video, Loader2, ShieldAlert, AlertTriangle, Wallet,
-  MapPin, Edit3
+  MapPin, Edit3, Trash2
 } from 'lucide-react';
 
 const money = (n: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n);
@@ -109,6 +109,9 @@ export default function Orders() {
   const [editShippingAddress, setEditShippingAddress] = useState('');
   const [editShippingNote, setEditShippingNote] = useState('');
   const [editShippingSaving, setEditShippingSaving] = useState(false);
+  
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const ITEMS_PER_PAGE = 10;
 
@@ -128,7 +131,7 @@ export default function Orders() {
     setLoading(true);
     setCurrentPage(1);
     api.get('/orders/my')
-      .then(r => setOrders(r.data))
+      .then(r => setOrders(r.data.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())))
       .finally(() => setLoading(false));
   };
 
@@ -455,11 +458,12 @@ export default function Orders() {
         </div>
 
         {orders.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 p-1.5 bg-gray-100/90 rounded-2xl border border-gray-200/80 w-fit shadow-xs">
+          <div className="flex flex-col sm:flex-row items-end sm:items-center gap-3 w-full sm:w-auto max-w-full">
+            <div className="flex overflow-x-auto items-center gap-2 p-1.5 bg-gray-100/90 rounded-2xl border border-gray-200/80 w-full sm:w-auto max-w-full shadow-xs [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
             <button
               type="button"
               onClick={() => { setOrderStatusFilter('ALL'); setCurrentPage(1); }}
-              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 cursor-pointer shrink-0 whitespace-nowrap ${
                 orderStatusFilter === 'ALL'
                   ? 'bg-white text-gray-900 shadow-sm'
                   : 'text-gray-600 hover:text-gray-900'
@@ -476,7 +480,7 @@ export default function Orders() {
             <button
               type="button"
               onClick={() => { setOrderStatusFilter('INCOMPLETE'); setCurrentPage(1); }}
-              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 cursor-pointer shrink-0 whitespace-nowrap ${
                 orderStatusFilter === 'INCOMPLETE'
                   ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/20'
                   : 'text-amber-800 hover:bg-amber-100/60'
@@ -494,7 +498,7 @@ export default function Orders() {
             <button
               type="button"
               onClick={() => { setOrderStatusFilter('COMPLETED'); setCurrentPage(1); }}
-              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 cursor-pointer shrink-0 whitespace-nowrap ${
                 orderStatusFilter === 'COMPLETED'
                   ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/20'
                   : 'text-emerald-800 hover:bg-emerald-100/60'
@@ -513,7 +517,7 @@ export default function Orders() {
               <button
                 type="button"
                 onClick={() => { setOrderStatusFilter('CANCELLED'); setCurrentPage(1); }}
-                className={`px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                className={`px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 cursor-pointer shrink-0 whitespace-nowrap ${
                   orderStatusFilter === 'CANCELLED'
                     ? 'bg-rose-600 text-white shadow-sm shadow-rose-600/20'
                     : 'text-rose-700 hover:bg-rose-100/60'
@@ -526,6 +530,19 @@ export default function Orders() {
                 }`}>
                   {cancelledCount}
                 </span>
+              </button>
+            )}
+            </div>
+
+            {cancelledCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmDelete(true)}
+                title="Dọn dẹp rác (Xóa tất cả đơn đã hủy)"
+                className="px-3 py-2 rounded-xl text-sm font-bold text-gray-500 hover:bg-rose-100 hover:text-rose-600 transition-all flex items-center gap-2 cursor-pointer shrink-0 whitespace-nowrap border border-transparent hover:border-rose-200"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Dọn dẹp rác</span>
               </button>
             )}
           </div>
@@ -1532,6 +1549,58 @@ export default function Orders() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {showConfirmDelete && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" style={{ animation: 'fadeInScale 0.2s ease-out' }}>
+          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl p-6">
+            <div className="flex flex-col items-center text-center">
+              <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mb-4">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Dọn dẹp rác</h3>
+              <p className="text-sm text-gray-500 mb-6">Bạn có chắc chắn muốn xóa tất cả các đơn hàng đã hủy không? Hành động này không thể hoàn tác.</p>
+              
+              <div className="flex items-center gap-3 w-full">
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmDelete(false)}
+                  disabled={isDeleting}
+                  className="flex-1 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-bold transition disabled:opacity-50"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={() => {
+                    setIsDeleting(true);
+                    api.delete('/orders/my/cancelled')
+                      .then(() => {
+                        setAlertModal({ type: 'success', title: 'Thành công', message: 'Đã xóa tất cả đơn hàng đã hủy.' });
+                        fetchOrders();
+                        setShowConfirmDelete(false);
+                      })
+                      .catch(e => {
+                        setAlertModal({ type: 'error', title: 'Lỗi', message: e.response?.data?.message || 'Không thể xóa đơn hàng.' });
+                      })
+                      .finally(() => setIsDeleting(false));
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-sm font-bold transition flex items-center justify-center gap-2 disabled:opacity-50 shadow-sm shadow-rose-200"
+                >
+                  {isDeleting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Đang xóa...</span>
+                    </>
+                  ) : (
+                    <span>Xác nhận xóa</span>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

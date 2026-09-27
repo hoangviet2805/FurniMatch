@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import api from '../utils/api';
 import { PauseCircle, PlayCircle, Trash2, AlertTriangle, CheckCircle, Info, PackagePlus, Plus, X, UploadCloud, Edit } from 'lucide-react';
 
@@ -17,7 +17,7 @@ const ManageProducts = () => {
     description: ''
   });
   const [materials, setMaterials] = useState(['']);
-  const [variants, setVariants] = useState([{ id: 1, sizeName: '', width: '', height: '', length: '', price: '', productionDays: '', stock: '' }]);
+  const [variants, setVariants] = useState([{ id: 1, sizeName: '', materialName: '', width: '', height: '', length: '', price: '', productionDays: '', stock: '' }]);
   const [thumbnailImage, setThumbnailImage] = useState<{file: File, preview: string} | null>(null);
   const [additionalImages, setAdditionalImages] = useState<{file: File, preview: string}[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -103,7 +103,7 @@ const ManageProducts = () => {
   };
 
   const addVariant = () => {
-    setVariants([...variants, { id: Date.now(), sizeName: '', width: '', height: '', length: '', price: '', productionDays: '', stock: '' }]);
+    setVariants([...variants, { id: Date.now(), sizeName: '', materialName: '', width: '', height: '', length: '', price: '', productionDays: '', stock: '' }]);
   };
 
   const removeVariant = (index: number) => {
@@ -197,7 +197,7 @@ const ManageProducts = () => {
       form.append('material', JSON.stringify(materials.filter(m => m.trim() !== '')));
 
       form.append('variantsJson', JSON.stringify(variants.map(v => ({
-        sizeName: v.sizeName,
+        sizeName: v.sizeName, materialName: v.materialName,
         width: Number(v.width),
         height: Number(v.height),
         length: Number(v.length),
@@ -252,6 +252,19 @@ const ManageProducts = () => {
     if (Number(editingFormData.categoryId) !== Number(editingProduct.categoryId)) return true;
     if ((editingFormData.description || '').trim() !== (editingProduct.description || '').trim()) return true;
     if (Boolean(editingFormData.customSizeSupported) !== Boolean(editingProduct.customSizeSupported)) return true;
+
+    // 1.5. Kiểm tra chất liệu
+    const currentMaterials = JSON.stringify(editingMaterials.filter(m => m.trim() !== ''));
+    let origMaterials = '[]';
+    if (editingProduct.material) {
+      try {
+        const parsed = JSON.parse(editingProduct.material);
+        origMaterials = JSON.stringify(Array.isArray(parsed) ? parsed.filter((m: any) => typeof m === 'string' && m.trim() !== '') : [editingProduct.material]);
+      } catch {
+        origMaterials = JSON.stringify([editingProduct.material]);
+      }
+    }
+    if (currentMaterials !== origMaterials) return true;
 
     // 2. Kiểm tra có chọn ảnh đại diện mới hoặc ảnh phụ mới không
     if (editingNewThumbnailImage !== null) return true;
@@ -318,7 +331,7 @@ const ManageProducts = () => {
       form.append('customSizeSupported', editingFormData.customSizeSupported ? 'true' : 'false');
 
       form.append('variantsJson', JSON.stringify(editingVariants.map(v => ({
-        sizeName: v.sizeName,
+        sizeName: v.sizeName, materialName: v.materialName,
         width: Number(v.width),
         height: Number(v.height),
         length: Number(v.length),
@@ -530,7 +543,7 @@ const ManageProducts = () => {
                   />
                 </div>
 
-                <div className="mt-5">
+                <div className="mt-5 hidden">
                   <div className="flex items-center justify-between mb-2">
                     <label className="block text-xs font-bold uppercase tracking-wider text-gray-700">
                       Chất liệu sản phẩm
@@ -585,6 +598,7 @@ const ManageProducts = () => {
                     <thead>
                       <tr className="bg-gray-100/70 text-gray-600 text-xs font-semibold uppercase tracking-wider">
                         <th className="p-3 border-b border-gray-200">Tên phân loại (VD: 1m6 x 2m) *</th>
+                        <th className="p-3 border-b border-gray-200">Chất liệu *</th>
                         <th className="p-3 border-b border-gray-200">Kích thước D x R x C (cm)</th>
                         <th className="p-3 border-b border-gray-200">Giá bán (VNĐ) *</th>
                         <th className="p-3 border-b border-gray-200">Thời gian thi công (Ngày) *</th>
@@ -602,6 +616,15 @@ const ManageProducts = () => {
                               className="w-full p-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 outline-none"
                               value={v.sizeName}
                               onChange={(e) => handleVariantChange(index, 'sizeName', e.target.value)}
+                            />
+                          </td>
+                          <td className="p-3">
+                            <input
+                              required
+                              placeholder="VD: Gỗ, Da"
+                              className="w-full p-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 outline-none"
+                              value={v.materialName || ''}
+                              onChange={(e) => handleVariantChange(index, 'materialName', e.target.value)}
                             />
                           </td>
                           <td className="p-3">
@@ -938,7 +961,7 @@ const ManageProducts = () => {
                       placeholder="Ví dụ: Tủ quần áo gỗ sồi Bắc Âu 4 cánh..."
                       className="w-full px-4 py-2.5 bg-gray-50/60 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 focus:bg-white transition-all outline-none"
                       value={editingFormData.name}
-                      onChange={handleChange}
+                      onChange={(e) => setEditingFormData(prev => ({ ...prev, name: e.target.value }))}
                     />
                   </div>
 
@@ -970,11 +993,11 @@ const ManageProducts = () => {
                     placeholder="Mô tả chi tiết về kiểu dáng, chất liệu gỗ, phong cách, đặc điểm nổi bật của sản phẩm..."
                     className="w-full px-4 py-2.5 bg-gray-50/60 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 focus:bg-white transition-all outline-none leading-relaxed"
                     value={editingFormData.description}
-                    onChange={handleChange}
+                    onChange={(e) => setEditingFormData(prev => ({ ...prev, description: e.target.value }))}
                   />
                 </div>
 
-                <div className="mt-5">
+                <div className="mt-5 hidden">
                   <div className="flex items-center justify-between mb-2">
                     <label className="block text-xs font-bold uppercase tracking-wider text-gray-700">
                       Chất liệu sản phẩm
@@ -1029,6 +1052,7 @@ const ManageProducts = () => {
                     <thead>
                       <tr className="bg-gray-100/70 text-gray-600 text-xs font-semibold uppercase tracking-wider">
                         <th className="p-3 border-b border-gray-200">Tên phân loại (VD: 1m6 x 2m) *</th>
+                        <th className="p-3 border-b border-gray-200">Chất liệu *</th>
                         <th className="p-3 border-b border-gray-200">Kích thước D x R x C (cm)</th>
                         <th className="p-3 border-b border-gray-200">Giá bán (VNĐ) *</th>
                         <th className="p-3 border-b border-gray-200">Thời gian thi công (Ngày) *</th>
@@ -1046,6 +1070,15 @@ const ManageProducts = () => {
                               className="w-full p-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 outline-none"
                               value={v.sizeName}
                               onChange={(e) => handleEditVariantChange(index, 'sizeName', e.target.value)}
+                            />
+                          </td>
+                          <td className="p-3">
+                            <input
+                              required
+                              placeholder="VD: Gỗ, Da"
+                              className="w-full p-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 outline-none"
+                              value={v.materialName || ''}
+                              onChange={(e) => handleEditVariantChange(index, 'materialName', e.target.value)}
                             />
                           </td>
                           <td className="p-3">

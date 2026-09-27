@@ -39,9 +39,9 @@ const Footer: React.FC = () => {
   if (!setting) return null;
 
   return (
-    <footer className="bg-gradient-to-r from-emerald-50 to-teal-50 text-gray-800 pt-16 pb-8 border-t border-emerald-100">
+    <footer className="bg-gradient-to-r from-emerald-50 to-teal-50 text-gray-800 py-8 border-t border-emerald-100">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 md:gap-8 mb-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
           
           {/* Column 1: About FurniMatch */}
           <div>
@@ -114,7 +114,7 @@ const Footer: React.FC = () => {
         </div>
 
         {/* Bottom Bar */}
-        <div className="pt-8 border-t border-emerald-100 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div className="pt-6 border-t border-emerald-100 flex flex-col md:flex-row justify-between items-center gap-4">
           <p className="text-sm text-gray-600">
             &copy; {new Date().getFullYear()} FurniMatch. All rights reserved.
           </p>
