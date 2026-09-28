@@ -21,11 +21,13 @@ namespace FurniMatch.Api.Controllers
     {
         private readonly FurniMatchDbContext _context;
         private readonly IWebHostEnvironment _env;
+        private readonly IPhotoService _photoService;
 
-        public ProductsController(FurniMatchDbContext context, IWebHostEnvironment env)
+        public ProductsController(FurniMatchDbContext context, IWebHostEnvironment env, IPhotoService photoService)
         {
             _context = context;
             _env = env;
+            _photoService = photoService;
         }
 
         [HttpGet]
@@ -220,34 +222,24 @@ namespace FurniMatch.Api.Controllers
             // Handle images
             if (request.Images != null && request.Images.Any())
             {
-                var webRoot = _env.WebRootPath ?? Path.Combine(_env.ContentRootPath, "wwwroot");
-                var uploadsFolder = Path.Combine(webRoot, "uploads", "products");
-                if (!Directory.Exists(uploadsFolder))
-                {
-                    Directory.CreateDirectory(uploadsFolder);
-                }
-
                 int order = 0;
                 foreach (var file in request.Images)
                 {
                     if (file.Length > 0)
                     {
-                        var uniqueFileName = Guid.NewGuid().ToString() + "_" + file.FileName;
-                        var filePath = Path.Combine(uploadsFolder, uniqueFileName);
-
-                        using (var fileStream = new FileStream(filePath, FileMode.Create))
+                        var imageUrl = await _photoService.AddPhotoAsync(file);
+                        
+                        if (!string.IsNullOrEmpty(imageUrl))
                         {
-                            await file.CopyToAsync(fileStream);
+                            var productImage = new ProductImage
+                            {
+                                ProductId = product.ProductId,
+                                ImageUrl = imageUrl,
+                                IsThumbnail = order == request.ThumbnailIndex,
+                                DisplayOrder = order
+                            };
+                            _context.ProductImages.Add(productImage);
                         }
-
-                        var productImage = new ProductImage
-                        {
-                            ProductId = product.ProductId,
-                            ImageUrl = $"/uploads/products/{uniqueFileName}",
-                            IsThumbnail = order == request.ThumbnailIndex,
-                            DisplayOrder = order
-                        };
-                        _context.ProductImages.Add(productImage);
                         order++;
                     }
                 }
@@ -359,11 +351,6 @@ namespace FurniMatch.Api.Controllers
             // Handle new images
             if (request.NewImages != null && request.NewImages.Any())
             {
-                if (!Directory.Exists(uploadsFolder))
-                {
-                    Directory.CreateDirectory(uploadsFolder);
-                }
-
                 int newIndex = 0;
                 int currentMaxOrder = product.ProductImages.Any() ? product.ProductImages.Max(i => i.DisplayOrder) : -1;
 
@@ -371,29 +358,26 @@ namespace FurniMatch.Api.Controllers
                 {
                     if (file.Length > 0)
                     {
-                        var uniqueFileName = Guid.NewGuid().ToString() + "_" + file.FileName;
-                        var filePath = Path.Combine(uploadsFolder, uniqueFileName);
+                        var imageUrl = await _photoService.AddPhotoAsync(file);
 
-                        using (var fileStream = new FileStream(filePath, FileMode.Create))
+                        if (!string.IsNullOrEmpty(imageUrl))
                         {
-                            await file.CopyToAsync(fileStream);
-                        }
+                            bool isThumb = request.NewThumbnailIndex.HasValue && request.NewThumbnailIndex.Value == newIndex;
 
-                        bool isThumb = request.NewThumbnailIndex.HasValue && request.NewThumbnailIndex.Value == newIndex;
-
-                        var productImage = new ProductImage
-                        {
-                            ProductId = product.ProductId,
-                            ImageUrl = $"/uploads/products/{uniqueFileName}",
-                            IsThumbnail = isThumb,
-                            DisplayOrder = currentMaxOrder + 1 + newIndex
-                        };
-                        _context.ProductImages.Add(productImage);
-                        
-                        if (isThumb) {
-                            // If this is the new thumbnail, ensure others are false
-                            foreach (var img in product.ProductImages) img.IsThumbnail = false;
-                            productImage.IsThumbnail = true;
+                            var productImage = new ProductImage
+                            {
+                                ProductId = product.ProductId,
+                                ImageUrl = imageUrl,
+                                IsThumbnail = isThumb,
+                                DisplayOrder = currentMaxOrder + 1 + newIndex
+                            };
+                            _context.ProductImages.Add(productImage);
+                            
+                            if (isThumb) {
+                                // If this is the new thumbnail, ensure others are false
+                                foreach (var img in product.ProductImages) img.IsThumbnail = false;
+                                productImage.IsThumbnail = true;
+                            }
                         }
 
                         newIndex++;

@@ -29,6 +29,10 @@ builder.Services.AddDbContext<FurniMatchDbContext>(options =>
 
 // Add Email Service
 builder.Services.AddScoped<IEmailService, EmailService>();
+
+// Add Photo Service (Cloudinary)
+builder.Services.AddScoped<IPhotoService, PhotoService>();
+
 builder.Services.AddHttpClient<MomoPaymentService>();
 builder.Services.Configure<SePayOptions>(builder.Configuration.GetSection("SePay"));
 builder.Services.AddHttpClient<SePayPaymentService>(client => client.BaseAddress = new Uri("https://userapi.sepay.vn/v2/"));
