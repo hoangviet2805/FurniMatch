@@ -333,8 +333,11 @@ const AdminDashboard = () => {
         body: formData
       });
       if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng xuất và đăng nhập lại!');
+        }
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || 'Lỗi tải ảnh');
+        throw new Error(errorData.message || `Lỗi tải ảnh (${response.status}: ${response.statusText})`);
       }
       setAlertModal({ isOpen: true, message: 'Tải ảnh banner thành công!', type: 'success' });
       fetchBanners();
