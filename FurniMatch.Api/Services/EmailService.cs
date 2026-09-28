@@ -41,13 +41,13 @@ namespace FurniMatch.Api.Services
                     return;
                 }
 
-                var smtpClient = new SmtpClient(host, port)
+                using var smtpClient = new SmtpClient(host, port)
                 {
                     EnableSsl = true,
                     UseDefaultCredentials = false,
                     Credentials = new NetworkCredential(senderEmail, senderPassword),
                     DeliveryMethod = SmtpDeliveryMethod.Network,
-                    Timeout = 5000
+                    Timeout = 30000 // 30 seconds
                 };
 
                 var mailMessage = new MailMessage
@@ -60,7 +60,7 @@ namespace FurniMatch.Api.Services
                 mailMessage.To.Add(toEmail);
 
                 var sendTask = smtpClient.SendMailAsync(mailMessage);
-                var completedTask = await Task.WhenAny(sendTask, Task.Delay(3500));
+                var completedTask = await Task.WhenAny(sendTask, Task.Delay(30000));
                 if (completedTask == sendTask)
                 {
                     await sendTask;
@@ -68,7 +68,7 @@ namespace FurniMatch.Api.Services
                 }
                 else
                 {
-                    _logger.LogWarning("Email to {Email} timed out after 3.5s (outbound SMTP likely blocked by hosting provider).", toEmail);
+                    _logger.LogWarning("Email to {Email} timed out after 30s.", toEmail);
                 }
             }
             catch (Exception ex)
