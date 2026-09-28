@@ -130,6 +130,8 @@ public class OrdersController : ControllerBase
                         d.Reason,
                         d.Status,
                         d.EvidenceImages,
+                        d.SellerNote,
+                        d.ReturnReceivedAt,
                         d.AdminNote,
                         d.CreatedAt,
                         d.ResolvedAt
@@ -149,7 +151,48 @@ public class OrdersController : ControllerBase
             foreach (var o in expiredOrders) { await CancelOrderAsync(o); }
             await _db.SaveChangesAsync();
         }
-        return Ok(await _db.Orders.Where(x => x.SellerId == UserId).OrderByDescending(x => x.CreatedAt).ToListAsync());
+        var orders = await _db.Orders
+            .Where(x => x.SellerId == UserId)
+            .OrderByDescending(x => x.CreatedAt)
+            .Select(o => new {
+                o.OrderId,
+                o.OrderCode,
+                o.CustomerId,
+                o.SellerId,
+                o.RecipientName,
+                o.RecipientPhone,
+                o.Address,
+                o.ItemsJson,
+                o.Subtotal,
+                o.ShippingFee,
+                o.TotalAmount,
+                o.PaymentMethod,
+                o.PaymentStatus,
+                o.OrderStatus,
+                o.PaymentExpiredAt,
+                o.CompletedAt,
+                o.PayoutStatus,
+                o.CreatedAt,
+                o.UpdatedAt,
+                Customer = o.Customer != null ? new { o.Customer.UserId, o.Customer.FullName, o.Customer.Email, o.Customer.Phone } : null,
+                Dispute = _db.OrderDisputes
+                    .Where(d => d.OrderId == o.OrderId)
+                    .OrderByDescending(d => d.CreatedAt)
+                    .Select(d => new {
+                        d.OrderDisputeId,
+                        d.Reason,
+                        d.Status,
+                        d.EvidenceImages,
+                        d.SellerNote,
+                        d.ReturnReceivedAt,
+                        d.AdminNote,
+                        d.CreatedAt,
+                        d.ResolvedAt
+                    })
+                    .FirstOrDefault()
+            })
+            .ToListAsync();
+        return Ok(orders);
     }
     [HttpGet("{id:int}")] public async Task<IActionResult> Get(int id)
     {
@@ -332,7 +375,8 @@ public class OrdersController : ControllerBase
         if (DateTime.UtcNow > completedTime.AddDays(3))
             return BadRequest(new { message = "Đã quá thời hạn khiếu nại. Bạn chỉ có thể khiếu nại trong vòng 3 ngày sau khi đơn hàng hoàn thành." });
 
-        var existing = await _db.OrderDisputes.AnyAsync(d => d.OrderId == id && (d.Status == "OPEN" || d.Status == "RESOLVED"));
+        var existing = await _db.OrderDisputes.AnyAsync(d => d.OrderId == id && 
+            (d.Status == "OPEN" || d.Status == "PENDING_SELLER" || d.Status == "RETURN_RECEIVED" || d.Status == "RESOLVED"));
         if (existing) return BadRequest(new { message = "Đã có khiếu nại đang xử lý hoặc đã được chấp thuận cho đơn hàng này." });
 
         if (string.IsNullOrWhiteSpace(form.Reason))
@@ -369,7 +413,7 @@ public class OrdersController : ControllerBase
             CustomerId = UserId,
             Reason = form.Reason.Trim(),
             EvidenceImages = imageUrls.Count > 0 ? System.Text.Json.JsonSerializer.Serialize(imageUrls) : null,
-            Status = "OPEN",
+            Status = "PENDING_SELLER",
             CreatedAt = DateTime.UtcNow
         };
         _db.OrderDisputes.Add(dispute);
@@ -378,15 +422,36 @@ public class OrdersController : ControllerBase
         _db.Notifications.Add(new Notification
         {
             UserId = order.SellerId,
-            Title = "Đơn hàng có khiếu nại ⚠️",
-            Message = $"Đơn hàng #{order.OrderCode} có khiếu nại mới từ khách hàng. Khoản giải ngân tạm thời bị đóng băng để Admin xử lý.",
+            Title = "Yêu cầu khiếu nại từ khách hàng ⚠️",
+            Message = $"Khách hàng đã gửi yêu cầu khiếu nại cho đơn hàng #{order.OrderCode}. Vui lòng kiểm tra email và xác nhận sau khi nhận lại hàng hoàn.",
+            IsRead = false,
+            CreatedAt = DateTime.UtcNow
+        });
+
+        // Thông báo cho Customer
+        _db.Notifications.Add(new Notification
+        {
+            UserId = UserId,
+            Title = "Đã gửi khiếu nại thành công 📨",
+            Message = $"Yêu cầu khiếu nại cho đơn hàng #{order.OrderCode} đã được gửi trực tiếp tới xưởng sản xuất. Vui lòng gửi trả hàng để xưởng kiểm tra.",
             IsRead = false,
             CreatedAt = DateTime.UtcNow
         });
 
         await _db.SaveChangesAsync();
 
-        return Ok(new { message = "Khiếu nại đã được ghi nhận. Admin sẽ xem xét và phản hồi sớm nhất." });
+        // Gửi email thông báo cho Seller
+        var customer = await _db.Users.FindAsync(UserId);
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await SendDisputeEmailToSeller(order.SellerId, order, customer, form.Reason.Trim(), imageUrls);
+            }
+            catch { /* Ignored background email error */ }
+        });
+
+        return Ok(new { message = "Yêu cầu khiếu nại đã được chuyển trực tiếp tới người bán kèm email thông báo. Khi người bán nhận hàng hoàn hợp lệ, Admin sẽ duyệt hoàn tiền vào ví cho bạn." });
     }
 
     /// <summary>Customer cập nhật thông tin giao hàng khi đơn hàng đang ở bước chuẩn bị</summary>
@@ -471,6 +536,69 @@ public class OrdersController : ControllerBase
                     <p style='margin: 0; font-size: 13px; color: #6b7280;'>© 2026 FurniMatch. Trân trọng cảm ơn bạn đã hợp tác cùng chúng tôi.</p>
                 </div>
             </div>";
+            await _emailService.SendEmailAsync(seller.Email, subject, htmlBody);
+        }
+    }
+
+    private async Task SendDisputeEmailToSeller(int sellerId, Order order, User? customer, string reason, List<string> imageUrls)
+    {
+        var seller = await _db.Users.FindAsync(sellerId);
+        if (seller != null && !string.IsNullOrEmpty(seller.Email))
+        {
+            string customerName = customer?.FullName ?? order.RecipientName;
+            string customerPhone = customer?.Phone ?? order.RecipientPhone;
+            string customerAddress = order.Address;
+            decimal totalAmount = order.TotalAmount > 0 ? order.TotalAmount : order.Subtotal;
+
+            string subject = $"⚠️ [Khiếu nại & Yêu cầu hoàn hàng] Đơn hàng #{order.OrderCode}";
+            string htmlBody = $@"
+            <div style='font-family: Arial, sans-serif; max-width: 620px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05);'>
+                <div style='background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); padding: 30px; text-align: center;'>
+                    <h1 style='color: white; margin: 0; font-size: 22px; font-weight: 700;'>⚠️ Yêu Cầu Khiếu Nại & Hoàn Hàng</h1>
+                    <p style='color: #fef3c7; margin: 6px 0 0 0; font-size: 14px;'>Đơn hàng #{order.OrderCode}</p>
+                </div>
+                <div style='padding: 28px; background-color: #ffffff;'>
+                    <p style='font-size: 16px; color: #374151; line-height: 1.6; margin-top: 0;'>Chào <strong>{seller.FullName ?? "Quý xưởng"}</strong>,</p>
+                    <p style='font-size: 15px; color: #4b5563; line-height: 1.6;'>
+                        Khách hàng vừa gửi yêu cầu khiếu nại cho đơn hàng <strong>#{order.OrderCode}</strong> và mong muốn hoàn trả hàng về xưởng của bạn.
+                    </p>
+                    
+                    <!-- Order & Customer Summary -->
+                    <div style='background-color: #f9fafb; border-left: 4px solid #f59e0b; padding: 16px 20px; border-radius: 6px; margin: 20px 0;'>
+                        <p style='margin: 0 0 8px 0; font-size: 14px; color: #374151;'><strong>Mã đơn hàng:</strong> #{order.OrderCode}</p>
+                        <p style='margin: 0 0 8px 0; font-size: 14px; color: #374151;'><strong>Giá trị đơn hàng:</strong> <span style='color: #d97706; font-weight: 700;'>{totalAmount:N0} VNĐ</span></p>
+                        <p style='margin: 0 0 8px 0; font-size: 14px; color: #374151;'><strong>Khách hàng:</strong> {customerName}</p>
+                        <p style='margin: 0 0 8px 0; font-size: 14px; color: #374151;'><strong>Số điện thoại:</strong> {customerPhone}</p>
+                        <p style='margin: 0; font-size: 14px; color: #374151;'><strong>Địa chỉ khách hàng:</strong> {customerAddress}</p>
+                    </div>
+
+                    <!-- Complaint Reason -->
+                    <div style='background-color: #fef2f2; border: 1px solid #fee2e2; border-radius: 8px; padding: 16px; margin: 20px 0;'>
+                        <p style='margin: 0 0 6px 0; font-size: 14px; font-weight: 700; color: #991b1b;'>Lý do khiếu nại từ khách hàng:</p>
+                        <p style='margin: 0; font-size: 14px; color: #7f1d1d; line-height: 1.6; font-style: italic;'>""{reason}""</p>
+                        {(imageUrls.Count > 0 ? $"<p style='margin: 10px 0 0 0; font-size: 13px; color: #991b1b;'><em>(Khách hàng đã đính kèm {imageUrls.Count} hình ảnh bằng chứng trên hệ thống)</em></p>" : "")}
+                    </div>
+
+                    <!-- Next Steps for Seller -->
+                    <div style='background-color: #ecfdf5; border: 1px solid #d1fae5; border-radius: 8px; padding: 18px; margin: 24px 0;'>
+                        <p style='margin: 0 0 10px 0; font-size: 15px; font-weight: 700; color: #065f46;'>📌 Quy trình xử lý tiếp theo dành cho xưởng:</p>
+                        <ol style='margin: 0; padding-left: 20px; font-size: 14px; color: #047857; line-height: 1.7;'>
+                            <li>Chủ động liên hệ với khách hàng qua số điện thoại <strong>{customerPhone}</strong> để tiếp nhận và hướng dẫn gửi hàng hoàn về địa chỉ của xưởng.</li>
+                            <li>Khi đã nhận được kiện hàng hoàn trả từ khách hàng, vui lòng kiểm tra tình trạng hàng hóa.</li>
+                            <li>Nếu hàng hoàn đúng và <strong>không có vấn đề gì xảy ra</strong>, hãy truy cập Kênh Người Bán &gt; mục <strong>Khiếu nại &amp; Hàng hoàn</strong> và bấm nút <strong>""Xác nhận đã nhận hàng hoàn""</strong>.</li>
+                            <li>Ngay sau khi xưởng xác nhận, <strong>Admin sẽ kiểm duyệt và hoàn tiền vào ví cho khách hàng</strong> để đóng khiếu nại.</li>
+                        </ol>
+                    </div>
+                    
+                    <div style='text-align: center; margin: 30px 0 10px 0;'>
+                        <a href='http://localhost:5173/seller/dashboard?tab=DISPUTES' style='background-color: #d97706; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 15px; display: inline-block; box-shadow: 0 4px 6px rgba(217, 119, 6, 0.25);'>Xem Chi Tiết Khiếu Nại &amp; Xác Nhận</a>
+                    </div>
+                </div>
+                <div style='background-color: #f9fafb; padding: 18px; text-align: center; border-top: 1px solid #e5e7eb;'>
+                    <p style='margin: 0; font-size: 13px; color: #6b7280;'>FurniMatch Escrow System - Hệ thống bảo vệ quyền lợi người mua và người bán.</p>
+                </div>
+            </div>";
+
             await _emailService.SendEmailAsync(seller.Email, subject, htmlBody);
         }
     }

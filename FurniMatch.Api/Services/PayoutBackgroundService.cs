@@ -76,14 +76,14 @@ namespace FurniMatch.Api.Services
             // - OrderStatus = COMPLETED
             // - PayoutStatus = PENDING
             // - CompletedAt + delayDays <= Now (đã qua thời gian chờ)
-            // - Không có khiếu nại OPEN
+            // - Không có khiếu nại chưa xử lý
             var ordersToRelease = await db.Orders
                 .Where(o =>
                     o.OrderStatus == "COMPLETED" &&
                     o.PayoutStatus == "PENDING" &&
                     o.CompletedAt != null &&
                     o.CompletedAt <= cutoffDate &&
-                    !db.OrderDisputes.Any(d => d.OrderId == o.OrderId && d.Status == "OPEN"))
+                    !db.OrderDisputes.Any(d => d.OrderId == o.OrderId && d.Status != "RESOLVED" && d.Status != "REJECTED"))
                 .ToListAsync();
 
             if (ordersToRelease.Count == 0)

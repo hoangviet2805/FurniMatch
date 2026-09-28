@@ -77,6 +77,22 @@ if (app.Environment.IsDevelopment())
 using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<FurniMatchDbContext>();
+
+    try
+    {
+        context.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('OrderDisputes') AND name = 'SellerNote')
+            BEGIN
+                ALTER TABLE [OrderDisputes] ADD [SellerNote] nvarchar(max) NULL;
+            END
+            IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('OrderDisputes') AND name = 'ReturnReceivedAt')
+            BEGIN
+                ALTER TABLE [OrderDisputes] ADD [ReturnReceivedAt] datetime2 NULL;
+            END
+        ");
+    }
+    catch { /* Ignore if already exists or table not ready */ }
+
     if (!context.Categories.Any())
     {
         context.Categories.AddRange(

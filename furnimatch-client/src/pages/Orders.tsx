@@ -367,7 +367,7 @@ export default function Orders() {
       setAlertModal({
         type: 'success',
         title: 'Đã gửi khiếu nại thành công!',
-        message: 'Khiếu nại kèm hình ảnh của bạn đã được chuyển tới Admin để xem xét. Khi được chấp thuận, số tiền sẽ được hoàn vào ví của bạn để bạn có thể rút về tài khoản ngân hàng.'
+        message: 'Khiếu nại của bạn đã được chuyển trực tiếp tới Xưởng sản xuất (Seller) kèm email thông báo. Vui lòng đóng gói và gửi trả hàng về địa chỉ của xưởng. Sau khi xưởng nhận hàng hoàn hợp lệ và không có vấn đề, Admin sẽ duyệt hoàn 100% tiền vào Ví FurniMatch của bạn.'
       });
       setDisputeOrder(null);
       setDisputeReason('');
@@ -718,19 +718,22 @@ export default function Orders() {
                           <button
                             onClick={() => setViewDisputeModal({ isOpen: true, order: o, dispute: o.dispute })}
                             className={`flex-1 sm:flex-none rounded-xl px-4 py-2.5 text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5 ${
-                              o.dispute.status === 'OPEN'
+                              (o.dispute.status === 'PENDING_SELLER' || o.dispute.status === 'OPEN')
                                 ? 'bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200'
-                                : o.dispute.status === 'RESOLVED'
+                                : o.dispute.status === 'RETURN_RECEIVED'
                                 ? 'bg-blue-100 text-blue-900 border border-blue-300 hover:bg-blue-200'
+                                : o.dispute.status === 'RESOLVED'
+                                ? 'bg-emerald-100 text-emerald-900 border border-emerald-300 hover:bg-emerald-200'
                                 : 'bg-rose-50 text-rose-800 border border-rose-200 hover:bg-rose-100'
                             }`}
                             title="Xem chi tiết khiếu nại"
                           >
                             <ShieldAlert className="w-4 h-4 shrink-0" />
                             <span>
-                              {o.dispute.status === 'OPEN' && '⚠️ Đang khiếu nại'}
-                              {o.dispute.status === 'RESOLVED' && '💰 Khiếu nại được chấp thuận (Đã hoàn tiền)'}
-                              {o.dispute.status === 'REJECTED' && '❌ Khiếu nại đã bị hủy'}
+                              {(o.dispute.status === 'PENDING_SELLER' || o.dispute.status === 'OPEN') && '⚠️ Đang khiếu nại (Chờ xưởng nhận hàng)'}
+                              {o.dispute.status === 'RETURN_RECEIVED' && '📦 Đã nhận hàng hoàn (Chờ Admin hoàn tiền ví)'}
+                              {o.dispute.status === 'RESOLVED' && '💰 Đã hoàn tiền vào ví'}
+                              {o.dispute.status === 'REJECTED' && '❌ Khiếu nại đã bị từ chối'}
                             </span>
                           </button>
                         ) : (
@@ -1286,42 +1289,155 @@ export default function Orders() {
               </button>
             </div>
 
-            <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto text-sm">
+            <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto text-sm">
               {/* Status Banner */}
-              <div className={`p-4 rounded-2xl border flex items-start gap-3 ${
-                viewDisputeModal.dispute.status === 'OPEN'
-                  ? 'bg-amber-50 border-amber-200 text-amber-900'
-                  : viewDisputeModal.dispute.status === 'RESOLVED'
-                  ? 'bg-blue-50 border-blue-200 text-blue-900'
-                  : 'bg-rose-50 border-rose-200 text-rose-900'
-              }`}>
-                <div className="mt-0.5 shrink-0">
-                  {viewDisputeModal.dispute.status === 'OPEN' && <Clock className="w-5 h-5 text-amber-600" />}
-                  {viewDisputeModal.dispute.status === 'RESOLVED' && <CheckCircle2 className="w-5 h-5 text-blue-600" />}
-                  {viewDisputeModal.dispute.status === 'REJECTED' && <XCircle className="w-5 h-5 text-rose-600" />}
-                </div>
-                <div>
-                  <h4 className="font-bold text-sm">
-                    {viewDisputeModal.dispute.status === 'OPEN' && 'Khiếu nại đang chờ Admin xem xét'}
-                    {viewDisputeModal.dispute.status === 'RESOLVED' && 'Khiếu nại đã được chấp thuận & Đã hoàn tiền'}
-                    {viewDisputeModal.dispute.status === 'REJECTED' && 'Khiếu nại đã bị hủy'}
-                  </h4>
-                  <p className="text-xs mt-1 leading-relaxed opacity-90">
-                    {viewDisputeModal.dispute.status === 'OPEN' && 'Admin đang xác minh lý do và hình ảnh bằng chứng. Kết quả sẽ được cập nhật trong vòng 24h.'}
-                    {viewDisputeModal.dispute.status === 'RESOLVED' && `Số tiền ${money(viewDisputeModal.order?.totalAmount || 0)} đã được hoàn vào Ví số dư của bạn. Bạn có thể vào ví để rút về tài khoản ngân hàng bất cứ lúc nào.`}
-                    {viewDisputeModal.dispute.status === 'REJECTED' && 'Khiếu nại đã bị Admin hủy do không đủ điều kiện xử lý hoặc không có vi phạm từ phía người bán.'}
-                  </p>
-                  {viewDisputeModal.dispute.status === 'RESOLVED' && (
-                    <Link
-                      to="/wallet"
-                      className="inline-flex items-center gap-1.5 mt-3 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition"
-                    >
-                      <Wallet className="w-3.5 h-3.5" />
-                      Đi tới Ví & Rút tiền ngay ➔
-                    </Link>
-                  )}
+              {(() => {
+                const st = viewDisputeModal.dispute.status;
+                const isPendingSeller = st === 'PENDING_SELLER' || st === 'OPEN';
+                const isReturnReceived = st === 'RETURN_RECEIVED';
+                const isResolved = st === 'RESOLVED';
+                const isRejected = st === 'REJECTED';
+
+                return (
+                  <div className={`p-4 rounded-2xl border flex items-start gap-3 ${
+                    isPendingSeller
+                      ? 'bg-amber-50 border-amber-200 text-amber-900'
+                      : isReturnReceived
+                      ? 'bg-blue-50 border-blue-200 text-blue-900'
+                      : isResolved
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                      : 'bg-rose-50 border-rose-200 text-rose-900'
+                  }`}>
+                    <div className="mt-0.5 shrink-0">
+                      {isPendingSeller && <Clock className="w-5 h-5 text-amber-600" />}
+                      {isReturnReceived && <Package className="w-5 h-5 text-blue-600" />}
+                      {isResolved && <CheckCircle2 className="w-5 h-5 text-emerald-600" />}
+                      {isRejected && <XCircle className="w-5 h-5 text-rose-600" />}
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-sm">
+                        {isPendingSeller && 'Đang chờ người bán nhận & kiểm tra hàng hoàn'}
+                        {isReturnReceived && 'Người bán đã nhận được hàng hoàn - Chờ Admin hoàn tiền'}
+                        {isResolved && 'Khiếu nại được chấp thuận & Đã hoàn tiền vào ví'}
+                        {isRejected && 'Khiếu nại đã bị từ chối / hủy'}
+                      </h4>
+                      <p className="text-xs mt-1 leading-relaxed opacity-90">
+                        {isPendingSeller && 'Yêu cầu khiếu nại đã được gửi tới người bán kèm email thông báo. Vui lòng đóng gói và gửi trả hàng về cho xưởng. Khi xưởng xác nhận nhận hàng hợp lệ, Admin sẽ duyệt hoàn tiền vào ví cho bạn.'}
+                        {isReturnReceived && 'Xưởng sản xuất đã xác nhận nhận lại kiện hàng hoàn trả từ bạn và kiểm tra không có vấn đề phát sinh. Yêu cầu đang được chuyển tới Admin để duyệt lệnh hoàn tiền vào ví.'}
+                        {isResolved && `Số tiền ${money(viewDisputeModal.order?.totalAmount || 0)} đã được hoàn vào số dư Ví FurniMatch của bạn. Bạn có thể vào ví để mua sắm tiếp hoặc rút về tài khoản ngân hàng.`}
+                        {isRejected && 'Khiếu nại đã bị Admin từ chối do không đủ điều kiện xử lý hoặc không có vi phạm từ phía người bán.'}
+                      </p>
+                      {isResolved && (
+                        <Link
+                          to="/wallet"
+                          className="inline-flex items-center gap-1.5 mt-3 px-3.5 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition"
+                        >
+                          <Wallet className="w-3.5 h-3.5" />
+                          Đi tới Ví &amp; Rút tiền ngay ➔
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* 3-Step Process Stepper */}
+              <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4">
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
+                  Tiến trình xử lý đổi trả &amp; hoàn tiền:
+                </p>
+                <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                  <div className="bg-white rounded-xl p-2.5 border border-emerald-200 shadow-2xs">
+                    <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 font-bold flex items-center justify-center mx-auto mb-1 text-[11px]">
+                      ✓
+                    </div>
+                    <p className="font-bold text-gray-900">1. Gửi khiếu nại</p>
+                    <p className="text-[10px] text-emerald-600 font-semibold mt-0.5">Đã gửi tới xưởng</p>
+                  </div>
+
+                  <div className={`bg-white rounded-xl p-2.5 border shadow-2xs ${
+                    viewDisputeModal.dispute.status === 'RETURN_RECEIVED' || viewDisputeModal.dispute.status === 'RESOLVED'
+                      ? 'border-emerald-200'
+                      : viewDisputeModal.dispute.status === 'PENDING_SELLER' || viewDisputeModal.dispute.status === 'OPEN'
+                      ? 'border-amber-300 ring-2 ring-amber-100'
+                      : 'border-gray-200 opacity-60'
+                  }`}>
+                    <div className={`w-6 h-6 rounded-full font-bold flex items-center justify-center mx-auto mb-1 text-[11px] ${
+                      viewDisputeModal.dispute.status === 'RETURN_RECEIVED' || viewDisputeModal.dispute.status === 'RESOLVED'
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : viewDisputeModal.dispute.status === 'PENDING_SELLER' || viewDisputeModal.dispute.status === 'OPEN'
+                        ? 'bg-amber-100 text-amber-700 animate-pulse'
+                        : 'bg-gray-100 text-gray-400'
+                    }`}>
+                      {viewDisputeModal.dispute.status === 'RETURN_RECEIVED' || viewDisputeModal.dispute.status === 'RESOLVED' ? '✓' : '2'}
+                    </div>
+                    <p className="font-bold text-gray-900">2. Xưởng nhận hàng</p>
+                    <p className={`text-[10px] font-semibold mt-0.5 ${
+                      viewDisputeModal.dispute.status === 'RETURN_RECEIVED' || viewDisputeModal.dispute.status === 'RESOLVED'
+                        ? 'text-emerald-600'
+                        : viewDisputeModal.dispute.status === 'PENDING_SELLER' || viewDisputeModal.dispute.status === 'OPEN'
+                        ? 'text-amber-600'
+                        : 'text-gray-400'
+                    }`}>
+                      {viewDisputeModal.dispute.status === 'RETURN_RECEIVED' || viewDisputeModal.dispute.status === 'RESOLVED'
+                        ? 'Đã nhận tốt'
+                        : 'Đang chờ nhận'}
+                    </p>
+                  </div>
+
+                  <div className={`bg-white rounded-xl p-2.5 border shadow-2xs ${
+                    viewDisputeModal.dispute.status === 'RESOLVED'
+                      ? 'border-emerald-200 ring-2 ring-emerald-100'
+                      : viewDisputeModal.dispute.status === 'RETURN_RECEIVED'
+                      ? 'border-blue-300 ring-2 ring-blue-100'
+                      : 'border-gray-200 opacity-60'
+                  }`}>
+                    <div className={`w-6 h-6 rounded-full font-bold flex items-center justify-center mx-auto mb-1 text-[11px] ${
+                      viewDisputeModal.dispute.status === 'RESOLVED'
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : viewDisputeModal.dispute.status === 'RETURN_RECEIVED'
+                        ? 'bg-blue-100 text-blue-700 animate-pulse'
+                        : 'bg-gray-100 text-gray-400'
+                    }`}>
+                      {viewDisputeModal.dispute.status === 'RESOLVED' ? '✓' : '3'}
+                    </div>
+                    <p className="font-bold text-gray-900">3. Admin hoàn tiền</p>
+                    <p className={`text-[10px] font-semibold mt-0.5 ${
+                      viewDisputeModal.dispute.status === 'RESOLVED'
+                        ? 'text-emerald-600'
+                        : viewDisputeModal.dispute.status === 'RETURN_RECEIVED'
+                        ? 'text-blue-600'
+                        : 'text-gray-400'
+                    }`}>
+                      {viewDisputeModal.dispute.status === 'RESOLVED'
+                        ? 'Đã cộng vào ví'
+                        : viewDisputeModal.dispute.status === 'RETURN_RECEIVED'
+                        ? 'Đang duyệt'
+                        : 'Chờ bước 2'}
+                    </p>
+                  </div>
                 </div>
               </div>
+
+              {/* Seller Confirmation & Note if available */}
+              {(viewDisputeModal.dispute.returnReceivedAt || viewDisputeModal.dispute.sellerNote) && (
+                <div className="bg-blue-50/70 border border-blue-200 rounded-2xl p-4 text-xs text-blue-900 space-y-1">
+                  <p className="font-bold flex items-center gap-1.5 text-blue-800">
+                    <CheckCircle2 className="w-4 h-4 text-blue-600" />
+                    Xác nhận nhận hàng từ xưởng:
+                  </p>
+                  {viewDisputeModal.dispute.returnReceivedAt && (
+                    <p className="text-blue-700">
+                      Thời gian xác nhận: {new Date(viewDisputeModal.dispute.returnReceivedAt).toLocaleString('vi-VN')}
+                    </p>
+                  )}
+                  {viewDisputeModal.dispute.sellerNote && (
+                    <p className="italic text-blue-950 font-medium pt-1">
+                      Ghi chú xưởng: "{viewDisputeModal.dispute.sellerNote}"
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Customer Reason */}
               <div>

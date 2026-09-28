@@ -533,11 +533,22 @@ namespace FurniMatch.Api.Controllers
         {
             var query = _context.OrderDisputes
                 .Include(d => d.Order)
+                    .ThenInclude(o => o!.Seller)
                 .Include(d => d.Customer)
                 .AsQueryable();
 
             if (!string.IsNullOrEmpty(status) && status.ToUpper() != "ALL")
-                query = query.Where(d => d.Status == status.ToUpper());
+            {
+                var upper = status.ToUpper();
+                if (upper == "PENDING_SELLER")
+                {
+                    query = query.Where(d => d.Status == "PENDING_SELLER" || d.Status == "OPEN");
+                }
+                else
+                {
+                    query = query.Where(d => d.Status == upper);
+                }
+            }
 
             var total = await query.CountAsync();
             var data = await query
@@ -552,10 +563,16 @@ namespace FurniMatch.Api.Controllers
                     OrderAmount = d.Order != null ? (d.Order.TotalAmount > 0 ? d.Order.TotalAmount : d.Order.Subtotal) : 0,
                     CustomerName = d.Customer != null ? d.Customer.FullName : "N/A",
                     CustomerEmail = d.Customer != null ? d.Customer.Email : "N/A",
-                    CustomerPhone = d.Order != null ? d.Order.RecipientPhone : "N/A",
+                    CustomerPhone = d.Customer != null ? d.Customer.Phone : (d.Order != null ? d.Order.RecipientPhone : "N/A"),
+                    SellerId = d.Order != null ? d.Order.SellerId : 0,
+                    SellerName = d.Order != null && d.Order.Seller != null ? (d.Order.Seller.ShopName ?? d.Order.Seller.FullName) : "N/A",
+                    SellerEmail = d.Order != null && d.Order.Seller != null ? d.Order.Seller.Email : "N/A",
+                    SellerPhone = d.Order != null && d.Order.Seller != null ? d.Order.Seller.Phone : "N/A",
                     d.Reason,
                     d.EvidenceImages,
                     d.Status,
+                    d.SellerNote,
+                    d.ReturnReceivedAt,
                     d.AdminNote,
                     d.CreatedAt,
                     d.ResolvedAt
@@ -574,7 +591,8 @@ namespace FurniMatch.Api.Controllers
                 .FirstOrDefaultAsync(d => d.OrderDisputeId == id);
 
             if (dispute == null) return NotFound();
-            if (dispute.Status != "OPEN") return BadRequest(new { message = "Khiếu nại này đã được xử lý." });
+            if (dispute.Status == "RESOLVED" || dispute.Status == "REJECTED") 
+                return BadRequest(new { message = "Khiếu nại này đã được xử lý trước đó." });
 
             dispute.Status = "REJECTED";
             dispute.AdminNote = dto.Note;
@@ -595,6 +613,19 @@ namespace FurniMatch.Api.Controllers
                 CreatedAt = DateTime.UtcNow
             });
 
+            // Thông báo cho Seller
+            if (dispute.Order != null)
+            {
+                _context.Notifications.Add(new Notification
+                {
+                    UserId = dispute.Order.SellerId,
+                    Title = "Khiếu nại đơn hàng đã kết thúc",
+                    Message = $"Khiếu nại đơn hàng #{dispute.Order.OrderCode} đã bị Admin từ chối/hủy. Đơn hàng tiếp tục quy trình giải ngân bình thường.",
+                    IsRead = false,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+
             await _context.SaveChangesAsync();
             return Ok(new { message = "Đã hủy khiếu nại. Đơn hàng sẽ được giải ngân theo lịch tự động." });
         }
@@ -605,10 +636,12 @@ namespace FurniMatch.Api.Controllers
         {
             var dispute = await _context.OrderDisputes
                 .Include(d => d.Order)
+                .Include(d => d.Customer)
                 .FirstOrDefaultAsync(d => d.OrderDisputeId == id);
 
             if (dispute == null) return NotFound();
-            if (dispute.Status != "OPEN") return BadRequest(new { message = "Khiếu nại này đã được xử lý." });
+            if (dispute.Status == "RESOLVED" || dispute.Status == "REJECTED") 
+                return BadRequest(new { message = "Khiếu nại này đã được xử lý trước đó." });
 
             dispute.Status = "RESOLVED";
             dispute.AdminNote = dto.Note;
@@ -668,6 +701,53 @@ namespace FurniMatch.Api.Controllers
             }
 
             await _context.SaveChangesAsync();
+
+            // Gửi email xác nhận hoàn tiền cho Customer
+            var customerEmail = dispute.Customer?.Email;
+            var customerName = dispute.Customer?.FullName ?? dispute.Order?.RecipientName ?? "Quý khách";
+            var orderCode = dispute.Order?.OrderCode ?? dispute.OrderId.ToString();
+            if (!string.IsNullOrEmpty(customerEmail))
+            {
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        string subject = $"💰 [FurniMatch] Hoàn tiền khiếu nại thành công cho đơn hàng #{orderCode}";
+                        string htmlBody = $@"
+                        <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;'>
+                            <div style='background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 28px; text-align: center; color: white;'>
+                                <h2 style='margin: 0; font-size: 22px;'>💰 Hoàn Tiền Thành Công</h2>
+                                <p style='margin: 6px 0 0 0; font-size: 14px;'>Đơn hàng #{orderCode}</p>
+                            </div>
+                            <div style='padding: 26px; background: white;'>
+                                <p style='font-size: 15px; color: #374151;'>Chào <strong>{customerName}</strong>,</p>
+                                <p style='font-size: 14px; color: #4b5563; line-height: 1.6;'>
+                                    Sau khi xưởng sản xuất xác nhận đã nhận lại hàng hoàn hợp lệ, Admin hệ thống đã tiến hành duyệt hoàn trả 100% giá trị đơn hàng vào <strong>Ví FurniMatch</strong> của bạn.
+                                </p>
+                                
+                                <div style='background: #ecfdf5; border-left: 4px solid #10b981; padding: 14px 18px; margin: 18px 0; border-radius: 4px;'>
+                                    <p style='margin: 0 0 6px 0; font-size: 14px; color: #065f46;'><strong>Mã đơn hàng:</strong> #{orderCode}</p>
+                                    <p style='margin: 0 0 6px 0; font-size: 14px; color: #065f46;'><strong>Số tiền hoàn vào ví:</strong> <span style='font-size: 18px; font-weight: bold; color: #059669;'>{refundAmount:N0} VNĐ</span></p>
+                                    <p style='margin: 0; font-size: 14px; color: #065f46;'><strong>Thời gian hoàn tất:</strong> {DateTime.UtcNow.AddHours(7):HH:mm dd/MM/yyyy}</p>
+                                    {(!string.IsNullOrWhiteSpace(dto.Note) ? $"<p style='margin: 6px 0 0 0; font-size: 13px; color: #047857;'><strong>Ghi chú Admin:</strong> {dto.Note}</p>" : "")}
+                                </div>
+
+                                <p style='font-size: 14px; color: #4b5563; line-height: 1.6;'>
+                                    Bạn có thể đăng nhập vào mục <strong>Ví của tôi</strong> để kiểm tra số dư và thực hiện rút tiền về tài khoản ngân hàng hoặc sử dụng để thanh toán các đơn hàng mới.
+                                </p>
+
+                                <div style='text-align: center; margin: 25px 0 10px 0;'>
+                                    <a href='http://localhost:5173/wallet' style='background: #10b981; color: white; padding: 12px 26px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block;'>Xem Số Dư Ví Của Bạn</a>
+                                </div>
+                            </div>
+                        </div>";
+
+                        await _emailService.SendEmailAsync(customerEmail, subject, htmlBody);
+                    }
+                    catch { /* Ignore background email failure */ }
+                });
+            }
+
             return Ok(new { message = "Đã chấp nhận khiếu nại. Số tiền đã được hoàn vào ví của khách hàng." });
         }
 
@@ -700,8 +780,8 @@ namespace FurniMatch.Api.Controllers
                     o.Subtotal,
                     o.CompletedAt,
                     o.PayoutStatus,
-                    HasDispute = _context.OrderDisputes.Any(d => d.OrderId == o.OrderId && d.Status == "OPEN"),
-                    IsEligible = o.CompletedAt != null && o.CompletedAt <= cutoff && !_context.OrderDisputes.Any(d => d.OrderId == o.OrderId && d.Status == "OPEN"),
+                    HasDispute = _context.OrderDisputes.Any(d => d.OrderId == o.OrderId && d.Status != "RESOLVED" && d.Status != "REJECTED"),
+                    IsEligible = o.CompletedAt != null && o.CompletedAt <= cutoff && !_context.OrderDisputes.Any(d => d.OrderId == o.OrderId && d.Status != "RESOLVED" && d.Status != "REJECTED"),
                     SellerName = _context.Users.Where(u => u.UserId == o.SellerId).Select(u => u.ShopName ?? u.FullName).FirstOrDefault() ?? "Người bán",
                     CustomerName = _context.Users.Where(u => u.UserId == o.CustomerId).Select(u => u.FullName).FirstOrDefault() ?? "Khách hàng"
                 })
@@ -752,7 +832,7 @@ namespace FurniMatch.Api.Controllers
                     o.PayoutStatus == "PENDING" &&
                     o.CompletedAt != null &&
                     o.CompletedAt <= cutoffDate &&
-                    !_context.OrderDisputes.Any(d => d.OrderId == o.OrderId && d.Status == "OPEN"))
+                    !_context.OrderDisputes.Any(d => d.OrderId == o.OrderId && d.Status != "RESOLVED" && d.Status != "REJECTED"))
                 .ToListAsync();
 
             int count = 0;

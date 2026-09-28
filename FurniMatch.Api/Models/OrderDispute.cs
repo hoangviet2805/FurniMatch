@@ -17,10 +17,16 @@ namespace FurniMatch.Api.Models
         public string Reason { get; set; } = string.Empty;
 
         /// <summary>
-        /// "OPEN" | "RESOLVED" | "REJECTED"
+        /// "PENDING_SELLER" | "RETURN_RECEIVED" | "RESOLVED" | "REJECTED" (also supports legacy "OPEN")
         /// </summary>
-        [MaxLength(20)]
-        public string Status { get; set; } = "OPEN";
+        [MaxLength(30)]
+        public string Status { get; set; } = "PENDING_SELLER";
+
+        /// <summary>Ghi chú của Seller khi nhận hàng hoàn hoặc phản hồi</summary>
+        public string? SellerNote { get; set; }
+
+        /// <summary>Thời điểm seller xác nhận đã nhận được hàng hoàn</summary>
+        public DateTime? ReturnReceivedAt { get; set; }
 
         /// <summary>Ghi chú của Admin khi xử lý khiếu nại</summary>
         public string? AdminNote { get; set; }

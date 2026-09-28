@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import api from '../utils/api';
-import { Package, User, MapPin, Phone, CheckCircle, Clock, Truck, Hammer, XCircle, ClipboardList, Wallet, ArrowDownToLine, History, FileText } from 'lucide-react';
+import { Package, User, MapPin, Phone, CheckCircle, Clock, Truck, Hammer, XCircle, ClipboardList, Wallet, ArrowDownToLine, History, FileText, AlertTriangle, CheckCircle2, Eye, ShieldAlert } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
@@ -454,12 +454,430 @@ function WalletSection() {
   );
 }
 
+// ─── Disputes Section for Seller ──────────────────────────────────────────────
+function SellerDisputesSection({ onCountUpdate }: { onCountUpdate?: (count: number) => void }) {
+  const [disputes, setDisputes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING_SELLER' | 'RETURN_RECEIVED' | 'RESOLVED' | 'REJECTED'>('ALL');
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [returnReceivedCount, setReturnReceivedCount] = useState(0);
+  const pageSize = 10;
+
+  const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; item: any | null; note: string; submitting: boolean }>({
+    isOpen: false, item: null, note: '', submitting: false
+  });
+
+  const [previewImageModal, setPreviewImageModal] = useState<{ isOpen: boolean; url: string; title: string }>({
+    isOpen: false, url: '', title: ''
+  });
+
+  const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const fetchDisputes = useCallback(async (p = 1, st = statusFilter) => {
+    setLoading(true);
+    try {
+      const res = await api.get(`/seller/disputes?page=${p}&pageSize=${pageSize}&status=${st}`);
+      setDisputes(res.data.data || []);
+      setTotal(res.data.total || 0);
+      setPendingCount(res.data.pendingCount || 0);
+      setReturnReceivedCount(res.data.returnReceivedCount || 0);
+      setPage(p);
+      if (onCountUpdate) onCountUpdate(res.data.pendingCount || 0);
+    } catch (e: any) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, [statusFilter, pageSize, onCountUpdate]);
+
+  useEffect(() => {
+    fetchDisputes(1, statusFilter);
+  }, [statusFilter]);
+
+  const handleConfirmReturn = async () => {
+    if (!confirmModal.item) return;
+    setConfirmModal(m => ({ ...m, submitting: true }));
+    try {
+      const res = await api.put(`/seller/disputes/${confirmModal.item.orderDisputeId}/confirm-return`, {
+        note: confirmModal.note.trim() || undefined
+      });
+      setAlert({ type: 'success', message: res.data.message || 'Đã xác nhận nhận hàng hoàn hợp lệ!' });
+      setConfirmModal({ isOpen: false, item: null, note: '', submitting: false });
+      fetchDisputes(page, statusFilter);
+    } catch (err: any) {
+      setAlert({ type: 'error', message: err?.response?.data?.message || 'Có lỗi xảy ra khi xác nhận.' });
+      setConfirmModal(m => ({ ...m, submitting: false }));
+    }
+  };
+
+  const statusConfigMap: Record<string, { label: string; color: string; border: string }> = {
+    PENDING_SELLER: { label: 'Chờ xưởng nhận hàng hoàn & kiểm tra', color: 'bg-amber-100 text-amber-800', border: 'border-amber-300' },
+    OPEN: { label: 'Chờ xưởng nhận hàng hoàn & kiểm tra', color: 'bg-amber-100 text-amber-800', border: 'border-amber-300' },
+    RETURN_RECEIVED: { label: 'Đã nhận hàng - Chờ Admin hoàn tiền ví', color: 'bg-blue-100 text-blue-800', border: 'border-blue-300' },
+    RESOLVED: { label: 'Admin đã hoàn tiền cho khách (Hoàn tất)', color: 'bg-emerald-100 text-emerald-800', border: 'border-emerald-300' },
+    REJECTED: { label: 'Khiếu nại bị từ chối / hủy', color: 'bg-rose-100 text-rose-800', border: 'border-rose-300' }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Alert message */}
+      {alert && (
+        <div className={`p-4 rounded-xl flex items-center justify-between ${alert.type === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-800 border border-rose-200'}`}>
+          <div className="flex items-center gap-2">
+            {alert.type === 'success' ? <CheckCircle2 className="w-5 h-5 text-emerald-600" /> : <AlertTriangle className="w-5 h-5 text-rose-600" />}
+            <span className="text-sm font-semibold">{alert.message}</span>
+          </div>
+          <button onClick={() => setAlert(null)} className="text-xs font-bold px-2 py-1 hover:bg-black/5 rounded">✕</button>
+        </div>
+      )}
+
+      {/* Header & Flow info banner */}
+      <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-6 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <ShieldAlert className="w-6 h-6 text-amber-600" />
+              Khiếu Nại &amp; Nhận Hàng Hoàn Trả
+            </h2>
+            <p className="text-sm text-gray-600 mt-1">
+              Quy trình hoàn trả an toàn: Khách gửi khiếu nại &rarr; <strong>Xưởng nhận &amp; xác nhận hàng hoàn tốt</strong> &rarr; <strong>Admin hoàn tiền vào ví người dùng</strong>.
+            </p>
+          </div>
+          {pendingCount > 0 && (
+            <div className="px-4 py-2.5 bg-amber-500 text-white rounded-xl shadow-sm text-sm font-bold flex items-center gap-2 animate-pulse">
+              <AlertTriangle className="w-5 h-5" />
+              <span>Có {pendingCount} yêu cầu đang chờ bạn xác nhận!</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Filter Tabs */}
+      <div className="flex items-center gap-2 bg-gray-100 p-1 rounded-xl text-xs font-semibold overflow-x-auto">
+        {[
+          { key: 'ALL', label: 'Tất cả' },
+          { key: 'PENDING_SELLER', label: 'Chờ xưởng nhận hàng', count: pendingCount },
+          { key: 'RETURN_RECEIVED', label: 'Đã nhận - Chờ Admin hoàn tiền', count: returnReceivedCount },
+          { key: 'RESOLVED', label: 'Đã hoàn tiền (Hoàn tất)' },
+          { key: 'REJECTED', label: 'Đã từ chối' }
+        ].map(t => (
+          <button
+            key={t.key}
+            onClick={() => { setStatusFilter(t.key as any); }}
+            className={`px-4 py-2 rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap ${
+              statusFilter === t.key
+                ? 'bg-white text-gray-900 shadow-sm font-bold'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <span>{t.label}</span>
+            {t.count !== undefined && t.count > 0 && (
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${statusFilter === t.key ? 'bg-amber-100 text-amber-800' : 'bg-amber-200 text-amber-900'}`}>
+                {t.count}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Content list */}
+      {loading ? (
+        <div className="flex justify-center py-16">
+          <div className="w-10 h-10 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : disputes.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-12 text-center">
+          <Package className="mx-auto h-12 w-12 text-gray-400 mb-3" />
+          <p className="text-gray-600 font-semibold text-base">Không có yêu cầu khiếu nại nào trong mục này.</p>
+          <p className="text-gray-400 text-xs mt-1">Khi khách hàng gửi yêu cầu đổi trả, thông tin và email sẽ lập tức xuất hiện tại đây.</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {disputes.map((d: any) => {
+            let images: string[] = [];
+            try {
+              if (d.evidenceImages) images = JSON.parse(d.evidenceImages);
+            } catch {}
+
+            const statusObj = statusConfigMap[d.status] || { label: d.status, color: 'bg-gray-100 text-gray-700', border: 'border-gray-200' };
+            const isPendingConfirm = d.status === 'PENDING_SELLER' || d.status === 'OPEN';
+
+            return (
+              <div key={d.orderDisputeId} className={`rounded-2xl border ${isPendingConfirm ? 'border-amber-300 shadow-sm bg-amber-50/20' : 'border-gray-200 bg-white'} p-6 transition-all`}>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-gray-100 gap-3">
+                  <div>
+                    <div className="flex items-center gap-3">
+                      <span className="font-mono text-base font-bold text-gray-900">Đơn hàng #{d.orderCode}</span>
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${statusObj.color}`}>
+                        {statusObj.label}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Khách gửi khiếu nại lúc: {new Date(d.createdAt).toLocaleString('vi-VN')}
+                    </p>
+                  </div>
+                  <div className="text-left sm:text-right">
+                    <p className="text-xs text-gray-400">Giá trị đơn / Số tiền hoàn</p>
+                    <p className="text-lg font-black text-emerald-600">{money(d.orderAmount)}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-5">
+                  {/* Customer Info */}
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <User className="w-3.5 h-3.5 text-emerald-600" />
+                      Thông tin khách hàng
+                    </h4>
+                    <p className="text-sm font-semibold text-gray-900">{d.customerName}</p>
+                    <p className="text-xs text-gray-600 flex items-center gap-1.5">
+                      <Phone className="w-3.5 h-3.5 text-gray-400" />
+                      <a href={`tel:${d.customerPhone || d.recipientPhone}`} className="text-emerald-600 font-semibold hover:underline">
+                        {d.customerPhone || d.recipientPhone || 'Chưa có SĐT'}
+                      </a>
+                    </p>
+                    <p className="text-xs text-gray-500 flex items-start gap-1.5">
+                      <MapPin className="w-3.5 h-3.5 text-gray-400 mt-0.5 shrink-0" />
+                      <span>{d.address || 'Địa chỉ đơn hàng'}</span>
+                    </p>
+                  </div>
+
+                  {/* Reason & Evidence */}
+                  <div className="space-y-2 md:col-span-2">
+                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <FileText className="w-3.5 h-3.5 text-amber-600" />
+                      Lý do khiếu nại &amp; Bằng chứng
+                    </h4>
+                    <div className="bg-white border border-gray-100 rounded-xl p-3 text-sm text-gray-800 shadow-2xs">
+                      <p className="italic font-medium text-gray-700">"{d.reason}"</p>
+                    </div>
+
+                    {images.length > 0 && (
+                      <div className="pt-2">
+                        <p className="text-xs text-gray-500 font-medium mb-1.5">Ảnh bằng chứng khách gửi ({images.length} ảnh):</p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {images.map((img: string, idx: number) => {
+                            const fullUrl = img.startsWith('http') ? img : `http://localhost:5234${img.startsWith('/') ? '' : '/'}${img}`;
+                            return (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => setPreviewImageModal({ isOpen: true, url: fullUrl, title: `Bằng chứng khiếu nại #${d.orderCode} (Ảnh ${idx + 1})` })}
+                                className="w-14 h-14 rounded-lg overflow-hidden border border-gray-200 hover:border-amber-500 shadow-2xs transition-all relative group bg-gray-50"
+                              >
+                                <img src={fullUrl} alt={`Evidence ${idx + 1}`} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
+                                <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                  <Eye className="w-4 h-4 text-white" />
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* History / Notes */}
+                {(d.sellerNote || d.adminNote || d.returnReceivedAt) && (
+                  <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    {d.returnReceivedAt && (
+                      <div className="p-3 bg-blue-50/70 rounded-xl border border-blue-100 text-blue-900">
+                        <p className="font-bold flex items-center gap-1">
+                          <CheckCircle className="w-3.5 h-3.5 text-blue-600" />
+                          Xưởng đã xác nhận nhận hàng:
+                        </p>
+                        <p className="text-blue-800 mt-0.5">{new Date(d.returnReceivedAt).toLocaleString('vi-VN')}</p>
+                        {d.sellerNote && <p className="italic mt-1 text-blue-950 font-medium">Ghi chú: {d.sellerNote}</p>}
+                      </div>
+                    )}
+                    {d.adminNote && (
+                      <div className="p-3 bg-emerald-50/70 rounded-xl border border-emerald-100 text-emerald-900">
+                        <p className="font-bold flex items-center gap-1">
+                          <ShieldAlert className="w-3.5 h-3.5 text-emerald-600" />
+                          Phản hồi của Admin:
+                        </p>
+                        <p className="italic mt-0.5 text-emerald-950 font-medium">{d.adminNote}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Action button */}
+                {isPendingConfirm && (
+                  <div className="mt-5 pt-4 border-t border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-amber-50/70 -mx-6 -mb-6 p-4 rounded-b-2xl">
+                    <div className="text-xs text-amber-900 flex items-center gap-1.5">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>Hãy đảm bảo bạn đã nhận được kiện hàng hoàn trả từ khách hàng và sản phẩm không có vấn đề trước khi xác nhận.</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmModal({ isOpen: true, item: d, note: '', submitting: false })}
+                      className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer"
+                    >
+                      <Package className="w-4 h-4" />
+                      <span>Xác nhận đã nhận hàng hoàn</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {total > pageSize && (
+        <div className="flex justify-center items-center gap-3 pt-4">
+          <button
+            disabled={page <= 1}
+            onClick={() => fetchDisputes(page - 1)}
+            className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold hover:bg-gray-50 disabled:opacity-50"
+          >
+            Trước
+          </button>
+          <span className="text-xs text-gray-500 font-medium">{page} / {Math.ceil(total / pageSize)}</span>
+          <button
+            disabled={page >= Math.ceil(total / pageSize)}
+            onClick={() => fetchDisputes(page + 1)}
+            className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold hover:bg-gray-50 disabled:opacity-50"
+          >
+            Sau
+          </button>
+        </div>
+      )}
+
+      {/* Confirm Return Modal */}
+      {confirmModal.isOpen && confirmModal.item && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden animate-[fadeInScale_0.2s_ease]">
+            <div className="bg-gradient-to-r from-emerald-600 to-teal-700 p-5 text-white flex items-center justify-between">
+              <h3 className="font-bold text-lg flex items-center gap-2">
+                <Package className="w-5 h-5" />
+                Xác Nhận Đã Nhận Hàng Hoàn Hợp Lệ
+              </h3>
+              <button
+                onClick={() => setConfirmModal({ isOpen: false, item: null, note: '', submitting: false })}
+                className="text-white/80 hover:text-white text-xl"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 text-sm space-y-1.5">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Mã đơn hàng:</span>
+                  <span className="font-mono font-bold text-gray-900">#{confirmModal.item.orderCode}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Khách hàng:</span>
+                  <span className="font-semibold text-gray-900">{confirmModal.item.customerName}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Số tiền hoàn cho khách:</span>
+                  <span className="font-bold text-emerald-600">{money(confirmModal.item.orderAmount)}</span>
+                </div>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-xs text-blue-900 space-y-1">
+                <p className="font-bold flex items-center gap-1 text-blue-800">
+                  <CheckCircle2 className="w-4 h-4 text-blue-600" />
+                  Quy trình sau khi xác nhận:
+                </p>
+                <p>
+                  1. Hệ thống sẽ ghi nhận kiện hàng hoàn trả đã được giao lại xưởng an toàn và không có lỗi phát sinh.
+                </p>
+                <p>
+                  2. Yêu cầu sẽ tự động được gửi thông báo đến <strong>Admin</strong> để Admin hoàn tất lệnh <strong>chuyển tiền hoàn vào ví của khách hàng</strong>.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase mb-1.5">
+                  Ghi chú kiểm tra hàng hoàn (tùy chọn)
+                </label>
+                <textarea
+                  rows={3}
+                  value={confirmModal.note}
+                  onChange={e => setConfirmModal(m => ({ ...m, note: e.target.value }))}
+                  placeholder="Ví dụ: Đã nhận đầy đủ sản phẩm và phụ kiện, tình trạng tốt, không có vấn đề..."
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 outline-none resize-none"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmModal({ isOpen: false, item: null, note: '', submitting: false })}
+                  className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  disabled={confirmModal.submitting}
+                  onClick={handleConfirmReturn}
+                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold shadow transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {confirmModal.submitting ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Đang lưu...</span>
+                    </>
+                  ) : (
+                    <span>Xác nhận &amp; Báo Admin</span>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image Preview Modal */}
+      {previewImageModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden">
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+              <h4 className="font-bold text-sm text-gray-900">{previewImageModal.title}</h4>
+              <button
+                onClick={() => setPreviewImageModal({ isOpen: false, url: '', title: '' })}
+                className="p-1 rounded-lg hover:bg-gray-100 text-gray-500"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-4 bg-gray-50 flex items-center justify-center max-h-[70vh] overflow-auto">
+              <img src={previewImageModal.url} alt="Evidence" className="max-w-full max-h-[65vh] object-contain rounded-lg shadow-xs" />
+            </div>
+            <div className="p-3 border-t border-gray-100 flex justify-between items-center">
+              <a href={previewImageModal.url} target="_blank" rel="noreferrer" className="text-xs font-semibold text-emerald-600 hover:underline">
+                Mở ảnh gốc trong tab mới ↗
+              </a>
+              <button
+                onClick={() => setPreviewImageModal({ isOpen: false, url: '', title: '' })}
+                className="px-4 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-semibold rounded-lg"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function SellerDashboard() {
-  const [tab, setTab] = useState<'ORDERS' | 'QUOTES' | 'REVENUE' | 'WALLET'>('ORDERS');
+  const [tab, setTab] = useState<'ORDERS' | 'QUOTES' | 'DISPUTES' | 'REVENUE' | 'WALLET'>('ORDERS');
   const [orders, setOrders] = useState<any[]>([]);
   const [orderStatusFilter, setOrderStatusFilter] = useState<'ALL' | 'INCOMPLETE' | 'COMPLETED' | 'CANCELLED'>('ALL');
   const [requests, setRequests] = useState<any[]>([]);
+  const [pendingDisputeCount, setPendingDisputeCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
@@ -489,6 +907,15 @@ export default function SellerDashboard() {
   const [revToDate, setRevToDate] = useState('');
   const REV_PAGE_SIZE = 10;
 
+  const loadDisputeBadge = useCallback(async () => {
+    try {
+      const res = await api.get('/seller/disputes?pageSize=1');
+      if (res.data?.pendingCount !== undefined) {
+        setPendingDisputeCount(res.data.pendingCount);
+      }
+    } catch {}
+  }, []);
+
   const load = async () => {
     setLoading(true);
     try {
@@ -505,7 +932,11 @@ export default function SellerDashboard() {
   };
 
   useEffect(() => {
-    if (tab !== 'REVENUE' && tab !== 'WALLET') {
+    loadDisputeBadge();
+  }, [loadDisputeBadge]);
+
+  useEffect(() => {
+    if (tab !== 'REVENUE' && tab !== 'WALLET' && tab !== 'DISPUTES') {
       load();
       setCurrentPage(1);
     }
@@ -562,6 +993,11 @@ export default function SellerDashboard() {
   const tabs = [
     { key: 'ORDERS', label: '📦 Quản lý đơn hàng' },
     { key: 'QUOTES', label: '📄 Yêu cầu báo giá' },
+    { 
+      key: 'DISPUTES', 
+      label: '⚠️ Khiếu nại & Hàng hoàn',
+      badge: pendingDisputeCount > 0 ? pendingDisputeCount : undefined
+    },
     { key: 'REVENUE', label: '📊 Doanh Thu Của Tôi' },
     { key: 'WALLET', label: '💰 Ví & Rút Tiền' },
   ] as const;
@@ -575,12 +1011,20 @@ export default function SellerDashboard() {
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`rounded-lg px-5 py-2.5 text-sm font-semibold transition-all ${tab === t.key ? 'bg-white text-emerald-700 shadow-sm' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'}`}
+            className={`rounded-lg px-5 py-2.5 text-sm font-semibold transition-all flex items-center gap-2 ${tab === t.key ? 'bg-white text-emerald-700 shadow-sm' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'}`}
           >
-            {t.label}
+            <span>{t.label}</span>
+            {'badge' in t && t.badge !== undefined && (
+              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-500 text-white animate-pulse">
+                {t.badge}
+              </span>
+            )}
           </button>
         ))}
       </div>
+
+      {/* ===================== DISPUTES TAB ===================== */}
+      {tab === 'DISPUTES' && <SellerDisputesSection onCountUpdate={setPendingDisputeCount} />}
 
       {/* ===================== WALLET TAB ===================== */}
       {tab === 'WALLET' && <WalletSection />}
@@ -868,6 +1312,32 @@ export default function SellerDashboard() {
                           </select>
                         </div>
                       </div>
+
+                      {/* Dispute Alert Banner if order is in dispute */}
+                      {o.dispute && (
+                        <div className="bg-amber-50 border-b border-amber-200 px-6 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+                          <div className="flex items-center gap-2 text-amber-900">
+                            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                            <span>
+                              <strong>Khiếu nại đổi trả:</strong>{' '}
+                              {o.dispute.status === 'PENDING_SELLER' || o.dispute.status === 'OPEN'
+                                ? 'Khách hàng đã gửi khiếu nại (Chờ xưởng nhận & xác nhận hàng hoàn).'
+                                : o.dispute.status === 'RETURN_RECEIVED'
+                                ? 'Xưởng đã xác nhận nhận hàng hoàn hợp lệ (Đang chờ Admin hoàn tiền ví).'
+                                : o.dispute.status === 'RESOLVED'
+                                ? 'Admin đã duyệt hoàn tiền vào ví cho khách hàng.'
+                                : 'Khiếu nại đơn hàng đã bị từ chối / hủy.'}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setTab('DISPUTES')}
+                            className="text-amber-800 hover:text-amber-950 font-bold underline flex items-center gap-1 cursor-pointer"
+                          >
+                            <span>Xem mục Khiếu nại &rarr;</span>
+                          </button>
+                        </div>
+                      )}
 
                       <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x border-gray-100">
                         {/* Customer Info */}

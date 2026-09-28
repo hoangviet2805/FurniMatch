@@ -2394,19 +2394,20 @@ const AdminDashboard = () => {
             </div>
             
             {/* Status Filter Tabs */}
-            <div className="flex items-center gap-1.5 bg-gray-100 p-1 rounded-xl text-xs font-semibold">
+            <div className="flex items-center gap-1.5 bg-gray-100 p-1 rounded-xl text-xs font-semibold overflow-x-auto">
               {[
                 { key: 'ALL', label: 'Tất cả' },
-                { key: 'OPEN', label: 'Chờ xử lý (OPEN)' },
-                { key: 'RESOLVED', label: 'Đã chấp nhận' },
-                { key: 'REJECTED', label: 'Đã hủy' }
+                { key: 'RETURN_RECEIVED', label: '📦 Xưởng đã nhận hàng - Chờ hoàn tiền' },
+                { key: 'PENDING_SELLER', label: '⏳ Chờ xưởng nhận hàng' },
+                { key: 'RESOLVED', label: '✅ Đã hoàn tiền' },
+                { key: 'REJECTED', label: '❌ Đã hủy' }
               ].map(tab => (
                 <button
                   key={tab.key}
                   onClick={() => { setDsStatusFilter(tab.key); fetchDisputes(1, tab.key); }}
-                  className={`px-3 py-1.5 rounded-lg transition-all ${
+                  className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-all ${
                     dsStatusFilter === tab.key
-                      ? 'bg-white text-gray-900 shadow-sm'
+                      ? 'bg-white text-gray-900 shadow-sm font-bold'
                       : 'text-gray-600 hover:text-gray-900'
                   }`}
                 >
@@ -2427,44 +2428,64 @@ const AdminDashboard = () => {
                   <table className="min-w-full divide-y divide-gray-100">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Ngày tạo</th>
-                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Mã Đơn</th>
-                        <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Giá trị hoàn</th>
-                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Khách hàng</th>
-                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Lý do khiếu nại</th>
-                        <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Bằng chứng</th>
-                        <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Trạng thái</th>
-                        <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Thao tác</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Ngày tạo</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Mã Đơn</th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Giá trị hoàn</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Khách hàng</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Xưởng bán</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Lý do khiếu nại</th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Bằng chứng</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Tiến trình</th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Thao tác</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
                       {disputes.map((d: any) => {
-                        const statusCls: Record<string, string> = { OPEN: 'bg-amber-100 text-amber-700', RESOLVED: 'bg-blue-100 text-blue-700', REJECTED: 'bg-rose-100 text-rose-700' };
-                        const statusLabel: Record<string, string> = { OPEN: 'Đang mở', RESOLVED: 'Đã hoàn tiền', REJECTED: 'Đã hủy' };
+                        const statusCls: Record<string, string> = {
+                          RETURN_RECEIVED: 'bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold',
+                          PENDING_SELLER: 'bg-amber-100 text-amber-800 border border-amber-300',
+                          OPEN: 'bg-amber-100 text-amber-800 border border-amber-300',
+                          RESOLVED: 'bg-blue-100 text-blue-800 border border-blue-300',
+                          REJECTED: 'bg-rose-100 text-rose-800 border border-rose-300'
+                        };
+                        const statusLabel: Record<string, string> = {
+                          RETURN_RECEIVED: '📦 Xưởng đã nhận hàng',
+                          PENDING_SELLER: '⏳ Chờ xưởng nhận hàng',
+                          OPEN: '⏳ Đang mở',
+                          RESOLVED: '✅ Đã hoàn tiền vào ví',
+                          REJECTED: '❌ Đã hủy khiếu nại'
+                        };
                         
                         let images: string[] = [];
                         try {
                           if (d.evidenceImages) images = JSON.parse(d.evidenceImages);
                         } catch {}
 
+                        const isReadyForRefund = d.status === 'RETURN_RECEIVED';
+
                         return (
-                          <tr key={d.orderDisputeId} className="hover:bg-gray-50/50">
-                            <td className="px-5 py-4 text-sm text-gray-600 whitespace-nowrap">{new Date(d.createdAt).toLocaleDateString('vi-VN')}</td>
-                            <td className="px-5 py-4 text-sm font-mono font-semibold text-gray-900">{d.orderCode}</td>
-                            <td className="px-5 py-4 text-sm font-bold text-right text-emerald-600 whitespace-nowrap">
+                          <tr key={d.orderDisputeId} className={`transition-colors ${isReadyForRefund ? 'bg-emerald-50/40 hover:bg-emerald-50/70 border-l-4 border-l-emerald-500' : 'hover:bg-gray-50/50'}`}>
+                            <td className="px-4 py-4 text-xs text-gray-600 whitespace-nowrap">{new Date(d.createdAt).toLocaleDateString('vi-VN')}</td>
+                            <td className="px-4 py-4 text-xs font-mono font-semibold text-gray-900">{d.orderCode}</td>
+                            <td className="px-4 py-4 text-sm font-bold text-right text-emerald-600 whitespace-nowrap">
                               {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(d.orderAmount)}
                             </td>
-                            <td className="px-5 py-4">
-                              <p className="text-sm font-medium text-gray-900">{d.customerName}</p>
+                            <td className="px-4 py-4">
+                              <p className="text-xs font-semibold text-gray-900">{d.customerName}</p>
                               <p className="text-xs text-gray-400">{d.customerEmail}</p>
-                              <p className="text-xs text-gray-500 font-semibold">{d.customerPhone}</p>
+                              <p className="text-xs text-gray-500">{d.customerPhone}</p>
                             </td>
-                            <td className="px-5 py-4 text-sm text-gray-700 max-w-xs">
+                            <td className="px-4 py-4">
+                              <p className="text-xs font-semibold text-amber-900">{d.sellerName || 'Người bán'}</p>
+                              <p className="text-xs text-gray-400">{d.sellerEmail}</p>
+                              <p className="text-xs text-gray-500">{d.sellerPhone}</p>
+                            </td>
+                            <td className="px-4 py-4 text-xs text-gray-700 max-w-xs">
                               <p className="line-clamp-2" title={d.reason}>{d.reason}</p>
                             </td>
-                            <td className="px-5 py-4 text-center">
+                            <td className="px-4 py-4 text-center">
                               {images.length > 0 ? (
-                                <div className="flex items-center justify-center gap-1.5 flex-wrap max-w-[140px] mx-auto">
+                                <div className="flex items-center justify-center gap-1.5 flex-wrap max-w-[120px] mx-auto">
                                   {images.map((img: string, idx: number) => {
                                     const fullUrl = img.startsWith('http') ? img : `http://localhost:5234${img.startsWith('/') ? '' : '/'}${img}`;
                                     return (
@@ -2472,7 +2493,7 @@ const AdminDashboard = () => {
                                         key={idx}
                                         type="button"
                                         onClick={() => setViewReceiptModal({ isOpen: true, url: fullUrl, title: `Bằng chứng khiếu nại đơn #${d.orderCode} (Ảnh ${idx + 1}/${images.length})` })}
-                                        className="relative group w-10 h-10 rounded-lg overflow-hidden border border-gray-200 hover:border-amber-500 shadow-xs cursor-pointer bg-gray-50 flex items-center justify-center"
+                                        className="relative group w-9 h-9 rounded-lg overflow-hidden border border-gray-200 hover:border-amber-500 shadow-xs cursor-pointer bg-gray-50 flex items-center justify-center"
                                         title="Nhấn để phóng to ảnh bằng chứng"
                                       >
                                         <img src={fullUrl} alt={`Evidence ${idx + 1}`} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
@@ -2484,30 +2505,56 @@ const AdminDashboard = () => {
                                 <span className="text-xs text-gray-400 italic">Không có ảnh</span>
                               )}
                             </td>
-                            <td className="px-5 py-4 text-center">
-                              <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold ${statusCls[d.status] ?? 'bg-gray-100 text-gray-600'}`}>
+                            <td className="px-4 py-4 text-xs">
+                              <span className={`inline-flex px-2.5 py-1 rounded-full text-xs ${statusCls[d.status] ?? 'bg-gray-100 text-gray-600'}`}>
                                 {statusLabel[d.status] ?? d.status}
                               </span>
+                              {d.returnReceivedAt && (
+                                <div className="mt-1 text-[11px] text-emerald-800 bg-emerald-50 px-2 py-1 rounded border border-emerald-200 max-w-xs">
+                                  <p className="font-semibold">Đã nhận hàng: {new Date(d.returnReceivedAt).toLocaleString('vi-VN')}</p>
+                                  {d.sellerNote && <p className="italic text-gray-700 line-clamp-2 mt-0.5">"{d.sellerNote}"</p>}
+                                </div>
+                              )}
+                              {d.status === 'PENDING_SELLER' && (
+                                <p className="text-[11px] text-amber-700 mt-1 italic">Đang chờ seller kiểm tra & nhận hàng hoàn</p>
+                              )}
                             </td>
-                            <td className="px-5 py-4 text-center">
-                              {d.status === 'OPEN' && (
-                                <div className="flex items-center justify-center gap-2">
+                            <td className="px-4 py-4 text-center">
+                              {d.status === 'RETURN_RECEIVED' && (
+                                <div className="space-y-1.5 min-w-[150px]">
                                   <button
                                     onClick={() => setResolveDisputeModal({ isOpen: true, disputeId: d.orderDisputeId, item: d, note: '', action: 'resolve' })}
-                                    className="px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 transition-colors shadow-xs"
+                                    className="w-full px-3 py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 transition-colors shadow-sm flex items-center justify-center gap-1"
                                   >
-                                    ✅ Chấp nhận & Hoàn tiền
+                                    💰 Hoàn tiền vào ví
                                   </button>
                                   <button
                                     onClick={() => setResolveDisputeModal({ isOpen: true, disputeId: d.orderDisputeId, item: d, note: '', action: 'reject' })}
-                                    className="px-3 py-1.5 bg-gray-100 text-gray-700 text-xs font-semibold rounded-lg hover:bg-gray-200 transition-colors"
+                                    className="w-full px-2.5 py-1 bg-gray-100 text-gray-700 text-xs font-medium rounded-lg hover:bg-gray-200 transition-colors"
                                   >
-                                    ❌ Hủy khiếu nại
+                                    Hủy khiếu nại
                                   </button>
                                 </div>
                               )}
-                              {d.status !== 'OPEN' && (
-                                <div className="text-xs text-left max-w-[180px] mx-auto text-gray-500">
+                              {(d.status === 'PENDING_SELLER' || d.status === 'OPEN') && (
+                                <div className="space-y-1 min-w-[130px]">
+                                  <button
+                                    onClick={() => setResolveDisputeModal({ isOpen: true, disputeId: d.orderDisputeId, item: d, note: '', action: 'resolve' })}
+                                    className="w-full px-2.5 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 text-xs font-semibold rounded-lg transition-colors"
+                                    title="Duyệt hoàn tiền trực tiếp không cần chờ seller"
+                                  >
+                                    Hoàn tiền ngay
+                                  </button>
+                                  <button
+                                    onClick={() => setResolveDisputeModal({ isOpen: true, disputeId: d.orderDisputeId, item: d, note: '', action: 'reject' })}
+                                    className="w-full px-2 py-1 bg-gray-100 text-gray-600 hover:bg-gray-200 text-xs font-medium rounded-lg transition-colors"
+                                  >
+                                    Hủy khiếu nại
+                                  </button>
+                                </div>
+                              )}
+                              {d.status !== 'RETURN_RECEIVED' && d.status !== 'PENDING_SELLER' && d.status !== 'OPEN' && (
+                                <div className="text-xs text-left max-w-[160px] mx-auto text-gray-500">
                                   <p className="font-semibold text-gray-700">Admin phản hồi:</p>
                                   <p className="line-clamp-2 italic">{d.adminNote || 'Không có ghi chú'}</p>
                                 </div>
@@ -2547,10 +2594,10 @@ const AdminDashboard = () => {
           {/* Resolve/Reject Dispute Modal */}
           {resolveDisputeModal.isOpen && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
                 <div className="flex items-center justify-between pb-3 border-b border-gray-100 mb-4">
                   <h3 className="text-lg font-bold text-gray-900">
-                    {resolveDisputeModal.action === 'resolve' ? '💰 Chấp nhận khiếu nại & Hoàn tiền' : '❌ Hủy khiếu nại'}
+                    {resolveDisputeModal.action === 'resolve' ? '💰 Duyệt Hoàn Tiền Vào Ví Khách Hàng' : '❌ Hủy khiếu nại'}
                   </h3>
                   <button
                     onClick={() => setResolveDisputeModal({ isOpen: false, disputeId: null, item: null, note: '', action: 'resolve' })}
@@ -2563,7 +2610,7 @@ const AdminDashboard = () => {
                 {/* Dispute details: Reason & Evidence Images */}
                 <div className="bg-gray-50 border border-gray-200 rounded-xl p-3.5 mb-3 space-y-2 text-xs">
                   <div>
-                    <span className="font-semibold text-gray-500 uppercase tracking-wider block mb-0.5">Lý do khiếu nại:</span>
+                    <span className="font-semibold text-gray-500 uppercase tracking-wider block mb-0.5">Lý do khiếu nại của khách:</span>
                     <p className="text-gray-800 italic bg-white p-2.5 rounded-lg border border-gray-100">
                       "{resolveDisputeModal.item?.reason}"
                     </p>
@@ -2605,13 +2652,36 @@ const AdminDashboard = () => {
                   })()}
                 </div>
 
+                {/* Seller Return Receipt Status */}
+                {resolveDisputeModal.item?.returnReceivedAt && (
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3.5 mb-3 text-xs text-emerald-950 space-y-1">
+                    <div className="flex items-center gap-1.5 font-bold text-emerald-800 text-sm">
+                      <span>📦</span>
+                      <span>Xưởng ({resolveDisputeModal.item?.sellerName}) đã nhận hàng hoàn</span>
+                    </div>
+                    <p className="text-gray-600">
+                      Thời gian nhận: <strong className="text-gray-800">{new Date(resolveDisputeModal.item.returnReceivedAt).toLocaleString('vi-VN')}</strong>
+                    </p>
+                    {resolveDisputeModal.item?.sellerNote && (
+                      <p className="text-gray-800 italic bg-white p-2 rounded-lg border border-emerald-100 mt-1">
+                        Ghi chú từ xưởng: "{resolveDisputeModal.item.sellerNote}"
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 {resolveDisputeModal.action === 'resolve' ? (
-                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-3.5 mb-4 text-xs text-blue-900 space-y-1">
-                    <p className="font-semibold text-blue-950 text-sm">Xác nhận hoàn tiền vào ví người dùng:</p>
+                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-3.5 mb-4 text-xs text-blue-900 space-y-1.5">
+                    <p className="font-bold text-blue-950 text-sm flex items-center gap-1.5">
+                      <span>💳</span> Xác nhận hoàn tiền vào ví khách hàng:
+                    </p>
                     <p>• Mã đơn hàng: <strong className="font-mono text-gray-900">{resolveDisputeModal.item?.orderCode}</strong></p>
                     <p>• Khách hàng: <strong>{resolveDisputeModal.item?.customerName}</strong> ({resolveDisputeModal.item?.customerEmail})</p>
-                    <p>• Số tiền sẽ hoàn vào ví: <strong className="text-emerald-700 text-sm">{money(resolveDisputeModal.item?.orderAmount || 0)}</strong></p>
-                    <p className="text-blue-800 pt-1">Sau khi duyệt, tiền sẽ lập tức vào số dư khả dụng của khách hàng và họ có thể tạo yêu cầu rút tiền. Tiền đơn hàng sẽ không giải ngân cho người bán.</p>
+                    <p>• Người bán / Xưởng: <strong>{resolveDisputeModal.item?.sellerName}</strong></p>
+                    <p>• Số tiền sẽ hoàn 100% vào ví khách: <strong className="text-emerald-700 text-sm">{money(resolveDisputeModal.item?.orderAmount || 0)}</strong></p>
+                    <p className="text-blue-800 pt-1 border-t border-blue-200">
+                      Sau khi Admin duyệt, số tiền trên sẽ lập tức được cộng vào số dư khả dụng (Escrow Wallet) của khách hàng. Khách có thể dùng để thanh toán đơn mới hoặc gửi lệnh rút tiền về ngân hàng.
+                    </p>
                   </div>
                 ) : (
                   <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 mb-4 text-xs text-amber-900 space-y-1">
@@ -2628,7 +2698,7 @@ const AdminDashboard = () => {
                     value={resolveDisputeModal.note}
                     onChange={e => setResolveDisputeModal(m => ({ ...m, note: e.target.value }))}
                     rows={3}
-                    placeholder={resolveDisputeModal.action === 'resolve' ? 'Ví dụ: Đã xác nhận hàng lỗi qua hình ảnh, đồng ý hoàn tiền toàn phần.' : 'Vui lòng nhập lý do hủy khiếu nại...'}
+                    placeholder={resolveDisputeModal.action === 'resolve' ? 'Ví dụ: Đã xác nhận xưởng nhận hàng hoàn tốt, đồng ý hoàn tiền 100% vào ví khách hàng.' : 'Vui lòng nhập lý do hủy khiếu nại...'}
                     className="w-full px-4 py-2.5 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-400 resize-none text-sm"
                   />
                 </div>
@@ -2643,7 +2713,7 @@ const AdminDashboard = () => {
                   <button
                     onClick={handleDisputeAction}
                     className={`flex-1 px-4 py-2.5 text-white rounded-xl font-semibold transition-colors ${
-                      resolveDisputeModal.action === 'resolve' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-red-600 hover:bg-red-700'
+                      resolveDisputeModal.action === 'resolve' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'
                     }`}
                   >
                     {resolveDisputeModal.action === 'resolve' ? 'Xác nhận Hoàn tiền' : 'Xác nhận Hủy khiếu nại'}
