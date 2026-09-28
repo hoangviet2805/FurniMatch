@@ -145,7 +145,7 @@ namespace FurniMatch.Api.Controllers
                 }
             });
 
-            return Ok(new { message = "Registration successful. Please verify OTP.", otp = code });
+            return Ok(new { message = "Registration successful. Please verify OTP." });
         }
 
         [HttpPost("verify-registration")]
@@ -180,10 +180,30 @@ namespace FurniMatch.Api.Controllers
 
             if (user.Status == "PENDING_APPROVAL")
             {
-                return Ok(new { message = "Xác thực email thành công! Đơn đăng ký nhà sản xuất của bạn đang chờ Admin phê duyệt." });
+                return Ok(new { message = "Xác thực email thành công! Đơn đăng ký nhà sản xuất của bạn đang chờ Admin phê duyệt.", isSeller = true });
             }
 
-            return Ok(new { message = "Xác thực tài khoản thành công! Bạn có thể đăng nhập ngay bây giờ." });
+            var token = GenerateJwtToken(user);
+            return Ok(new
+            {
+                message = "Xác thực tài khoản thành công!",
+                isSeller = false,
+                token = token,
+                userId = user.UserId,
+                fullName = user.FullName,
+                email = user.Email,
+                role = user.Role!.RoleName,
+                phone = user.Phone,
+                shopName = user.ShopName,
+                shopDescription = user.ShopDescription,
+                isCustomSizeSupported = user.IsCustomSizeSupported,
+                latitude = user.Latitude,
+                longitude = user.Longitude,
+                province = user.Province,
+                district = user.District,
+                ward = user.Ward,
+                addressDetail = user.AddressDetail
+            });
         }
 
         [HttpPost("login")]
@@ -366,8 +386,7 @@ namespace FurniMatch.Api.Controllers
 
             return Ok(new 
             { 
-                message = "Mã xác nhận đã được gửi đến email của bạn.",
-                otp = code
+                message = "Mã xác nhận đã được gửi đến email của bạn."
             });
         }
 

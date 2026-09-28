@@ -27,9 +27,7 @@ const ForgotPassword = () => {
     try {
       const response = await api.post('/auth/forgot-password', { email });
       setMessage(response.data.message);
-      if (response.data?.otp) {
-        setCode(response.data.otp);
-      }
+      setCode('');
       setStep(2); // Chuyển sang bước nhập mã
     } catch (err: any) {
       setError(err.response?.data?.message || err.response?.data || 'Có lỗi xảy ra, vui lòng thử lại.');
@@ -139,13 +137,7 @@ const ForgotPassword = () => {
         {/* BƯỚC 2: NHẬP MÃ OTP */}
         {step === 2 && (
           <form className="mt-8 space-y-6" onSubmit={handleVerifyCode}>
-            {code && (
-              <div className="bg-emerald-50 border border-emerald-300 text-emerald-900 p-3.5 rounded-xl shadow-sm text-center">
-                <div className="text-xs text-emerald-700 font-bold uppercase tracking-wider">Mã xác thực của bạn:</div>
-                <div className="text-2xl font-mono font-black text-emerald-600 tracking-widest my-1">{code}</div>
-                <div className="text-[11px] text-gray-500">Mã đã được tự động điền sẵn, bạn chỉ cần bấm "Xác Nhận Mã"</div>
-              </div>
-            )}
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Mã xác nhận (8 số)</label>
               <input

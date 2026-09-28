@@ -24,6 +24,7 @@ const Register = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('Đăng Ký Thành Công!');
   const [loading, setLoading] = useState(false);
 
   const {
@@ -80,14 +81,12 @@ const Register = () => {
         });
       }
 
-      const response = await api.post('/auth/register', data, {
+      await api.post('/auth/register', data, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
       });
-      if (response.data?.otp) {
-        setCode(response.data.otp);
-      }
+      setCode('');
       setStep(2);
     } catch (err: any) {
       const respData = err.response?.data;
@@ -114,9 +113,24 @@ const Register = () => {
 
     setLoading(true);
     try {
-      await verifyRegistration({ email: formData.email, code });
-      setSuccess(true);
-      setTimeout(() => navigate('/login'), 1500);
+      const response = await verifyRegistration({ email: formData.email, code });
+      
+      if (response.data?.isSeller) {
+        setSuccessMessage('Xác thực thành công! Đơn đăng ký xưởng của bạn đang chờ Admin phê duyệt.');
+        setSuccess(true);
+        setTimeout(() => navigate('/login'), 3000);
+      } else {
+        if (response.data?.token) {
+          localStorage.setItem('token', response.data.token);
+          localStorage.setItem('user', JSON.stringify(response.data));
+        }
+        setSuccessMessage('Xác thực tài khoản thành công!');
+        setSuccess(true);
+        setTimeout(() => {
+          navigate('/');
+          window.location.reload();
+        }, 1500);
+      }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Xác thực thất bại. Vui lòng kiểm tra lại mã.');
     } finally {
@@ -460,13 +474,6 @@ const Register = () => {
           /* Step 2: Email Verification */
           <form className="space-y-6" onSubmit={handleVerifyCode}>
             <div className="bg-emerald-50/60 p-6 rounded-2xl border border-emerald-100 text-center">
-              {code && (
-                <div className="mb-4 bg-white border border-emerald-300 text-emerald-900 p-3.5 rounded-xl shadow-sm">
-                  <div className="text-xs text-emerald-700 font-bold uppercase tracking-wider">Mã xác thực của bạn:</div>
-                  <div className="text-2xl font-mono font-black text-emerald-600 tracking-widest my-1">{code}</div>
-                  <div className="text-[11px] text-gray-500">Mã đã được tự động điền sẵn, bạn chỉ cần nhấn nút xác nhận bên dưới</div>
-                </div>
-              )}
               <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-2">
                 Nhập mã 8 chữ số xác thực
               </label>
@@ -513,9 +520,9 @@ const Register = () => {
             <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-3xl mb-4 shadow-sm">
               ✓
             </div>
-            <h3 className="text-xl font-black text-gray-900 mb-1">Đăng Ký Thành Công!</h3>
+            <h3 className="text-xl font-black text-gray-900 mb-1">{successMessage}</h3>
             <p className="text-xs sm:text-sm text-gray-500">
-              Chào mừng bạn đến với FurniMatch. Đang chuyển hướng đến trang đăng nhập...
+              Chào mừng bạn đến với FurniMatch. {successMessage.includes('chuyển hướng') ? '' : 'Đang chuyển hướng...'}
             </p>
           </div>
         </div>
