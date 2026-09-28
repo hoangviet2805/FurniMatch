@@ -4,6 +4,8 @@ using System.Net.Mail;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
+using System.Net.Http;
 
 namespace FurniMatch.Api.Services
 {
@@ -16,6 +18,7 @@ namespace FurniMatch.Api.Services
     {
         private readonly IConfiguration _config;
         private readonly ILogger<EmailService> _logger;
+        private static readonly HttpClient _httpClient = new HttpClient();
 
         public EmailService(IConfiguration config, ILogger<EmailService> logger)
         {
@@ -28,6 +31,32 @@ namespace FurniMatch.Api.Services
             try
             {
                 var emailSettings = _config.GetSection("EmailSettings");
+                var googleScriptUrl = emailSettings["GoogleScriptUrl"];
+                
+                // NẾU CÓ CẤU HÌNH GOOGLE SCRIPT WEBHOOK -> DÙNG HTTP API (PORT 443) ĐỂ LÁCH LUẬT RENDER
+                if (!string.IsNullOrWhiteSpace(googleScriptUrl))
+                {
+                    var payload = new
+                    {
+                        to = toEmail,
+                        subject = subject,
+                        body = body
+                    };
+                    var content = new StringContent(JsonSerializer.Serialize(payload), System.Text.Encoding.UTF8, "application/json");
+                    
+                    var response = await _httpClient.PostAsync(googleScriptUrl, content);
+                    if (response.IsSuccessStatusCode)
+                    {
+                        _logger.LogInformation("Email sent successfully via Google Apps Script Webhook to {Email}", toEmail);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Failed to send email via Webhook. Status Code: {StatusCode}", response.StatusCode);
+                    }
+                    return; // Gửi bằng HTTP thành công, thoát hàm
+                }
+
+                // NẾU KHÔNG CÓ WEBHOOK -> DÙNG SMTP PORT 587 NHƯ CŨ (Chỉ chạy được ở Localhost)
                 var senderEmail = emailSettings["SenderEmail"];
                 var senderPassword = emailSettings["SenderPassword"];
                 var host = emailSettings["Host"];

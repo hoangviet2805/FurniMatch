@@ -24,14 +24,14 @@ namespace FurniMatch.Api.Controllers
     {
         private readonly FurniMatchDbContext _context;
         private readonly IConfiguration _configuration;
-        private readonly IEmailService _emailService;
+        private readonly IServiceScopeFactory _scopeFactory;
         private readonly IWebHostEnvironment _env;
 
-        public AuthController(FurniMatchDbContext context, IConfiguration configuration, IEmailService emailService, IWebHostEnvironment env)
+        public AuthController(FurniMatchDbContext context, IConfiguration configuration, IServiceScopeFactory scopeFactory, IWebHostEnvironment env)
         {
             _context = context;
             _configuration = configuration;
-            _emailService = emailService;
+            _scopeFactory = scopeFactory;
             _env = env;
         }
 
@@ -132,16 +132,21 @@ namespace FurniMatch.Api.Controllers
                 <p>Mã này sẽ hết hạn sau 15 phút.</p>
             ";
 
-            // Gửi email xác nhận trong background để tránh nghẽn thread và lỗi port SMTP trên cloud host
+            // Gửi email xác nhận trong background để tránh nghẽn thread
+            var targetEmail = dto.Email;
             _ = Task.Run(async () =>
             {
-                try
+                using (var scope = _scopeFactory.CreateScope())
                 {
-                    await _emailService.SendEmailAsync(dto.Email, "Xác thực tài khoản mới - FurniMatch", emailBody);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[EmailService] Failed to send email to {dto.Email}: {ex.Message}");
+                    var emailService = scope.ServiceProvider.GetRequiredService<IEmailService>();
+                    try
+                    {
+                        await emailService.SendEmailAsync(targetEmail, "Xác thực tài khoản mới - FurniMatch", emailBody);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[EmailService] Failed to send email to {targetEmail}: {ex.Message}");
+                    }
                 }
             });
 
@@ -372,15 +377,20 @@ namespace FurniMatch.Api.Controllers
                 <p>FurniMatch Team</p>";
             
             // Gửi email xác nhận trong background
+            var targetEmail = user.Email;
             _ = Task.Run(async () =>
             {
-                try 
+                using (var scope = _scopeFactory.CreateScope())
                 {
-                    await _emailService.SendEmailAsync(user.Email, subject, body);
-                } 
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[EmailService] Failed to send email to {user.Email}: {ex.Message}");
+                    var emailService = scope.ServiceProvider.GetRequiredService<IEmailService>();
+                    try 
+                    {
+                        await emailService.SendEmailAsync(targetEmail, subject, body);
+                    } 
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[EmailService] Failed to send email to {targetEmail}: {ex.Message}");
+                    }
                 }
             });
 
