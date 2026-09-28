@@ -1182,7 +1182,7 @@ const ManageProducts = () => {
                       </div>
                     ) : editingExistingThumbnailUrl ? (
                       <div className="relative border-2 border-emerald-500 rounded-2xl overflow-hidden h-44 shadow-md group">
-                        <img src={`${API_BASE_URL}${editingExistingThumbnailUrl}`} alt="Existing Thumbnail" className="w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-300" />
+                        <img src={editingExistingThumbnailUrl?.startsWith('http') ? editingExistingThumbnailUrl : `${API_BASE_URL}${editingExistingThumbnailUrl}`} alt="Existing Thumbnail" className="w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-300" />
                         <button
                           type="button"
                           onClick={() => setEditingExistingThumbnailUrl(null)}
@@ -1215,7 +1215,7 @@ const ManageProducts = () => {
                       
                       {editingExistingImages.map((img, index) => (
                         <div key={`existing-${index}`} className="relative border border-gray-200 rounded-xl overflow-hidden h-32 group shadow-xs">
-                          <img src={`${API_BASE_URL}${img.imageUrl}`} alt="Existing Additional" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 opacity-80" />
+                          <img src={img.imageUrl?.startsWith('http') ? img.imageUrl : `${API_BASE_URL}${img.imageUrl}`} alt="Existing Additional" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 opacity-80" />
                           <button
                             type="button"
                             onClick={() => setEditingExistingImages(editingExistingImages.filter((_, i) => i !== index))}
@@ -1294,7 +1294,7 @@ const ManageProducts = () => {
                         {selectedProduct.productImages.sort((a: any, b: any) => a.displayOrder - b.displayOrder).map((img: any) => (
                           <div key={img.productImageId} className="flex-shrink-0 relative">
                             <img 
-                              src={`${API_BASE_URL}${img.imageUrl}`} 
+                              src={img.imageUrl?.startsWith('http') ? img.imageUrl : `${API_BASE_URL}${img.imageUrl}`} 
                               alt="Product" 
                               className={`h-32 w-32 object-cover rounded-lg border-2 ${img.isThumbnail ? 'border-emerald-500' : 'border-transparent'}`}
                             />
