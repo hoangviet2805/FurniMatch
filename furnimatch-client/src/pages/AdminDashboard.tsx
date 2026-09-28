@@ -326,23 +326,17 @@ const AdminDashboard = () => {
 
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE_URL}/api/banners`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
-        body: formData
+      await api.post('/banners', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
       });
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng xuất và đăng nhập lại!');
-        }
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `Lỗi tải ảnh (${response.status}: ${response.statusText})`);
-      }
       setAlertModal({ isOpen: true, message: 'Tải ảnh banner thành công!', type: 'success' });
       fetchBanners();
     } catch (error: any) {
-      setAlertModal({ isOpen: true, message: error.message || 'Lỗi tải ảnh lên', type: 'error' });
+      if (error.response?.status === 401) {
+        setAlertModal({ isOpen: true, message: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng xuất và đăng nhập lại!', type: 'error' });
+      } else {
+        setAlertModal({ isOpen: true, message: error.response?.data?.message || error.message || 'Lỗi tải ảnh lên', type: 'error' });
+      }
     } finally {
       setLoading(false);
     }

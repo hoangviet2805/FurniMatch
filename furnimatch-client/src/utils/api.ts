@@ -1,7 +1,11 @@
 import axios from 'axios';
 import { repairResponseText } from './text';
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.VITE_API_URL ? String(import.meta.env.VITE_API_URL).replace(/\/api\/?$/, '') : 'http://localhost:5234');
+const rawApiUrl = (import.meta.env.VITE_API_URL ? String(import.meta.env.VITE_API_URL).trim() : '');
+const rawBaseUrl = (import.meta.env.VITE_API_BASE_URL ? String(import.meta.env.VITE_API_BASE_URL).trim() : '');
+
+export const API_BASE_URL = rawBaseUrl || (rawApiUrl ? rawApiUrl.replace(/\/api\/?$/, '') : 'http://localhost:5234');
+export const API_URL = rawApiUrl || `${API_BASE_URL}/api`;
 
 export const getImageUrl = (url?: string) => {
   if (!url) return '';
@@ -10,7 +14,7 @@ export const getImageUrl = (url?: string) => {
 };
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || `${API_BASE_URL}/api`,
+  baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json',
   },
