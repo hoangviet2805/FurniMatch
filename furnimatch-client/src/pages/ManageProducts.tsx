@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import api from '../utils/api';
+import api, { API_BASE_URL } from '../utils/api';
 import { PauseCircle, PlayCircle, Trash2, AlertTriangle, CheckCircle, Info, PackagePlus, Plus, X, UploadCloud, Edit } from 'lucide-react';
 
 const ManageProducts = () => {
@@ -217,7 +217,7 @@ const ManageProducts = () => {
 
       // Use native fetch to completely avoid Axios boundary/header stripping issues with FormData
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5234/api/products', {
+      const response = await fetch(`${API_BASE_URL}/api/products`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -364,7 +364,7 @@ const ManageProducts = () => {
       });
 
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5234/api/products/${editingProduct.productId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/products/${editingProduct.productId}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -1182,7 +1182,7 @@ const ManageProducts = () => {
                       </div>
                     ) : editingExistingThumbnailUrl ? (
                       <div className="relative border-2 border-emerald-500 rounded-2xl overflow-hidden h-44 shadow-md group">
-                        <img src={`http://localhost:5234${editingExistingThumbnailUrl}`} alt="Existing Thumbnail" className="w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-300" />
+                        <img src={`${API_BASE_URL}${editingExistingThumbnailUrl}`} alt="Existing Thumbnail" className="w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-300" />
                         <button
                           type="button"
                           onClick={() => setEditingExistingThumbnailUrl(null)}
@@ -1215,7 +1215,7 @@ const ManageProducts = () => {
                       
                       {editingExistingImages.map((img, index) => (
                         <div key={`existing-${index}`} className="relative border border-gray-200 rounded-xl overflow-hidden h-32 group shadow-xs">
-                          <img src={`http://localhost:5234${img.imageUrl}`} alt="Existing Additional" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 opacity-80" />
+                          <img src={`${API_BASE_URL}${img.imageUrl}`} alt="Existing Additional" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 opacity-80" />
                           <button
                             type="button"
                             onClick={() => setEditingExistingImages(editingExistingImages.filter((_, i) => i !== index))}
@@ -1294,7 +1294,7 @@ const ManageProducts = () => {
                         {selectedProduct.productImages.sort((a: any, b: any) => a.displayOrder - b.displayOrder).map((img: any) => (
                           <div key={img.productImageId} className="flex-shrink-0 relative">
                             <img 
-                              src={`http://localhost:5234${img.imageUrl}`} 
+                              src={`${API_BASE_URL}${img.imageUrl}`} 
                               alt="Product" 
                               className={`h-32 w-32 object-cover rounded-lg border-2 ${img.isThumbnail ? 'border-emerald-500' : 'border-transparent'}`}
                             />

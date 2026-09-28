@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import api from '../utils/api';
+import api, { API_BASE_URL } from '../utils/api';
 import { getRecentlyViewedIds } from '../utils/comparison';
 
 const Home = () => {
@@ -132,7 +132,7 @@ const Home = () => {
                 }`}
               >
                 <img
-                  src={banner.imageUrl.startsWith('http') ? banner.imageUrl : `http://localhost:5234${banner.imageUrl}`}
+                  src={banner.imageUrl.startsWith('http') ? banner.imageUrl : `${API_BASE_URL}${banner.imageUrl.startsWith('/') ? '' : '/'}${banner.imageUrl}`}
                   alt={`Banner ${index + 1}`}
                   className="w-full h-full object-cover"
                 />
@@ -186,7 +186,7 @@ const Home = () => {
                 <Link to={`/products/${product.productId}`} key={product.productId} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow group block">
                   <div className="h-48 bg-gray-100 relative overflow-hidden">
                     {product.productImages && product.productImages.length > 0 ? (
-                      <img src={product.productImages[0].imageUrl.startsWith('http') ? product.productImages[0].imageUrl : `http://localhost:5234${product.productImages[0].imageUrl}`} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                      <img src={product.productImages[0].imageUrl.startsWith('http') ? product.productImages[0].imageUrl : `${API_BASE_URL}${product.productImages[0].imageUrl.startsWith('/') ? '' : '/'}${product.productImages[0].imageUrl}`} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-gray-400">Không có ảnh</div>
                     )}
@@ -217,7 +217,7 @@ const Home = () => {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between mb-6"><h2 className="text-2xl font-bold text-gray-900">Bạn vừa xem</h2><Link to="/products" className="text-sm font-medium text-emerald-600">Xem thêm sản phẩm</Link></div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              {recentProducts.map(product => <Link to={`/products/${product.productId}`} key={product.productId} className="bg-white rounded-xl overflow-hidden border border-gray-100 hover:shadow-md transition-shadow group"><div className="h-32 sm:h-40 bg-gray-100">{product.productImages?.[0] ? <img src={product.productImages[0].imageUrl.startsWith('http') ? product.productImages[0].imageUrl : `http://localhost:5234${product.productImages[0].imageUrl}`} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" /> : <div className="h-full flex items-center justify-center text-gray-400 text-xs">Không có ảnh</div>}</div><div className="p-3"><p className="font-semibold text-sm text-gray-900 truncate">{product.name}</p><p className="mt-1 text-sm font-bold text-emerald-600">{product.productVariants?.length ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Math.min(...product.productVariants.map((variant: any) => variant.price))) : 'Liên hệ'}</p></div></Link>)}
+              {recentProducts.map(product => <Link to={`/products/${product.productId}`} key={product.productId} className="bg-white rounded-xl overflow-hidden border border-gray-100 hover:shadow-md transition-shadow group"><div className="h-32 sm:h-40 bg-gray-100">{product.productImages?.[0] ? <img src={product.productImages[0].imageUrl.startsWith('http') ? product.productImages[0].imageUrl : `${API_BASE_URL}${product.productImages[0].imageUrl.startsWith('/') ? '' : '/'}${product.productImages[0].imageUrl}`} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" /> : <div className="h-full flex items-center justify-center text-gray-400 text-xs">Không có ảnh</div>}</div><div className="p-3"><p className="font-semibold text-sm text-gray-900 truncate">{product.name}</p><p className="mt-1 text-sm font-bold text-emerald-600">{product.productVariants?.length ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Math.min(...product.productVariants.map((variant: any) => variant.price))) : 'Liên hệ'}</p></div></Link>)}
             </div>
           </div>
         </section>

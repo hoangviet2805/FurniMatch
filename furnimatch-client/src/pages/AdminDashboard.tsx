@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import api from '../utils/api';
+import api, { API_BASE_URL } from '../utils/api';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
@@ -327,7 +327,7 @@ const AdminDashboard = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5234/api/banners', {
+      const response = await fetch(`${API_BASE_URL}/api/banners`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` },
         body: formData
@@ -1023,7 +1023,7 @@ const AdminDashboard = () => {
                   </button>
                   <div className="aspect-[21/9] w-full">
                     <img
-                      src={banner.imageUrl.startsWith('http') ? banner.imageUrl : `http://localhost:5234${banner.imageUrl}`}
+                      src={banner.imageUrl.startsWith('http') ? banner.imageUrl : `${API_BASE_URL}${banner.imageUrl}`}
                       alt={`Banner ${index + 1}`}
                       className="w-full h-full object-cover"
                     />
@@ -1854,7 +1854,7 @@ const AdminDashboard = () => {
 
           <div className="relative w-full max-w-4xl max-h-[80vh] flex justify-center px-12">
             <img
-              src={`http://localhost:5234${imageModal.images[imageModal.currentIndex]}`}
+              src={imageModal.images[imageModal.currentIndex].startsWith('http') ? imageModal.images[imageModal.currentIndex] : `${API_BASE_URL}${imageModal.images[imageModal.currentIndex].startsWith('/') ? '' : '/'}${imageModal.images[imageModal.currentIndex]}`}
               alt="Document"
               className="max-w-full max-h-[80vh] object-contain"
             />
@@ -2165,7 +2165,7 @@ const AdminDashboard = () => {
                                         setReceiptZoom(1);
                                         setViewReceiptModal({
                                           isOpen: true,
-                                          url: w.paymentReceiptUrl.startsWith('http') ? w.paymentReceiptUrl : `http://localhost:5234${w.paymentReceiptUrl}`,
+                                          url: w.paymentReceiptUrl.startsWith('http') ? w.paymentReceiptUrl : `${API_BASE_URL}${w.paymentReceiptUrl.startsWith('/') ? '' : '/'}${w.paymentReceiptUrl}`,
                                           title: `Bill chuyển khoản - ${w.sellerName} (${money(w.amount)})`
                                         });
                                       }}
@@ -2465,7 +2465,7 @@ const AdminDashboard = () => {
                               {images.length > 0 ? (
                                 <div className="flex items-center justify-center gap-1.5 flex-wrap max-w-[120px] mx-auto">
                                   {images.map((img: string, idx: number) => {
-                                    const fullUrl = img.startsWith('http') ? img : `http://localhost:5234${img.startsWith('/') ? '' : '/'}${img}`;
+                                    const fullUrl = img.startsWith('http') ? img : `${API_BASE_URL}${img.startsWith('/') ? '' : '/'}${img}`;
                                     return (
                                       <button
                                         key={idx}
@@ -2614,7 +2614,7 @@ const AdminDashboard = () => {
                         </span>
                         <div className="flex gap-2 flex-wrap">
                           {modalImgs.map((img: string, i: number) => {
-                            const fullUrl = img.startsWith('http') ? img : `http://localhost:5234${img.startsWith('/') ? '' : '/'}${img}`;
+                            const fullUrl = img.startsWith('http') ? img : `${API_BASE_URL}${img.startsWith('/') ? '' : '/'}${img}`;
                             return (
                               <button
                                 key={i}
