@@ -33,7 +33,7 @@ interface Product {
 
 const resolveImageUrl = (url?: string) => {
   if (!url) return '';
-  return url.startsWith('http') ? url : `http://localhost:5234${url}`;
+  return url.startsWith('http') ? url : `https://furnimatch-2.onrender.com${url}`;
 };
 
 // ─── Modal Tùy Chỉnh Gian Hàng ──────────────────────────────────────────────
@@ -823,3 +823,4 @@ const Shop: React.FC = () => {
 };
 
 export default Shop;
+

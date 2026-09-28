@@ -187,7 +187,7 @@ const Products = () => {
                     {product.productImages && product.productImages.length > 0 ? (
                       (() => {
                         const thumb = product.productImages.find((img: any) => img.isThumbnail) || product.productImages[0];
-                        const imgUrl = thumb.imageUrl.startsWith('http') ? thumb.imageUrl : `http://localhost:5234${thumb.imageUrl.startsWith('/') ? '' : '/'}${thumb.imageUrl}`;
+                        const imgUrl = thumb.imageUrl.startsWith('http') ? thumb.imageUrl : `https://furnimatch-2.onrender.com${thumb.imageUrl.startsWith('/') ? '' : '/'}${thumb.imageUrl}`;
                         return (
                           <img 
                             src={imgUrl} 
@@ -256,3 +256,4 @@ const Products = () => {
 };
 
 export default Products;
+

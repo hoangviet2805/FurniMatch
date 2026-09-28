@@ -272,7 +272,7 @@ function WalletSection() {
                                 type="button"
                                 onClick={() => setReceiptPreviewModal({
                                   isOpen: true,
-                                  url: w.paymentReceiptUrl.startsWith('http') ? w.paymentReceiptUrl : `http://localhost:5234${w.paymentReceiptUrl}`,
+                                  url: w.paymentReceiptUrl.startsWith('http') ? w.paymentReceiptUrl : `https://furnimatch-2.onrender.com${w.paymentReceiptUrl}`,
                                   item: w
                                 })}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-xs font-bold border border-emerald-200 transition-all shadow-sm"
@@ -675,7 +675,7 @@ function SellerDisputesSection({
                         <p className="text-xs text-gray-500 font-medium mb-1.5">Ảnh bằng chứng khách gửi ({images.length} ảnh):</p>
                         <div className="flex items-center gap-2 flex-wrap">
                           {images.map((img: string, idx: number) => {
-                            const fullUrl = img.startsWith('http') ? img : `http://localhost:5234${img.startsWith('/') ? '' : '/'}${img}`;
+                            const fullUrl = img.startsWith('http') ? img : `https://furnimatch-2.onrender.com${img.startsWith('/') ? '' : '/'}${img}`;
                             return (
                               <button
                                 key={idx}
@@ -817,7 +817,7 @@ function SellerDisputesSection({
                         <p className="text-[11px] text-gray-500 font-semibold mb-1">Ảnh bằng chứng khách gửi ({cImgs.length} ảnh) - Nhấn để xem:</p>
                         <div className="flex items-center gap-2 flex-wrap">
                           {cImgs.map((img: string, idx: number) => {
-                            const fullUrl = img.startsWith('http') ? img : `http://localhost:5234${img.startsWith('/') ? '' : '/'}${img}`;
+                            const fullUrl = img.startsWith('http') ? img : `https://furnimatch-2.onrender.com${img.startsWith('/') ? '' : '/'}${img}`;
                             return (
                               <button
                                 key={idx}
@@ -1492,7 +1492,7 @@ export default function SellerDashboard() {
                               <div className="flex items-center gap-2 flex-wrap pt-0.5">
                                 <span className="text-[11px] font-semibold text-gray-600">Ảnh bằng chứng ({dispImgs.length} ảnh):</span>
                                 {dispImgs.map((img: string, idx: number) => {
-                                  const fullUrl = img.startsWith('http') ? img : `http://localhost:5234${img.startsWith('/') ? '' : '/'}${img}`;
+                                  const fullUrl = img.startsWith('http') ? img : `https://furnimatch-2.onrender.com${img.startsWith('/') ? '' : '/'}${img}`;
                                   return (
                                     <button
                                       key={idx}
@@ -1579,7 +1579,7 @@ export default function SellerDashboard() {
                                   <div className="h-16 w-16 shrink-0 rounded-lg border border-gray-200 bg-gray-50 overflow-hidden flex items-center justify-center">
                                     {imageUrl ? (
                                       <img 
-                                        src={imageUrl.startsWith('http') ? imageUrl : `http://localhost:5234${imageUrl.startsWith('/') ? '' : '/'}${imageUrl}`} 
+                                        src={imageUrl.startsWith('http') ? imageUrl : `https://furnimatch-2.onrender.com${imageUrl.startsWith('/') ? '' : '/'}${imageUrl}`} 
                                         className="h-full w-full object-cover" 
                                         alt={name || 'Sản phẩm'}
                                         onError={(e) => {
@@ -1759,3 +1759,4 @@ export default function SellerDashboard() {
     </div>
   );
 }
+

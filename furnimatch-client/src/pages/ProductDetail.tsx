@@ -5,13 +5,13 @@ import { isFavorite, toggleFavorite } from '../utils/favorites';
 import { addRecentlyViewed, isCompared, toggleComparison } from '../utils/comparison';
 import { saveCart } from '../utils/cart';
 
-const imageUrl = (url?: string) => url?.startsWith('http') ? url : `http://localhost:5234${url}`;
+const imageUrl = (url?: string) => url?.startsWith('http') ? url : `https://furnimatch-2.onrender.com${url}`;
 const money = (value: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
 
 const resolveMediaUrl = (url: string) => {
   if (!url) return '';
   if (url.startsWith('http://') || url.startsWith('https://')) return url;
-  return `http://localhost:5234${url.startsWith('/') ? '' : '/'}${url}`;
+  return `https://furnimatch-2.onrender.com${url.startsWith('/') ? '' : '/'}${url}`;
 };
 
 const isVideoFile = (url: string) => {
@@ -494,3 +494,4 @@ const ProductDetail = () => {
 };
 
 export default ProductDetail;
+

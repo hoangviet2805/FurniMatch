@@ -4,7 +4,7 @@ import { repairResponseText } from './text';
 const rawApiUrl = (import.meta.env.VITE_API_URL ? String(import.meta.env.VITE_API_URL).trim() : '');
 const rawBaseUrl = (import.meta.env.VITE_API_BASE_URL ? String(import.meta.env.VITE_API_BASE_URL).trim() : '');
 
-export const API_BASE_URL = rawBaseUrl || (rawApiUrl ? rawApiUrl.replace(/\/api\/?$/, '') : 'http://localhost:5234');
+export const API_BASE_URL = rawBaseUrl || (rawApiUrl ? rawApiUrl.replace(/\/api\/?$/, '') : 'https://furnimatch-2.onrender.com');
 export const API_URL = rawApiUrl || `${API_BASE_URL}/api`;
 
 export const getImageUrl = (url?: string) => {
@@ -45,3 +45,4 @@ export const verifyRegistration = (data: { email: string; code: string }) => api
 export const getShopInfo = (sellerId: string) => api.get(`/shops/${sellerId}`);
 export const getShopProducts = (sellerId: string) => api.get(`/shops/${sellerId}/products`);
 export const updateProduct = (id: number, data: any) => api.put(`/products/${id}`, data);
+
