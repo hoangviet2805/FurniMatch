@@ -132,16 +132,20 @@ namespace FurniMatch.Api.Controllers
                 <p>Mã này sẽ hết hạn sau 15 phút.</p>
             ";
 
-            try
+            // Gửi email xác nhận trong background để tránh nghẽn thread và lỗi port SMTP trên cloud host
+            _ = Task.Run(async () =>
             {
-                await _emailService.SendEmailAsync(dto.Email, "Xác thực tài khoản mới - FurniMatch", emailBody);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { message = "Không thể gửi email lúc này. Vui lòng kiểm tra cấu hình SMTP." });
-            }
+                try
+                {
+                    await _emailService.SendEmailAsync(dto.Email, "Xác thực tài khoản mới - FurniMatch", emailBody);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[EmailService] Failed to send email to {dto.Email}: {ex.Message}");
+                }
+            });
 
-            return Ok(new { message = "Registration successful. Please verify OTP." });
+            return Ok(new { message = "Registration successful. Please verify OTP.", otp = code });
         }
 
         [HttpPost("verify-registration")]
@@ -347,18 +351,23 @@ namespace FurniMatch.Api.Controllers
                 <p>Trân trọng,</p>
                 <p>FurniMatch Team</p>";
             
-            try 
+            // Gửi email xác nhận trong background
+            _ = Task.Run(async () =>
             {
-                await _emailService.SendEmailAsync(user.Email, subject, body);
-            } 
-            catch (Exception)
-            {
-                return StatusCode(500, new { message = "Không thể gửi email lúc này, vui lòng thử lại sau." });
-            }
+                try 
+                {
+                    await _emailService.SendEmailAsync(user.Email, subject, body);
+                } 
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[EmailService] Failed to send email to {user.Email}: {ex.Message}");
+                }
+            });
 
             return Ok(new 
             { 
-                message = "Mã xác nhận đã được gửi đến email của bạn." 
+                message = "Mã xác nhận đã được gửi đến email của bạn.",
+                otp = code
             });
         }
 

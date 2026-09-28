@@ -41,16 +41,16 @@ namespace FurniMatch.Api.Services
                     return;
                 }
 
-                using var smtpClient = new SmtpClient(host, port)
+                var smtpClient = new SmtpClient(host, port)
                 {
                     EnableSsl = true,
                     UseDefaultCredentials = false,
                     Credentials = new NetworkCredential(senderEmail, senderPassword),
                     DeliveryMethod = SmtpDeliveryMethod.Network,
-                    Timeout = 15000
+                    Timeout = 5000
                 };
 
-                using var mailMessage = new MailMessage
+                var mailMessage = new MailMessage
                 {
                     From = new MailAddress(senderEmail!, "FurniMatch System"),
                     Subject = subject,
@@ -59,8 +59,17 @@ namespace FurniMatch.Api.Services
                 };
                 mailMessage.To.Add(toEmail);
 
-                await smtpClient.SendMailAsync(mailMessage);
-                _logger.LogInformation("Email sent successfully to {Email} with subject: {Subject}", toEmail, subject);
+                var sendTask = smtpClient.SendMailAsync(mailMessage);
+                var completedTask = await Task.WhenAny(sendTask, Task.Delay(3500));
+                if (completedTask == sendTask)
+                {
+                    await sendTask;
+                    _logger.LogInformation("Email sent successfully to {Email} with subject: {Subject}", toEmail, subject);
+                }
+                else
+                {
+                    _logger.LogWarning("Email to {Email} timed out after 3.5s (outbound SMTP likely blocked by hosting provider).", toEmail);
+                }
             }
             catch (Exception ex)
             {
