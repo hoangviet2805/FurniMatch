@@ -33,17 +33,21 @@ namespace FurniMatch.Api.Services
                 var host = emailSettings["Host"];
                 var port = int.Parse(emailSettings["Port"] ?? "587");
 
+                senderPassword = senderPassword?.Trim().Replace(" ", "");
+
                 if (string.IsNullOrWhiteSpace(senderEmail) || string.IsNullOrWhiteSpace(senderPassword))
                 {
                     _logger.LogWarning("Email settings are not configured properly. Cannot send email to {Email}", toEmail);
                     return;
                 }
 
-                using var smtpClient = new SmtpClient(host)
+                using var smtpClient = new SmtpClient(host, port)
                 {
-                    Port = port,
-                    Credentials = new NetworkCredential(senderEmail, senderPassword),
                     EnableSsl = true,
+                    UseDefaultCredentials = false,
+                    Credentials = new NetworkCredential(senderEmail, senderPassword),
+                    DeliveryMethod = SmtpDeliveryMethod.Network,
+                    Timeout = 15000
                 };
 
                 using var mailMessage = new MailMessage
