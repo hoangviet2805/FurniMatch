@@ -552,6 +552,7 @@ namespace FurniMatch.Api.Controllers
                     OrderAmount = d.Order != null ? (d.Order.TotalAmount > 0 ? d.Order.TotalAmount : d.Order.Subtotal) : 0,
                     CustomerName = d.Customer != null ? d.Customer.FullName : "N/A",
                     CustomerEmail = d.Customer != null ? d.Customer.Email : "N/A",
+                    CustomerPhone = d.Order != null ? d.Order.RecipientPhone : "N/A",
                     d.Reason,
                     d.EvidenceImages,
                     d.Status,

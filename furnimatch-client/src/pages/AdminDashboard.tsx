@@ -501,7 +501,7 @@ const AdminDashboard = () => {
   };
 
   const handleDisputeAction = async () => {
-    if (!resolveDisputeModal.disputeId) return;
+    if (resolveDisputeModal.disputeId == null) return;
     const url = `/admin/disputes/${resolveDisputeModal.disputeId}/${resolveDisputeModal.action}`;
     try {
       await api.put(url, { note: resolveDisputeModal.note });
@@ -2457,6 +2457,7 @@ const AdminDashboard = () => {
                             <td className="px-5 py-4">
                               <p className="text-sm font-medium text-gray-900">{d.customerName}</p>
                               <p className="text-xs text-gray-400">{d.customerEmail}</p>
+                              <p className="text-xs text-gray-500 font-semibold">{d.customerPhone}</p>
                             </td>
                             <td className="px-5 py-4 text-sm text-gray-700 max-w-xs">
                               <p className="line-clamp-2" title={d.reason}>{d.reason}</p>

@@ -57,6 +57,13 @@ const Register = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    const phoneRegex = /^(03|05|07|08|09)\d{8}$/;
+    if (!phoneRegex.test(formData.phone)) {
+      setError('Số điện thoại phải gồm 10 chữ số và bắt đầu bằng 03, 05, 07, 08, 09.');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -396,7 +403,7 @@ const Register = () => {
 
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1">
-                    Hồ sơ xác thực (CCCD / Giấy phép kinh doanh)
+                    Hồ sơ xác thực (CCCD / Giấy phép kinh doanh/Hình ảnh xưởng)
                   </label>
                   <input
                     type="file"
