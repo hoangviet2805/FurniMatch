@@ -6,6 +6,8 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
 
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Dynamically bind port for Render / container environments
@@ -21,9 +23,9 @@ builder.Services.AddControllers().AddJsonOptions(options =>
     options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
 });
 
-// Add DbContext
+// Add DbContext (PostgreSQL / Supabase)
 builder.Services.AddDbContext<FurniMatchDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // Add Email Service
 builder.Services.AddScoped<IEmailService, EmailService>();
@@ -88,18 +90,13 @@ using (var scope = app.Services.CreateScope())
 
     try
     {
-        context.Database.ExecuteSqlRaw(@"
-            IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('OrderDisputes') AND name = 'SellerNote')
-            BEGIN
-                ALTER TABLE [OrderDisputes] ADD [SellerNote] nvarchar(max) NULL;
-            END
-            IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('OrderDisputes') AND name = 'ReturnReceivedAt')
-            BEGIN
-                ALTER TABLE [OrderDisputes] ADD [ReturnReceivedAt] datetime2 NULL;
-            END
-        ");
+        // Auto-create database schema on PostgreSQL / Supabase if not exists
+        context.Database.EnsureCreated();
     }
-    catch { /* Ignore if already exists or table not ready */ }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[Database Init Warning]: {ex.Message}");
+    }
 
     if (!context.Categories.Any())
     {
