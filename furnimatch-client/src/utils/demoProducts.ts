@@ -5,4 +5,6 @@ export const demoProducts = [
   { productId: -4, name: 'Tủ Trang Trí Kính', category: { name: 'Tủ Bếp' }, seller: { shopName: 'Furni Studio' }, price: 5400000, customSizeSupported: false, productImages: [{ imageUrl: '/uploads/products/627040a4-0c2c-4aa8-8150-3fb65555a4a2_image3.jpg' }], productVariants: [{ price: 5400000, length: 100, width: 40, height: 180, productionDays: 10 }] }
 ];
 
-export const productImageUrl = (url?: string) => url?.startsWith('http') ? url : `http://localhost:5234${url}`;
+import { getImageUrl } from './api';
+
+export const productImageUrl = (url?: string) => getImageUrl(url);

@@ -3,6 +3,7 @@ import api from '../utils/api';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
+import { ZoomIn, ZoomOut, RotateCcw, X, ExternalLink } from 'lucide-react';
 
 const AdminDashboard = () => {
   const [users, setUsers] = useState<any[]>([]);
@@ -49,6 +50,18 @@ const AdminDashboard = () => {
     url: '',
     title: ''
   });
+  const [receiptZoom, setReceiptZoom] = useState<number>(1);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && viewReceiptModal.isOpen) {
+        setViewReceiptModal({ isOpen: false, url: '', title: '' });
+        setReceiptZoom(1);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [viewReceiptModal.isOpen]);
 
   const [disputes, setDisputes] = useState<any[]>([]);
   const [dsTotal, setDsTotal] = useState(0);
@@ -2148,12 +2161,15 @@ const AdminDashboard = () => {
                                   {w.paymentReceiptUrl && (
                                     <button
                                       type="button"
-                                      onClick={() => setViewReceiptModal({
-                                        isOpen: true,
-                                        url: w.paymentReceiptUrl.startsWith('http') ? w.paymentReceiptUrl : `http://localhost:5234${w.paymentReceiptUrl}`,
-                                        title: `Bill chuyển khoản - ${w.sellerName} (${money(w.amount)})`
-                                      })}
-                                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg text-xs font-semibold transition-colors border border-emerald-200"
+                                      onClick={() => {
+                                        setReceiptZoom(1);
+                                        setViewReceiptModal({
+                                          isOpen: true,
+                                          url: w.paymentReceiptUrl.startsWith('http') ? w.paymentReceiptUrl : `http://localhost:5234${w.paymentReceiptUrl}`,
+                                          title: `Bill chuyển khoản - ${w.sellerName} (${money(w.amount)})`
+                                        });
+                                      }}
+                                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg text-xs font-semibold transition-colors border border-emerald-200 cursor-pointer"
                                     >
                                       <span>🧾 Xem bill</span>
                                     </button>
@@ -2343,44 +2359,6 @@ const AdminDashboard = () => {
               </div>
             </div>
           )}
-
-          {/* View Receipt Image Modal */}
-          {viewReceiptModal.isOpen && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-              <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden">
-                <div className="p-4 border-b border-gray-100 flex justify-between items-center">
-                  <h3 className="font-bold text-gray-900 text-sm truncate">{viewReceiptModal.title || 'Chứng từ chuyển khoản'}</h3>
-                  <button
-                    type="button"
-                    onClick={() => setViewReceiptModal({ isOpen: false, url: '', title: '' })}
-                    className="p-1 rounded-lg hover:bg-gray-100 text-gray-500"
-                  >
-                    ✕
-                  </button>
-                </div>
-                <div className="p-4 bg-gray-50 flex items-center justify-center max-h-[75vh] overflow-auto">
-                  <img src={viewReceiptModal.url} alt="Receipt" className="max-w-full max-h-[70vh] object-contain rounded-lg shadow-sm" />
-                </div>
-                <div className="p-3 border-t border-gray-100 flex justify-between items-center">
-                  <a
-                    href={viewReceiptModal.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-xs font-semibold text-emerald-600 hover:underline flex items-center gap-1"
-                  >
-                    <span>Mở ảnh gốc trong tab mới ↗</span>
-                  </a>
-                  <button
-                    type="button"
-                    onClick={() => setViewReceiptModal({ isOpen: false, url: '', title: '' })}
-                    className="px-4 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-semibold rounded-lg"
-                  >
-                    Đóng
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -2492,8 +2470,15 @@ const AdminDashboard = () => {
                                       <button
                                         key={idx}
                                         type="button"
-                                        onClick={() => setViewReceiptModal({ isOpen: true, url: fullUrl, title: `Bằng chứng khiếu nại đơn #${d.orderCode} (Ảnh ${idx + 1}/${images.length})` })}
-                                        className="relative group w-9 h-9 rounded-lg overflow-hidden border border-gray-200 hover:border-amber-500 shadow-xs cursor-pointer bg-gray-50 flex items-center justify-center"
+                                        onClick={() => {
+                                          setReceiptZoom(1);
+                                          setViewReceiptModal({ 
+                                            isOpen: true, 
+                                            url: fullUrl, 
+                                            title: `Bằng chứng khiếu nại đơn #${d.orderCode} (Ảnh ${idx + 1}/${images.length})` 
+                                          });
+                                        }}
+                                        className="relative group w-9 h-9 rounded-lg overflow-hidden border border-gray-200 hover:border-amber-500 shadow-xs cursor-pointer bg-gray-50 flex items-center justify-center cursor-zoom-in"
                                         title="Nhấn để phóng to ảnh bằng chứng"
                                       >
                                         <img src={fullUrl} alt={`Evidence ${idx + 1}`} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
@@ -2634,12 +2619,15 @@ const AdminDashboard = () => {
                               <button
                                 key={i}
                                 type="button"
-                                onClick={() => setViewReceiptModal({
-                                  isOpen: true,
-                                  url: fullUrl,
-                                  title: `Bằng chứng khiếu nại - Đơn #${resolveDisputeModal.item?.orderCode} (Ảnh ${i + 1}/${modalImgs.length})`
-                                })}
-                                className="w-14 h-14 rounded-lg overflow-hidden border border-gray-200 hover:border-amber-500 transition shadow-xs cursor-pointer bg-white"
+                                onClick={() => {
+                                  setReceiptZoom(1);
+                                  setViewReceiptModal({
+                                    isOpen: true,
+                                    url: fullUrl,
+                                    title: `Bằng chứng khiếu nại - Đơn #${resolveDisputeModal.item?.orderCode} (Ảnh ${i + 1}/${modalImgs.length})`
+                                  });
+                                }}
+                                className="w-14 h-14 rounded-lg overflow-hidden border border-gray-200 hover:border-amber-500 transition shadow-xs cursor-pointer bg-white cursor-zoom-in"
                                 title="Nhấp để phóng to"
                               >
                                 <img src={fullUrl} alt={`Evidence ${i + 1}`} className="w-full h-full object-cover" />
@@ -2722,6 +2710,112 @@ const AdminDashboard = () => {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* View Receipt / Evidence Image Preview Modal */}
+      {viewReceiptModal.isOpen && (
+        <div 
+          className="fixed inset-0 z-[95] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-150"
+          onClick={() => { setViewReceiptModal({ isOpen: false, url: '', title: '' }); setReceiptZoom(1); }}
+        >
+          <div 
+            className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full overflow-hidden flex flex-col max-h-[90vh]" 
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/80">
+              <h3 className="font-bold text-gray-900 text-sm truncate mr-4">
+                {viewReceiptModal.title || 'Xem hình ảnh'}
+              </h3>
+              <div className="flex items-center gap-2 shrink-0">
+                {/* Zoom Controls */}
+                <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg p-1 shadow-2xs">
+                  <button
+                    type="button"
+                    title="Thu nhỏ"
+                    onClick={() => setReceiptZoom(z => Math.max(0.5, Number((z - 0.25).toFixed(2))))}
+                    className="p-1 rounded hover:bg-gray-100 text-gray-600 cursor-pointer disabled:opacity-40"
+                    disabled={receiptZoom <= 0.5}
+                  >
+                    <ZoomOut className="w-4 h-4" />
+                  </button>
+                  <span className="text-xs font-semibold px-1.5 text-gray-700 min-w-[42px] text-center select-none">
+                    {Math.round(receiptZoom * 100)}%
+                  </span>
+                  <button
+                    type="button"
+                    title="Phóng to"
+                    onClick={() => setReceiptZoom(z => Math.min(3, Number((z + 0.25).toFixed(2))))}
+                    className="p-1 rounded hover:bg-gray-100 text-gray-600 cursor-pointer disabled:opacity-40"
+                    disabled={receiptZoom >= 3}
+                  >
+                    <ZoomIn className="w-4 h-4" />
+                  </button>
+                  {receiptZoom !== 1 && (
+                    <button
+                      type="button"
+                      title="Đặt lại kích thước (100%)"
+                      onClick={() => setReceiptZoom(1)}
+                      className="p-1 rounded hover:bg-gray-100 text-gray-600 cursor-pointer border-l border-gray-200 ml-0.5"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  title="Đóng (Esc)"
+                  onClick={() => { setViewReceiptModal({ isOpen: false, url: '', title: '' }); setReceiptZoom(1); }}
+                  className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-500 hover:text-gray-800 transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Image Body */}
+            <div className="p-4 bg-gray-950/95 flex-1 min-h-[300px] overflow-auto flex items-center justify-center select-none">
+              <img 
+                src={viewReceiptModal.url} 
+                alt="Evidence / Receipt Preview" 
+                style={{ 
+                  transform: `scale(${receiptZoom})`, 
+                  transformOrigin: 'center center',
+                  transition: 'transform 0.15s ease-out' 
+                }}
+                className={`max-w-full max-h-[70vh] object-contain rounded-lg shadow-2xl transition-transform ${receiptZoom > 1 ? 'cursor-zoom-out' : 'cursor-zoom-in'}`}
+                onClick={() => setReceiptZoom(z => z === 1 ? 1.75 : 1)}
+                title="Nhấp vào ảnh để phóng to / thu nhỏ nhanh"
+              />
+            </div>
+
+            {/* Footer */}
+            <div className="p-3 border-t border-gray-100 flex justify-between items-center bg-gray-50 text-xs text-gray-500">
+              <span className="hidden sm:inline">
+                💡 Nhấp vào ảnh hoặc dùng thanh công cụ để zoom chi tiết
+              </span>
+              <div className="flex items-center gap-3 ml-auto">
+                <a
+                  href={viewReceiptModal.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-semibold text-emerald-600 hover:text-emerald-700 hover:underline flex items-center gap-1"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Mở ảnh gốc trong tab mới</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => { setViewReceiptModal({ isOpen: false, url: '', title: '' }); setReceiptZoom(1); }}
+                  className="px-4 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold rounded-lg cursor-pointer"
+                >
+                  Đóng
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

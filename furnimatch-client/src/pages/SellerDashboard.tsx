@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import api from '../utils/api';
-import { Package, User, MapPin, Phone, CheckCircle, Clock, Truck, Hammer, XCircle, ClipboardList, Wallet, ArrowDownToLine, History, FileText, AlertTriangle, CheckCircle2, Eye, ShieldAlert } from 'lucide-react';
+import { Package, User, MapPin, Phone, CheckCircle, Clock, Truck, Hammer, XCircle, ClipboardList, Wallet, ArrowDownToLine, History, FileText, AlertTriangle, CheckCircle2, Eye, ShieldAlert, ZoomIn, ZoomOut, RotateCcw, X, ExternalLink } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
@@ -455,7 +455,13 @@ function WalletSection() {
 }
 
 // ─── Disputes Section for Seller ──────────────────────────────────────────────
-function SellerDisputesSection({ onCountUpdate }: { onCountUpdate?: (count: number) => void }) {
+function SellerDisputesSection({ 
+  onCountUpdate, 
+  onPreviewImage 
+}: { 
+  onCountUpdate?: (count: number) => void;
+  onPreviewImage?: (url: string, title: string) => void;
+}) {
   const [disputes, setDisputes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING_SELLER' | 'RETURN_RECEIVED' | 'RESOLVED' | 'REJECTED'>('ALL');
@@ -472,6 +478,16 @@ function SellerDisputesSection({ onCountUpdate }: { onCountUpdate?: (count: numb
   const [previewImageModal, setPreviewImageModal] = useState<{ isOpen: boolean; url: string; title: string }>({
     isOpen: false, url: '', title: ''
   });
+  const [localZoom, setLocalZoom] = useState<number>(1);
+
+  const handleOpenPreview = (url: string, title: string) => {
+    if (onPreviewImage) {
+      onPreviewImage(url, title);
+    } else {
+      setLocalZoom(1);
+      setPreviewImageModal({ isOpen: true, url, title });
+    }
+  };
 
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -664,8 +680,9 @@ function SellerDisputesSection({ onCountUpdate }: { onCountUpdate?: (count: numb
                               <button
                                 key={idx}
                                 type="button"
-                                onClick={() => setPreviewImageModal({ isOpen: true, url: fullUrl, title: `Bằng chứng khiếu nại #${d.orderCode} (Ảnh ${idx + 1})` })}
-                                className="w-14 h-14 rounded-lg overflow-hidden border border-gray-200 hover:border-amber-500 shadow-2xs transition-all relative group bg-gray-50"
+                                onClick={() => handleOpenPreview(fullUrl, `Bằng chứng khiếu nại #${d.orderCode} (Ảnh ${idx + 1}/${images.length})`)}
+                                className="w-14 h-14 rounded-lg overflow-hidden border border-gray-200 hover:border-amber-500 shadow-xs transition-all relative group bg-gray-50 cursor-pointer cursor-zoom-in"
+                                title="Nhấn để phóng to ảnh bằng chứng"
                               >
                                 <img src={fullUrl} alt={`Evidence ${idx + 1}`} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
                                 <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
@@ -782,6 +799,47 @@ function SellerDisputesSection({ onCountUpdate }: { onCountUpdate?: (count: numb
                 </div>
               </div>
 
+              {/* Customer Complaint Reason & Evidence in Confirm Modal */}
+              {(() => {
+                let cImgs: string[] = [];
+                try {
+                  if (confirmModal.item.evidenceImages) cImgs = JSON.parse(confirmModal.item.evidenceImages);
+                } catch {}
+                return (
+                  <div className="space-y-2 bg-amber-50/70 p-3.5 rounded-xl border border-amber-200/80">
+                    <p className="text-xs font-bold text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
+                      <FileText className="w-3.5 h-3.5 text-amber-600" />
+                      Lý do khiếu nại của khách:
+                    </p>
+                    <p className="text-xs font-medium text-gray-800 italic">"{confirmModal.item.reason}"</p>
+                    {cImgs.length > 0 && (
+                      <div className="pt-1.5">
+                        <p className="text-[11px] text-gray-500 font-semibold mb-1">Ảnh bằng chứng khách gửi ({cImgs.length} ảnh) - Nhấn để xem:</p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {cImgs.map((img: string, idx: number) => {
+                            const fullUrl = img.startsWith('http') ? img : `http://localhost:5234${img.startsWith('/') ? '' : '/'}${img}`;
+                            return (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => handleOpenPreview(fullUrl, `Bằng chứng khiếu nại #${confirmModal.item.orderCode} (Ảnh ${idx + 1}/${cImgs.length})`)}
+                                className="w-12 h-12 rounded-lg overflow-hidden border border-gray-200 hover:border-amber-500 shadow-2xs transition-all relative group bg-white cursor-pointer cursor-zoom-in"
+                                title="Nhấn để phóng to ảnh"
+                              >
+                                <img src={fullUrl} alt={`Evidence ${idx + 1}`} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
+                                <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                  <Eye className="w-3.5 h-3.5 text-white" />
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-xs text-blue-900 space-y-1">
                 <p className="font-bold flex items-center gap-1 text-blue-800">
                   <CheckCircle2 className="w-4 h-4 text-blue-600" />
@@ -837,32 +895,88 @@ function SellerDisputesSection({ onCountUpdate }: { onCountUpdate?: (count: numb
         </div>
       )}
 
-      {/* Image Preview Modal */}
+      {/* Fallback Image Preview Modal */}
       {previewImageModal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden">
-            <div className="p-4 border-b border-gray-100 flex items-center justify-between">
-              <h4 className="font-bold text-sm text-gray-900">{previewImageModal.title}</h4>
-              <button
-                onClick={() => setPreviewImageModal({ isOpen: false, url: '', title: '' })}
-                className="p-1 rounded-lg hover:bg-gray-100 text-gray-500"
-              >
-                ✕
-              </button>
+        <div 
+          className="fixed inset-0 z-[95] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-150"
+          onClick={() => { setPreviewImageModal({ isOpen: false, url: '', title: '' }); setLocalZoom(1); }}
+        >
+          <div 
+            className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full overflow-hidden flex flex-col max-h-[90vh]"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/80">
+              <h4 className="font-bold text-sm text-gray-900 truncate mr-4">{previewImageModal.title}</h4>
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg p-1 shadow-2xs">
+                  <button
+                    type="button"
+                    title="Thu nhỏ"
+                    onClick={() => setLocalZoom(z => Math.max(0.5, Number((z - 0.25).toFixed(2))))}
+                    className="p-1 rounded hover:bg-gray-100 text-gray-600 cursor-pointer disabled:opacity-40"
+                    disabled={localZoom <= 0.5}
+                  >
+                    <ZoomOut className="w-4 h-4" />
+                  </button>
+                  <span className="text-xs font-semibold px-1.5 text-gray-700 min-w-[42px] text-center select-none">
+                    {Math.round(localZoom * 100)}%
+                  </span>
+                  <button
+                    type="button"
+                    title="Phóng to"
+                    onClick={() => setLocalZoom(z => Math.min(3, Number((z + 0.25).toFixed(2))))}
+                    className="p-1 rounded hover:bg-gray-100 text-gray-600 cursor-pointer disabled:opacity-40"
+                    disabled={localZoom >= 3}
+                  >
+                    <ZoomIn className="w-4 h-4" />
+                  </button>
+                  {localZoom !== 1 && (
+                    <button
+                      type="button"
+                      title="Đặt lại kích thước (100%)"
+                      onClick={() => setLocalZoom(1)}
+                      className="p-1 rounded hover:bg-gray-100 text-gray-600 cursor-pointer border-l border-gray-200 ml-0.5"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+                <button
+                  onClick={() => { setPreviewImageModal({ isOpen: false, url: '', title: '' }); setLocalZoom(1); }}
+                  className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-500 hover:text-gray-800 transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
-            <div className="p-4 bg-gray-50 flex items-center justify-center max-h-[70vh] overflow-auto">
-              <img src={previewImageModal.url} alt="Evidence" className="max-w-full max-h-[65vh] object-contain rounded-lg shadow-xs" />
+            <div className="p-4 bg-gray-950/95 flex-1 min-h-[300px] overflow-auto flex items-center justify-center select-none">
+              <img 
+                src={previewImageModal.url} 
+                alt="Evidence" 
+                style={{ 
+                  transform: `scale(${localZoom})`, 
+                  transformOrigin: 'center center',
+                  transition: 'transform 0.15s ease-out' 
+                }}
+                className={`max-w-full max-h-[70vh] object-contain rounded-lg shadow-2xl transition-transform ${localZoom > 1 ? 'cursor-zoom-out' : 'cursor-zoom-in'}`}
+                onClick={() => setLocalZoom(z => z === 1 ? 1.75 : 1)}
+                title="Nhấp vào ảnh để phóng to / thu nhỏ nhanh"
+              />
             </div>
-            <div className="p-3 border-t border-gray-100 flex justify-between items-center">
-              <a href={previewImageModal.url} target="_blank" rel="noreferrer" className="text-xs font-semibold text-emerald-600 hover:underline">
-                Mở ảnh gốc trong tab mới ↗
-              </a>
-              <button
-                onClick={() => setPreviewImageModal({ isOpen: false, url: '', title: '' })}
-                className="px-4 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-semibold rounded-lg"
-              >
-                Đóng
-              </button>
+            <div className="p-3 border-t border-gray-100 flex justify-between items-center bg-gray-50 text-xs text-gray-500">
+              <span className="hidden sm:inline">💡 Nhấp vào ảnh hoặc dùng thanh công cụ để zoom chi tiết</span>
+              <div className="flex items-center gap-3 ml-auto">
+                <a href={previewImageModal.url} target="_blank" rel="noreferrer" className="font-semibold text-emerald-600 hover:underline flex items-center gap-1">
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Mở ảnh gốc trong tab mới</span>
+                </a>
+                <button
+                  onClick={() => { setPreviewImageModal({ isOpen: false, url: '', title: '' }); setLocalZoom(1); }}
+                  className="px-4 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold rounded-lg cursor-pointer"
+                >
+                  Đóng
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -881,6 +995,30 @@ export default function SellerDashboard() {
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
+
+  // Root image preview modal with zoom
+  const [previewImageModal, setPreviewImageModal] = useState<{ isOpen: boolean; url: string; title: string }>({
+    isOpen: false,
+    url: '',
+    title: ''
+  });
+  const [previewZoom, setPreviewZoom] = useState<number>(1);
+
+  const handlePreviewImage = (url: string, title: string) => {
+    setPreviewZoom(1);
+    setPreviewImageModal({ isOpen: true, url, title });
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && previewImageModal.isOpen) {
+        setPreviewImageModal({ isOpen: false, url: '', title: '' });
+        setPreviewZoom(1);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [previewImageModal.isOpen]);
 
   const filteredOrders = orders.filter(o => {
     if (orderStatusFilter === 'ALL') return true;
@@ -1024,7 +1162,7 @@ export default function SellerDashboard() {
       </div>
 
       {/* ===================== DISPUTES TAB ===================== */}
-      {tab === 'DISPUTES' && <SellerDisputesSection onCountUpdate={setPendingDisputeCount} />}
+      {tab === 'DISPUTES' && <SellerDisputesSection onCountUpdate={setPendingDisputeCount} onPreviewImage={handlePreviewImage} />}
 
       {/* ===================== WALLET TAB ===================== */}
       {tab === 'WALLET' && <WalletSection />}
@@ -1314,30 +1452,67 @@ export default function SellerDashboard() {
                       </div>
 
                       {/* Dispute Alert Banner if order is in dispute */}
-                      {o.dispute && (
-                        <div className="bg-amber-50 border-b border-amber-200 px-6 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
-                          <div className="flex items-center gap-2 text-amber-900">
-                            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                            <span>
-                              <strong>Khiếu nại đổi trả:</strong>{' '}
-                              {o.dispute.status === 'PENDING_SELLER' || o.dispute.status === 'OPEN'
-                                ? 'Khách hàng đã gửi khiếu nại (Chờ xưởng nhận & xác nhận hàng hoàn).'
-                                : o.dispute.status === 'RETURN_RECEIVED'
-                                ? 'Xưởng đã xác nhận nhận hàng hoàn hợp lệ (Đang chờ Admin hoàn tiền ví).'
-                                : o.dispute.status === 'RESOLVED'
-                                ? 'Admin đã duyệt hoàn tiền vào ví cho khách hàng.'
-                                : 'Khiếu nại đơn hàng đã bị từ chối / hủy.'}
-                            </span>
+                      {o.dispute && (() => {
+                        let dispImgs: string[] = [];
+                        try {
+                          if (o.dispute.evidenceImages) dispImgs = JSON.parse(o.dispute.evidenceImages);
+                        } catch {}
+                        return (
+                          <div className="bg-amber-50/90 border-b border-amber-200 px-6 py-3 space-y-2 text-xs">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex items-center gap-2 text-amber-900">
+                                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                                <span>
+                                  <strong>Khiếu nại đổi trả:</strong>{' '}
+                                  {o.dispute.status === 'PENDING_SELLER' || o.dispute.status === 'OPEN'
+                                    ? 'Khách hàng đã gửi khiếu nại (Chờ xưởng nhận & xác nhận hàng hoàn).'
+                                    : o.dispute.status === 'RETURN_RECEIVED'
+                                    ? 'Xưởng đã xác nhận nhận hàng hoàn hợp lệ (Đang chờ Admin hoàn tiền ví).'
+                                    : o.dispute.status === 'RESOLVED'
+                                    ? 'Admin đã duyệt hoàn tiền vào ví cho khách hàng.'
+                                    : 'Khiếu nại đơn hàng đã bị từ chối / hủy.'}
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setTab('DISPUTES')}
+                                className="text-amber-800 hover:text-amber-950 font-bold underline flex items-center gap-1 cursor-pointer shrink-0"
+                              >
+                                <span>Xem chi tiết khiếu nại &rarr;</span>
+                              </button>
+                            </div>
+
+                            {o.dispute.reason && (
+                              <p className="text-gray-700 italic bg-white/70 px-3 py-1.5 rounded-lg border border-amber-200/60">
+                                <span className="font-semibold text-gray-800 not-italic">Lý do khách gửi: </span>"{o.dispute.reason}"
+                              </p>
+                            )}
+
+                            {dispImgs.length > 0 && (
+                              <div className="flex items-center gap-2 flex-wrap pt-0.5">
+                                <span className="text-[11px] font-semibold text-gray-600">Ảnh bằng chứng ({dispImgs.length} ảnh):</span>
+                                {dispImgs.map((img: string, idx: number) => {
+                                  const fullUrl = img.startsWith('http') ? img : `http://localhost:5234${img.startsWith('/') ? '' : '/'}${img}`;
+                                  return (
+                                    <button
+                                      key={idx}
+                                      type="button"
+                                      onClick={() => handlePreviewImage(fullUrl, `Bằng chứng khiếu nại #${o.orderCode} (Ảnh ${idx + 1}/${dispImgs.length})`)}
+                                      className="w-10 h-10 rounded-lg overflow-hidden border border-gray-200 hover:border-amber-500 shadow-2xs transition-all relative group bg-white cursor-pointer cursor-zoom-in"
+                                      title="Nhấn để phóng to ảnh bằng chứng"
+                                    >
+                                      <img src={fullUrl} alt={`Evidence ${idx + 1}`} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
+                                      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                        <Eye className="w-3.5 h-3.5 text-white" />
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => setTab('DISPUTES')}
-                            className="text-amber-800 hover:text-amber-950 font-bold underline flex items-center gap-1 cursor-pointer"
-                          >
-                            <span>Xem mục Khiếu nại &rarr;</span>
-                          </button>
-                        </div>
-                      )}
+                        );
+                      })()}
 
                       <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x border-gray-100">
                         {/* Customer Info */}
@@ -1478,6 +1653,108 @@ export default function SellerDashboard() {
             </div>
           )}
         </>
+      )}
+
+      {/* Global Image Preview Modal with Zoom */}
+      {previewImageModal.isOpen && (
+        <div 
+          className="fixed inset-0 z-[99] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-150"
+          onClick={() => { setPreviewImageModal({ isOpen: false, url: '', title: '' }); setPreviewZoom(1); }}
+        >
+          <div 
+            className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full overflow-hidden flex flex-col max-h-[90vh]"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/80">
+              <h4 className="font-bold text-sm text-gray-900 truncate mr-4">{previewImageModal.title}</h4>
+              <div className="flex items-center gap-2 shrink-0">
+                {/* Zoom Controls */}
+                <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg p-1 shadow-2xs">
+                  <button
+                    type="button"
+                    title="Thu nhỏ"
+                    onClick={() => setPreviewZoom(z => Math.max(0.5, Number((z - 0.25).toFixed(2))))}
+                    className="p-1 rounded hover:bg-gray-100 text-gray-600 cursor-pointer disabled:opacity-40"
+                    disabled={previewZoom <= 0.5}
+                  >
+                    <ZoomOut className="w-4 h-4" />
+                  </button>
+                  <span className="text-xs font-semibold px-1.5 text-gray-700 min-w-[42px] text-center select-none">
+                    {Math.round(previewZoom * 100)}%
+                  </span>
+                  <button
+                    type="button"
+                    title="Phóng to"
+                    onClick={() => setPreviewZoom(z => Math.min(3, Number((z + 0.25).toFixed(2))))}
+                    className="p-1 rounded hover:bg-gray-100 text-gray-600 cursor-pointer disabled:opacity-40"
+                    disabled={previewZoom >= 3}
+                  >
+                    <ZoomIn className="w-4 h-4" />
+                  </button>
+                  {previewZoom !== 1 && (
+                    <button
+                      type="button"
+                      title="Đặt lại kích thước (100%)"
+                      onClick={() => setPreviewZoom(1)}
+                      className="p-1 rounded hover:bg-gray-100 text-gray-600 cursor-pointer border-l border-gray-200 ml-0.5"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  title="Đóng (Esc)"
+                  onClick={() => { setPreviewImageModal({ isOpen: false, url: '', title: '' }); setPreviewZoom(1); }}
+                  className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-500 hover:text-gray-800 transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Image Body */}
+            <div className="p-4 bg-gray-950/95 flex-1 min-h-[300px] overflow-auto flex items-center justify-center select-none">
+              <img 
+                src={previewImageModal.url} 
+                alt="Evidence Preview" 
+                style={{ 
+                  transform: `scale(${previewZoom})`, 
+                  transformOrigin: 'center center',
+                  transition: 'transform 0.15s ease-out' 
+                }}
+                className={`max-w-full max-h-[70vh] object-contain rounded-lg shadow-2xl transition-transform ${previewZoom > 1 ? 'cursor-zoom-out' : 'cursor-zoom-in'}`}
+                onClick={() => setPreviewZoom(z => z === 1 ? 1.75 : 1)}
+                title="Nhấp vào ảnh để phóng to / thu nhỏ nhanh"
+              />
+            </div>
+
+            {/* Footer */}
+            <div className="p-3 border-t border-gray-100 flex justify-between items-center bg-gray-50 text-xs text-gray-500">
+              <span className="hidden sm:inline">💡 Nhấp vào ảnh hoặc dùng thanh công cụ để zoom chi tiết</span>
+              <div className="flex items-center gap-3 ml-auto">
+                <a 
+                  href={previewImageModal.url} 
+                  target="_blank" 
+                  rel="noreferrer" 
+                  className="font-semibold text-emerald-600 hover:text-emerald-700 hover:underline flex items-center gap-1"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Mở ảnh gốc trong tab mới</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => { setPreviewImageModal({ isOpen: false, url: '', title: '' }); setPreviewZoom(1); }}
+                  className="px-4 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold rounded-lg cursor-pointer"
+                >
+                  Đóng
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
