@@ -11,8 +11,7 @@ services:
     envVars:
       - key: ASPNETCORE_ENVIRONMENT
         value: Production
-      - key: ConnectionStrings__DefaultConnection
-        value: Host=aws-0-ap-southeast-2.pooler.supabase.com;Port=5432;Database=postgres;Username=postgres.homodxvtvrjahagavrut;Password=Nmcong88$$$;SSL Mode=Require;Trust Server Certificate=true;
+
       - key: Jwt__Key
         generateValue: true
       - key: Jwt__Issuer
