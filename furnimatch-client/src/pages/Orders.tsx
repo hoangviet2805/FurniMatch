@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import api from '../utils/api';
+import api, { API_BASE_URL } from '../utils/api';
 import {
   CheckCircle2, Clock, XCircle, Package, Truck, Hammer,
   ClipboardList, Store, Info, Star, Upload, X, ChevronRight,
@@ -447,7 +447,7 @@ export default function Orders() {
   };
 
   const currentReviewItem = reviewItems[reviewStep];
-  const resolveImgUrl = (url?: string) => !url ? '' : url.startsWith('http') ? url : `https://furnimatch-2.onrender.com${url}`;
+  const resolveImgUrl = (url?: string) => !url ? '' : url.startsWith('http') ? url : `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-12">
@@ -616,7 +616,7 @@ export default function Orders() {
                           <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg border bg-gray-50 flex items-center justify-center">
                             {imageUrl ? (
                               <img 
-                                src={imageUrl.startsWith('http') ? imageUrl : `https://furnimatch-2.onrender.com${imageUrl.startsWith('/') ? '' : '/'}${imageUrl}`} 
+                                src={imageUrl.startsWith('http') ? imageUrl : `${API_BASE_URL}${imageUrl.startsWith('/') ? '' : '/'}${imageUrl}`} 
                                 alt={name || 'Sản phẩm'} 
                                 className="h-full w-full object-cover" 
                                 onError={(e) => {
@@ -1467,7 +1467,7 @@ export default function Orders() {
                     </span>
                     <div className="flex gap-2 flex-wrap">
                       {images.map((imgUrl, i) => {
-                        const fullUrl = imgUrl.startsWith('http') ? imgUrl : `https://furnimatch-2.onrender.com${imgUrl.startsWith('/') ? '' : '/'}${imgUrl}`;
+                        const fullUrl = imgUrl.startsWith('http') ? imgUrl : `${API_BASE_URL}${imgUrl.startsWith('/') ? '' : '/'}${imgUrl}`;
                         return (
                           <button
                             key={i}
