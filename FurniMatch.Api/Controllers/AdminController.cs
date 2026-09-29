@@ -220,7 +220,7 @@ namespace FurniMatch.Api.Controllers
         public async Task<IActionResult> GetRevenueSummary([FromQuery] string? from, [FromQuery] string? to)
         {
             var commissionRate = await GetCurrentCommissionRate();
-            var query = _context.Orders.Where(o => o.PaymentStatus == "PAID");
+            var query = _context.Orders.Where(o => o.PaymentStatus == "PAID" && o.PayoutStatus != "REFUNDED");
             if (DateTime.TryParse(from, out var fromDate)) query = query.Where(o => o.CreatedAt >= fromDate);
             if (DateTime.TryParse(to, out var toDate)) query = query.Where(o => o.CreatedAt <= toDate.AddDays(1));
 
@@ -231,13 +231,22 @@ namespace FurniMatch.Api.Controllers
                 .Include(u => u.Role)
                 .CountAsync(u => u.Role!.RoleName == "SELLER" && u.Status == "ACTIVE");
 
+            // Thống kê số tiền hoàn từ khiếu nại đã duyệt
+            var refundedQuery = _context.Orders.Where(o => o.PayoutStatus == "REFUNDED" || o.PaymentStatus == "REFUNDED");
+            if (DateTime.TryParse(from, out var fDate)) refundedQuery = refundedQuery.Where(o => o.CreatedAt >= fDate);
+            if (DateTime.TryParse(to, out var tDate)) refundedQuery = refundedQuery.Where(o => o.CreatedAt <= tDate.AddDays(1));
+            var refundedOrders = await refundedQuery.ToListAsync();
+            var totalRefunded = refundedOrders.Sum(o => o.Subtotal);
+
             return Ok(new
             {
                 totalGmv,
                 totalCommission,
                 commissionRate,
                 totalPaidOrders = orders.Count,
-                activeSellers
+                activeSellers,
+                totalRefunded,
+                totalRefundedOrders = refundedOrders.Count
             });
         }
 
@@ -246,7 +255,7 @@ namespace FurniMatch.Api.Controllers
         {
             if (year == 0) year = DateTime.UtcNow.Year;
             var orders = await _context.Orders
-                .Where(o => o.PaymentStatus == "PAID" && o.CreatedAt.Year == year)
+                .Where(o => o.PaymentStatus == "PAID" && o.PayoutStatus != "REFUNDED" && o.CreatedAt.Year == year)
                 .ToListAsync();
 
             if (period == "monthly")
@@ -281,7 +290,7 @@ namespace FurniMatch.Api.Controllers
         public async Task<IActionResult> GetRevenueBySeller([FromQuery] string? from, [FromQuery] string? to)
         {
             var commissionRate = await GetCurrentCommissionRate();
-            var query = _context.Orders.Where(o => o.PaymentStatus == "PAID");
+            var query = _context.Orders.Where(o => o.PaymentStatus == "PAID" && o.PayoutStatus != "REFUNDED");
             if (DateTime.TryParse(from, out var fromDate)) query = query.Where(o => o.CreatedAt >= fromDate);
             if (DateTime.TryParse(to, out var toDate)) query = query.Where(o => o.CreatedAt <= toDate.AddDays(1));
 
@@ -324,7 +333,7 @@ namespace FurniMatch.Api.Controllers
             if (!string.IsNullOrEmpty(status))
                 query = query.Where(o => o.PaymentStatus == status);
             else
-                query = query.Where(o => o.PaymentStatus == "PAID");
+                query = query.Where(o => o.PaymentStatus == "PAID" && o.PayoutStatus != "REFUNDED");
 
             if (DateTime.TryParse(from, out var fromDate)) query = query.Where(o => o.CreatedAt >= fromDate);
             if (DateTime.TryParse(to, out var toDate)) query = query.Where(o => o.CreatedAt <= toDate.AddDays(1));
@@ -344,6 +353,7 @@ namespace FurniMatch.Api.Controllers
                     commission = o.Subtotal * (commissionRate / 100),
                     o.PaymentStatus,
                     o.OrderStatus,
+                    o.PayoutStatus,
                     o.CreatedAt,
                     o.Note,
                     SellerShopName = o.Seller != null ? (o.Seller.ShopName ?? o.Seller.FullName) : "N/A",
@@ -663,9 +673,13 @@ namespace FurniMatch.Api.Controllers
                 });
             }
 
-            // Đánh dấu đơn là REFUNDED — tiền không giải ngân cho seller
+            // Đánh dấu đơn là REFUNDED — tiền không giải ngân cho seller, trừ doanh thu & hoa hồng khỏi hệ thống
             if (dispute.Order != null)
+            {
                 dispute.Order.PayoutStatus = "REFUNDED";
+                dispute.Order.PaymentStatus = "REFUNDED";
+                dispute.Order.UpdatedAt = DateTime.UtcNow;
+            }
 
             // Thông báo cho Customer
             _context.Notifications.Add(new Notification
@@ -760,7 +774,7 @@ namespace FurniMatch.Api.Controllers
             var cutoff = DateTime.UtcNow.Subtract(totalDelay);
 
             var orders = await _context.Orders
-                .Where(o => o.OrderStatus == "COMPLETED" && o.PayoutStatus != "RELEASED")
+                .Where(o => o.OrderStatus == "COMPLETED" && o.PayoutStatus != "RELEASED" && o.PayoutStatus != "REFUNDED")
                 .OrderByDescending(o => o.CompletedAt)
                 .Take(50)
                 .Select(o => new

@@ -32,7 +32,7 @@ namespace FurniMatch.Api.Controllers
         public async Task<IActionResult> GetSummary([FromQuery] string? from, [FromQuery] string? to)
         {
             var commissionRate = await GetCurrentCommissionRate();
-            var query = _context.Orders.Where(o => o.SellerId == SellerId && o.PaymentStatus == "PAID");
+            var query = _context.Orders.Where(o => o.SellerId == SellerId && o.PaymentStatus == "PAID" && o.PayoutStatus != "REFUNDED");
             if (DateTime.TryParse(from, out var fromDate)) query = query.Where(o => o.CreatedAt >= fromDate);
             if (DateTime.TryParse(to, out var toDate)) query = query.Where(o => o.CreatedAt <= toDate.AddDays(1));
 
@@ -43,6 +43,13 @@ namespace FurniMatch.Api.Controllers
             // Count completed orders
             var completedOrders = orders.Count(o => o.OrderStatus == "COMPLETED");
 
+            // Count refunded orders for this seller
+            var refundedQuery = _context.Orders.Where(o => o.SellerId == SellerId && (o.PayoutStatus == "REFUNDED" || o.PaymentStatus == "REFUNDED"));
+            if (DateTime.TryParse(from, out var fDate)) refundedQuery = refundedQuery.Where(o => o.CreatedAt >= fDate);
+            if (DateTime.TryParse(to, out var tDate)) refundedQuery = refundedQuery.Where(o => o.CreatedAt <= tDate.AddDays(1));
+            var refundedOrders = await refundedQuery.ToListAsync();
+            var totalRefunded = refundedOrders.Sum(o => o.Subtotal);
+
             return Ok(new
             {
                 totalGmv,
@@ -50,7 +57,9 @@ namespace FurniMatch.Api.Controllers
                 commissionRate,
                 netRevenue = totalGmv - totalCommission,
                 totalPaidOrders = orders.Count,
-                completedOrders
+                completedOrders,
+                totalRefunded,
+                totalRefundedOrders = refundedOrders.Count
             });
         }
 
@@ -63,7 +72,7 @@ namespace FurniMatch.Api.Controllers
         {
             if (year == 0) year = DateTime.UtcNow.Year;
             var orders = await _context.Orders
-                .Where(o => o.SellerId == SellerId && o.PaymentStatus == "PAID" && o.CreatedAt.Year == year)
+                .Where(o => o.SellerId == SellerId && o.PaymentStatus == "PAID" && o.PayoutStatus != "REFUNDED" && o.CreatedAt.Year == year)
                 .ToListAsync();
 
             var commissionRate = await GetCurrentCommissionRate();
@@ -113,7 +122,7 @@ namespace FurniMatch.Api.Controllers
             var commissionRate = await GetCurrentCommissionRate();
             var query = _context.Orders
                 .Include(o => o.Customer)
-                .Where(o => o.SellerId == SellerId && o.PaymentStatus == "PAID");
+                .Where(o => o.SellerId == SellerId && o.PaymentStatus == "PAID" && o.PayoutStatus != "REFUNDED");
 
             if (DateTime.TryParse(from, out var fromDate)) query = query.Where(o => o.CreatedAt >= fromDate);
             if (DateTime.TryParse(to, out var toDate)) query = query.Where(o => o.CreatedAt <= toDate.AddDays(1));
@@ -134,6 +143,7 @@ namespace FurniMatch.Api.Controllers
                     netRevenue = o.Subtotal - o.Subtotal * (commissionRate / 100),
                     o.PaymentStatus,
                     o.OrderStatus,
+                    o.PayoutStatus,
                     o.CreatedAt,
                     o.Note,
                     CustomerName = o.Customer != null ? o.Customer.FullName : "N/A"

@@ -102,6 +102,27 @@ using (var scope = app.Services.CreateScope())
         Console.WriteLine($"[Database Init Warning]: {ex.Message}");
     }
 
+    // Đồng bộ các đơn hàng đã được duyệt khiếu nại (PayoutStatus == REFUNDED) để PaymentStatus cũng là REFUNDED
+    try
+    {
+        var pastRefundedOrders = context.Orders
+            .Where(o => o.PayoutStatus == "REFUNDED" && o.PaymentStatus != "REFUNDED")
+            .ToList();
+        if (pastRefundedOrders.Any())
+        {
+            foreach (var ord in pastRefundedOrders)
+            {
+                ord.PaymentStatus = "REFUNDED";
+                ord.UpdatedAt = DateTime.UtcNow;
+            }
+            context.SaveChanges();
+        }
+    }
+    catch (Exception syncEx)
+    {
+        Console.WriteLine($"[Refund Sync Warning]: {syncEx.Message}");
+    }
+
     if (!context.Categories.Any())
     {
         context.Categories.AddRange(

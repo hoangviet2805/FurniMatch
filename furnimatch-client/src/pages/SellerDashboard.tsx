@@ -1201,22 +1201,24 @@ export default function SellerDashboard() {
                 <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-5 text-white shadow-sm">
                   <p className="text-emerald-100 text-xs font-medium uppercase tracking-wide mb-1">Tổng Doanh Thu</p>
                   <p className="text-xl font-bold truncate">{money(revSummary?.totalGmv)}</p>
-                  <p className="text-emerald-200 text-xs mt-1">Tiền hàng đã thanh toán</p>
+                  <p className="text-emerald-200 text-xs mt-1">Tiền hàng (đã trừ hoàn)</p>
                 </div>
                 <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl p-5 text-white shadow-sm">
                   <p className="text-amber-100 text-xs font-medium uppercase tracking-wide mb-1">Hoa Hồng Platform</p>
                   <p className="text-xl font-bold truncate">{money(revSummary?.totalCommission)}</p>
-                  <p className="text-amber-200 text-xs mt-1">Tỷ lệ {revSummary?.commissionRate}%</p>
+                  <p className="text-amber-200 text-xs mt-1">Tỷ lệ {revSummary?.commissionRate}% (đã trừ hoàn)</p>
                 </div>
                 <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-5 text-white shadow-sm">
                   <p className="text-blue-100 text-xs font-medium uppercase tracking-wide mb-1">Thực Nhận</p>
                   <p className="text-xl font-bold truncate">{money(revSummary?.netRevenue)}</p>
-                  <p className="text-blue-200 text-xs mt-1">Sau khi trừ hoa hồng</p>
+                  <p className="text-blue-200 text-xs mt-1">Sau khi trừ hoa hồng & hoàn</p>
                 </div>
                 <div className="bg-gradient-to-br from-violet-500 to-violet-600 rounded-xl p-5 text-white shadow-sm">
-                  <p className="text-violet-100 text-xs font-medium uppercase tracking-wide mb-1">Đơn Đã Thanh Toán</p>
+                  <p className="text-violet-100 text-xs font-medium uppercase tracking-wide mb-1">Đơn Hoàn Tất</p>
                   <p className="text-xl font-bold">{revSummary?.totalPaidOrders ?? 0}</p>
-                  <p className="text-violet-200 text-xs mt-1">Đơn hoàn tất thanh toán</p>
+                  <p className="text-violet-200 text-xs mt-1">
+                    {revSummary?.totalRefundedOrders > 0 ? `Đã hoàn tiền ${revSummary?.totalRefundedOrders} đơn` : 'Đơn thành công'}
+                  </p>
                 </div>
               </div>
 
@@ -1280,8 +1282,20 @@ export default function SellerDashboard() {
                           <td className="px-5 py-3 text-sm text-amber-600 font-medium text-right">-{money(o.commission)}</td>
                           <td className="px-5 py-3 text-sm text-blue-700 font-bold text-right">{money(o.netRevenue)}</td>
                           <td className="px-5 py-3 text-right">
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${o.orderStatus === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>
-                              {o.orderStatus === 'COMPLETED' ? 'Hoàn thành' : o.orderStatus === 'CONFIRMED' ? 'Đã xác nhận' : o.orderStatus}
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                              o.payoutStatus === 'REFUNDED' || o.paymentStatus === 'REFUNDED'
+                                ? 'bg-rose-100 text-rose-700'
+                                : o.orderStatus === 'COMPLETED'
+                                ? 'bg-emerald-100 text-emerald-700'
+                                : 'bg-blue-100 text-blue-700'
+                            }`}>
+                              {o.payoutStatus === 'REFUNDED' || o.paymentStatus === 'REFUNDED'
+                                ? 'Đã hoàn tiền'
+                                : o.orderStatus === 'COMPLETED'
+                                ? 'Hoàn thành'
+                                : o.orderStatus === 'CONFIRMED'
+                                ? 'Đã xác nhận'
+                                : o.orderStatus}
                             </span>
                           </td>
                           <td className="px-5 py-3 text-xs text-gray-500 text-right">{new Date(o.createdAt).toLocaleDateString('vi-VN')}</td>
