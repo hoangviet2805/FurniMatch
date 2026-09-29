@@ -9,6 +9,7 @@ const Profile = () => {
     phone: '',
     shopName: '',
     shopDescription: '',
+    isCustomSizeSupported: false,
     province: '',
     district: '',
     ward: '',
@@ -28,6 +29,7 @@ const Profile = () => {
         phone: parsedUser.phone || '',
         shopName: parsedUser.shopName || '',
         shopDescription: parsedUser.shopDescription || '',
+        isCustomSizeSupported: !!parsedUser.isCustomSizeSupported,
         province: parsedUser.province || '',
         district: parsedUser.district || '',
         ward: parsedUser.ward || '',
@@ -255,6 +257,26 @@ const Profile = () => {
                   rows={3}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
                 />
+              </div>
+
+              <div className="pt-2">
+                <label className="flex items-start gap-3 p-3.5 bg-emerald-50/70 rounded-xl border border-emerald-200 cursor-pointer hover:border-emerald-400 transition-colors shadow-sm">
+                  <input
+                    type="checkbox"
+                    name="isCustomSizeSupported"
+                    checked={formData.isCustomSizeSupported}
+                    onChange={handleChange}
+                    className="mt-1 h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <div>
+                    <span className="text-sm font-bold text-gray-950 flex items-center gap-1.5">
+                      <span>🪵</span> Nhận đặt hàng theo yêu cầu (Gia công / May đo riêng)
+                    </span>
+                    <p className="text-xs text-gray-600 mt-0.5">
+                      Bật tính năng này để nhận thông báo và tham gia báo giá các yêu cầu đóng đồ nội thất theo kích thước và chất liệu riêng từ khách hàng.
+                    </p>
+                  </div>
+                </label>
               </div>
             </>
           )}

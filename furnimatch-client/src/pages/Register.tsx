@@ -15,6 +15,7 @@ const Register = () => {
     roleName: 'CUSTOMER', // Default
     shopName: '',
     shopDescription: '',
+    isCustomSizeSupported: false,
     province: '',
     district: '',
     ward: '',
@@ -415,6 +416,26 @@ const Register = () => {
                     value={formData.shopDescription}
                     onChange={handleChange}
                   />
+                </div>
+
+                <div className="pt-1">
+                  <label className="flex items-start gap-3 p-3 bg-white rounded-xl border border-emerald-300 cursor-pointer hover:border-emerald-500 transition-colors shadow-sm">
+                    <input
+                      type="checkbox"
+                      name="isCustomSizeSupported"
+                      checked={formData.isCustomSizeSupported}
+                      onChange={handleChange}
+                      className="mt-1 h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <div>
+                      <span className="text-xs sm:text-sm font-bold text-gray-900 flex items-center gap-1.5">
+                        <span>🪵</span> Nhận đặt hàng theo yêu cầu (Gia công / May đo riêng)
+                      </span>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Tích chọn để nhận thông báo và tiếp nhận các đơn hàng đóng nội thất theo mẫu và kích thước riêng từ khách hàng.
+                      </p>
+                    </div>
+                  </label>
                 </div>
 
 

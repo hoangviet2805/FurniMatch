@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import api, { getImageUrl } from '../utils/api';
-import { Package, User, MapPin, Phone, CheckCircle, Clock, Truck, Hammer, XCircle, ClipboardList, Wallet, ArrowDownToLine, History, FileText, AlertTriangle, CheckCircle2, Eye, ShieldAlert, ZoomIn, ZoomOut, RotateCcw, X, ExternalLink } from 'lucide-react';
+import { Package, User, MapPin, Phone, CheckCircle, Clock, Truck, Hammer, XCircle, ClipboardList, Wallet, ArrowDownToLine, History, FileText, AlertTriangle, CheckCircle2, Eye, ShieldAlert, ZoomIn, ZoomOut, RotateCcw, X, ExternalLink, Sparkles } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
@@ -987,14 +988,44 @@ function SellerDisputesSection({
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function SellerDashboard() {
+  const [searchParams] = useSearchParams();
   const [tab, setTab] = useState<'ORDERS' | 'QUOTES' | 'DISPUTES' | 'REVENUE' | 'WALLET'>('ORDERS');
   const [orders, setOrders] = useState<any[]>([]);
   const [orderStatusFilter, setOrderStatusFilter] = useState<'ALL' | 'INCOMPLETE' | 'COMPLETED' | 'CANCELLED'>('ALL');
-  const [requests, setRequests] = useState<any[]>([]);
   const [pendingDisputeCount, setPendingDisputeCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
+
+  // QUOTES (Đặt hàng theo yêu cầu) State
+  const [quotesData, setQuotesData] = useState<{
+    isCustomSizeSupported: boolean;
+    availableRequests: any[];
+    myClaimedRequests: any[];
+  }>({
+    isCustomSizeSupported: true,
+    availableRequests: [],
+    myClaimedRequests: []
+  });
+  const [quoteSubTab, setQuoteSubTab] = useState<'AVAILABLE' | 'CLAIMED'>('AVAILABLE');
+  const [quotingModal, setQuotingModal] = useState<{
+    isOpen: boolean;
+    request: any | null;
+    price: string;
+    productionDays: string;
+    note: string;
+    submitting: boolean;
+    error: string;
+  }>({
+    isOpen: false,
+    request: null,
+    price: '',
+    productionDays: '7',
+    note: '',
+    submitting: false,
+    error: ''
+  });
+  const [quoteToast, setQuoteToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Root image preview modal with zoom
   const [previewImageModal, setPreviewImageModal] = useState<{ isOpen: boolean; url: string; title: string }>({
@@ -1019,6 +1050,13 @@ export default function SellerDashboard() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [previewImageModal.isOpen]);
+
+  useEffect(() => {
+    const urlTab = searchParams.get('tab');
+    if (urlTab && ['ORDERS', 'QUOTES', 'DISPUTES', 'REVENUE', 'WALLET'].includes(urlTab)) {
+      setTab(urlTab as any);
+    }
+  }, [searchParams]);
 
   const filteredOrders = orders.filter(o => {
     if (orderStatusFilter === 'ALL') return true;
@@ -1054,6 +1092,29 @@ export default function SellerDashboard() {
     } catch {}
   }, []);
 
+  const loadQuotes = useCallback(async () => {
+    try {
+      const res = await api.get('/quotationrequests');
+      if (res.data) {
+        if (Array.isArray(res.data)) {
+          setQuotesData({
+            isCustomSizeSupported: true,
+            availableRequests: res.data.filter((r: any) => r.status === 'OPEN'),
+            myClaimedRequests: res.data.filter((r: any) => r.status !== 'OPEN')
+          });
+        } else {
+          setQuotesData({
+            isCustomSizeSupported: res.data.isCustomSizeSupported ?? true,
+            availableRequests: res.data.availableRequests || [],
+            myClaimedRequests: res.data.myClaimedRequests || []
+          });
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }, []);
+
   const load = async () => {
     setLoading(true);
     try {
@@ -1061,8 +1122,7 @@ export default function SellerDashboard() {
         const res = await api.get('/orders/seller');
         setOrders(res.data);
       } else if (tab === 'QUOTES') {
-        const res = await api.get('/quotationrequests');
-        setRequests(res.data);
+        await loadQuotes();
       }
     } finally {
       setLoading(false);
@@ -1071,7 +1131,8 @@ export default function SellerDashboard() {
 
   useEffect(() => {
     loadDisputeBadge();
-  }, [loadDisputeBadge]);
+    loadQuotes();
+  }, [loadDisputeBadge, loadQuotes]);
 
   useEffect(() => {
     if (tab !== 'REVENUE' && tab !== 'WALLET' && tab !== 'DISPUTES') {
@@ -1083,6 +1144,84 @@ export default function SellerDashboard() {
   const update = async (id: number, status: string) => {
     await api.put(`/orders/${id}/status`, { status });
     load();
+  };
+
+  const handleOpenQuoteModal = (req: any) => {
+    const defaultPrice = req.budgetMin ? String(req.budgetMin) : '';
+    setQuotingModal({
+      isOpen: true,
+      request: req,
+      price: defaultPrice,
+      productionDays: '7',
+      note: 'Xưởng cam kết sử dụng chất liệu chuẩn chất lượng, bàn giao đúng hạn và bảo hành 2 năm.',
+      submitting: false,
+      error: ''
+    });
+  };
+
+  const handleSubmitQuote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quotingModal.request) return;
+
+    const priceNum = parseFloat(quotingModal.price.replace(/,/g, ''));
+    if (isNaN(priceNum) || priceNum <= 0) {
+      setQuotingModal(m => ({ ...m, error: 'Vui lòng nhập báo giá hợp lệ (lớn hơn 0).' }));
+      return;
+    }
+
+    const daysNum = parseInt(quotingModal.productionDays, 10);
+    if (isNaN(daysNum) || daysNum <= 0) {
+      setQuotingModal(m => ({ ...m, error: 'Vui lòng nhập số ngày hoàn thiện dự kiến (tối thiểu 1 ngày).' }));
+      return;
+    }
+
+    setQuotingModal(m => ({ ...m, submitting: true, error: '' }));
+    try {
+      await api.post('/quotations', {
+        quotationRequestId: quotingModal.request.quotationRequestId,
+        price: priceNum,
+        productionDays: daysNum,
+        note: quotingModal.note.trim()
+      });
+
+      setQuotingModal({
+        isOpen: false,
+        request: null,
+        price: '',
+        productionDays: '7',
+        note: '',
+        submitting: false,
+        error: ''
+      });
+
+      setQuoteToast({
+        type: 'success',
+        message: '🎉 Tiếp nhận thành công! Đã gửi báo giá và thời gian hoàn thành tới khách hàng. Yêu cầu đã chuyển sang mục "Yêu cầu đã nhận" và ẩn khỏi các xưởng khác.'
+      });
+      setTimeout(() => setQuoteToast(null), 7000);
+
+      await loadQuotes();
+      setQuoteSubTab('CLAIMED');
+    } catch (err: any) {
+      const errMsg = err?.response?.data?.message || (typeof err?.response?.data === 'string' ? err.response.data : 'Có lỗi xảy ra khi tiếp nhận yêu cầu.');
+      setQuotingModal(m => ({ ...m, submitting: false, error: errMsg }));
+    }
+  };
+
+  const handleEnableCustomOrder = async () => {
+    try {
+      await api.put('/auth/profile', { isCustomSizeSupported: true });
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const u = JSON.parse(userStr);
+        u.isCustomSizeSupported = true;
+        localStorage.setItem('user', JSON.stringify(u));
+      }
+      setQuotesData(d => ({ ...d, isCustomSizeSupported: true }));
+      await loadQuotes();
+    } catch {
+      alert('Không thể kích hoạt tính năng. Vui lòng thử lại trong trang Hồ sơ cá nhân.');
+    }
   };
 
   // ========== REVENUE LOGIC ==========
@@ -1130,7 +1269,11 @@ export default function SellerDashboard() {
 
   const tabs = [
     { key: 'ORDERS', label: '📦 Quản lý đơn hàng' },
-    { key: 'QUOTES', label: '📄 Yêu cầu báo giá' },
+    { 
+      key: 'QUOTES', 
+      label: '🪵 Đặt hàng theo yêu cầu',
+      badge: quotesData.availableRequests.length > 0 ? quotesData.availableRequests.length : undefined
+    },
     { 
       key: 'DISPUTES', 
       label: '⚠️ Khiếu nại & Hàng hoàn',
@@ -1651,17 +1794,426 @@ export default function SellerDashboard() {
               )}
             </div>
           ) : (
-            <div className="space-y-4">
-              {requests.length ? (
-                requests.map((r: any) => (
-                  <div key={r.quotationRequestId} className="rounded-xl border bg-white p-6 shadow-sm">
-                    <h3 className="font-bold text-lg text-gray-900">{r.productType}</h3>
-                    <p className="mt-2 text-gray-600">Số lượng: {r.quantity} · {r.description || 'Không có mô tả'}</p>
+            <div className="space-y-6">
+              {/* Toast message */}
+              {quoteToast && (
+                <div className={`p-4 rounded-2xl flex items-center justify-between text-sm shadow-sm ${
+                  quoteToast.type === 'success' ? 'bg-emerald-50 border border-emerald-200 text-emerald-900' : 'bg-rose-50 border border-rose-200 text-rose-900'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">{quoteToast.type === 'success' ? '🎉' : '⚠️'}</span>
+                    <span className="font-semibold">{quoteToast.message}</span>
                   </div>
-                ))
+                  <button onClick={() => setQuoteToast(null)} className="text-gray-400 hover:text-gray-700 font-bold p-1">✕</button>
+                </div>
+              )}
+
+              {!quotesData.isCustomSizeSupported ? (
+                <div className="rounded-2xl border-2 border-dashed border-emerald-200 bg-emerald-50/50 p-8 sm:p-12 text-center">
+                  <div className="w-16 h-16 mx-auto rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-3xl mb-4 shadow-xs">
+                    🪵
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 mb-2">
+                    Xưởng của bạn chưa bật tính năng "Nhận Đặt Hàng Theo Yêu Cầu"
+                  </h3>
+                  <p className="text-sm text-gray-600 max-w-xl mx-auto mb-6 leading-relaxed">
+                    Khách hàng trên FurniMatch thường xuyên tìm kiếm các xưởng mộc uy tín để gia công bàn ghế, tủ kệ theo mẫu và kích thước riêng biệt. Bật tính năng ngay để nhận thông báo đơn hàng độc quyền!
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleEnableCustomOrder}
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-lg shadow-emerald-700/25 transition-all hover:scale-105 cursor-pointer"
+                  >
+                    <Sparkles className="w-5 h-5" />
+                    <span>Kích Hoạt Nhận Đặt Hàng Ngay</span>
+                  </button>
+                </div>
               ) : (
-                <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-12 text-center">
-                  <p className="text-gray-500 font-medium">Chưa có yêu cầu báo giá.</p>
+                <div className="space-y-6">
+                  {/* Sub-tabs */}
+                  <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-200 pb-4">
+                    <div className="flex items-center gap-2 bg-gray-100 p-1 rounded-xl">
+                      <button
+                        type="button"
+                        onClick={() => setQuoteSubTab('AVAILABLE')}
+                        className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                          quoteSubTab === 'AVAILABLE'
+                            ? 'bg-white text-emerald-800 shadow-xs'
+                            : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                      >
+                        <span>⚡ Yêu Cầu Mới Chờ Tiếp Nhận</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
+                          quoteSubTab === 'AVAILABLE' ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-700'
+                        }`}>
+                          {quotesData.availableRequests.length}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setQuoteSubTab('CLAIMED')}
+                        className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                          quoteSubTab === 'CLAIMED'
+                            ? 'bg-white text-emerald-800 shadow-xs'
+                            : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                      >
+                        <span>📋 Yêu Cầu Xưởng Đã Nhận</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
+                          quoteSubTab === 'CLAIMED' ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-700'
+                        }`}>
+                          {quotesData.myClaimedRequests.length}
+                        </span>
+                      </button>
+                    </div>
+
+                    <div className="text-xs text-gray-500 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                      <span>Đang nhận yêu cầu theo năng lực gia công & bán kính xưởng</span>
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 bg-sky-50 border border-sky-200 rounded-xl text-xs text-sky-900 flex items-center gap-2.5">
+                    <span className="text-base">💡</span>
+                    <span>
+                      <strong>Quyền lợi tiếp nhận đơn hàng:</strong> Khi xưởng bấm <strong>"Tiếp Nhận & Báo Giá"</strong>, yêu cầu sẽ lập tức được chốt riêng cho xưởng của bạn và ẩn hoàn toàn khỏi tất cả các xưởng khác trên sàn!
+                    </span>
+                  </div>
+
+                  {/* Subtab AVAILABLE */}
+                  {quoteSubTab === 'AVAILABLE' && (
+                    <>
+                      {quotesData.availableRequests.length === 0 ? (
+                        <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-12 text-center">
+                          <div className="w-12 h-12 mx-auto rounded-full bg-gray-100 text-gray-400 flex items-center justify-center text-2xl mb-3">
+                            📋
+                          </div>
+                          <p className="font-bold text-gray-800">Hiện chưa có yêu cầu mới đang mở</p>
+                          <p className="text-xs text-gray-500 mt-1 max-w-md mx-auto">
+                            Khi có khách hàng gửi yêu cầu đặt làm nội thất theo kích thước riêng, hệ thống sẽ lập tức gửi thông báo và email đến xưởng của bạn.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="grid gap-5">
+                          {quotesData.availableRequests.map((req: any) => (
+                            <div 
+                              key={req.quotationRequestId} 
+                              className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden"
+                            >
+                              <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-4 pb-4 border-b border-gray-100">
+                                <div>
+                                  <div className="flex items-center gap-2 mb-1.5">
+                                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
+                                      {req.category?.name || 'Nội thất đặt đóng'}
+                                    </span>
+                                    <span className="text-xs text-gray-400">
+                                      {new Date(req.createdAt).toLocaleDateString('vi-VN')}
+                                    </span>
+                                  </div>
+                                  <h3 className="text-xl font-bold text-gray-900">{req.productType}</h3>
+                                </div>
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 self-start">
+                                  <Clock className="w-3.5 h-3.5" />
+                                  Chờ tiếp nhận
+                                </span>
+                              </div>
+
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 py-4 border-b border-gray-100 text-sm">
+                                <div>
+                                  <p className="text-xs text-gray-500">Kích thước (D × R × C)</p>
+                                  <p className="font-bold text-gray-900 mt-0.5">{req.length} × {req.width} × {req.height} cm</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-gray-500">Chất liệu mong muốn</p>
+                                  <p className="font-bold text-gray-900 mt-0.5">{req.material || 'Xưởng tư vấn'}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-gray-500">Số lượng</p>
+                                  <p className="font-bold text-gray-900 mt-0.5">{req.quantity} cái/bộ</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-gray-500">Ngân sách dự kiến</p>
+                                  <p className="font-bold text-emerald-700 mt-0.5">
+                                    {req.budgetMin || req.budgetMax ? `${money(req.budgetMin)} – ${money(req.budgetMax)}` : 'Chưa định'}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {req.description && (
+                                <div className="py-3 text-xs sm:text-sm text-gray-600 bg-gray-50/70 p-3.5 rounded-xl border border-gray-100 my-4">
+                                  <span className="font-bold text-gray-800">Yêu cầu từ khách: </span>
+                                  <span>{req.description}</span>
+                                </div>
+                              )}
+
+                              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pt-2">
+                                <div className="text-xs text-gray-500 flex items-center gap-2">
+                                  <User className="w-4 h-4 text-gray-400" />
+                                  <span>Khách hàng: <strong className="text-gray-700">{req.customer?.fullName || 'Khách hàng'}</strong></span>
+                                  {req.customer?.province && (
+                                    <span className="text-gray-400">· 📍 {req.customer.district ? `${req.customer.district}, ` : ''}{req.customer.province}</span>
+                                  )}
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenQuoteModal(req)}
+                                  className="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold shadow-md shadow-emerald-700/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer"
+                                >
+                                  <span>🪵 Tiếp Nhận & Báo Giá</span>
+                                  <span>→</span>
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* Subtab CLAIMED */}
+                  {quoteSubTab === 'CLAIMED' && (
+                    <>
+                      {quotesData.myClaimedRequests.length === 0 ? (
+                        <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-12 text-center">
+                          <div className="w-12 h-12 mx-auto rounded-full bg-gray-100 text-gray-400 flex items-center justify-center text-2xl mb-3">
+                            🛠️
+                          </div>
+                          <p className="font-bold text-gray-800">Xưởng chưa tiếp nhận yêu cầu nào</p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Hãy chuyển sang tab "Yêu cầu mới chờ tiếp nhận" để chọn đơn hàng phù hợp và gửi báo giá cho khách!
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="grid gap-5">
+                          {quotesData.myClaimedRequests.map((req: any) => {
+                            const myQuote = req.quotations?.[0];
+                            return (
+                              <div 
+                                key={req.quotationRequestId} 
+                                className="rounded-2xl border border-emerald-200 bg-white p-6 shadow-sm relative overflow-hidden"
+                              >
+                                <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-4 pb-4 border-b border-gray-100">
+                                  <div>
+                                    <div className="flex items-center gap-2 mb-1.5">
+                                      <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
+                                        {req.category?.name || 'Nội thất đặt đóng'}
+                                      </span>
+                                      <span className="text-xs text-gray-400">
+                                        Tiếp nhận: {new Date(req.createdAt).toLocaleDateString('vi-VN')}
+                                      </span>
+                                    </div>
+                                    <h3 className="text-xl font-bold text-gray-900">{req.productType}</h3>
+                                  </div>
+                                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 self-start">
+                                    <CheckCircle className="w-3.5 h-3.5" />
+                                    Đã tiếp nhận & báo giá
+                                  </span>
+                                </div>
+
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 py-4 border-b border-gray-100 text-sm">
+                                  <div>
+                                    <p className="text-xs text-gray-500">Kích thước</p>
+                                    <p className="font-bold text-gray-900 mt-0.5">{req.length} × {req.width} × {req.height} cm</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-gray-500">Chất liệu</p>
+                                    <p className="font-bold text-gray-900 mt-0.5">{req.material || 'Xưởng tư vấn'}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-gray-500">Số lượng</p>
+                                    <p className="font-bold text-gray-900 mt-0.5">{req.quantity} cái/bộ</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-gray-500">Ghi chú của khách</p>
+                                    <p className="text-xs text-gray-700 mt-0.5 truncate">{req.description || 'Không có'}</p>
+                                  </div>
+                                </div>
+
+                                {/* Thông tin báo giá xưởng đã gửi */}
+                                {myQuote && (
+                                  <div className="my-4 p-4 rounded-xl bg-emerald-50/70 border border-emerald-200">
+                                    <p className="text-xs font-bold uppercase tracking-wider text-emerald-950 mb-2 flex items-center gap-1.5">
+                                      <span>💰</span>
+                                      <span>Báo Giá Xưởng Đã Gửi Khách Hàng:</span>
+                                    </p>
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                                      <div>
+                                        <span className="text-xs text-emerald-800">Giá hoàn thiện:</span>
+                                        <p className="text-lg font-extrabold text-emerald-700">{money(myQuote.price)}</p>
+                                      </div>
+                                      <div>
+                                        <span className="text-xs text-emerald-800">Thời gian hoàn thiện dự kiến:</span>
+                                        <p className="text-base font-bold text-emerald-900">{myQuote.productionDays} ngày</p>
+                                      </div>
+                                      <div className="sm:col-span-1">
+                                        <span className="text-xs text-emerald-800">Cam kết / Ghi chú:</span>
+                                        <p className="text-xs text-gray-700 mt-0.5 italic">{myQuote.note || 'Không có ghi chú'}</p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Thông tin liên hệ khách hàng */}
+                                <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 text-xs sm:text-sm">
+                                  <p className="font-bold text-gray-900 mb-2 flex items-center gap-1.5">
+                                    <Phone className="w-4 h-4 text-emerald-600" />
+                                    Thông tin liên hệ khách hàng để chốt sản xuất:
+                                  </p>
+                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-gray-700">
+                                    <div>
+                                      <span className="text-gray-500">Khách hàng: </span>
+                                      <strong className="text-gray-900">{req.customer?.fullName}</strong>
+                                    </div>
+                                    <div>
+                                      <span className="text-gray-500">Hotline: </span>
+                                      <strong className="text-emerald-700 font-mono">{req.customer?.phone || 'Chưa cung cấp'}</strong>
+                                    </div>
+                                    <div>
+                                      <span className="text-gray-500">Email: </span>
+                                      <span className="text-gray-900">{req.customer?.email}</span>
+                                    </div>
+                                  </div>
+                                  <div className="mt-2 text-gray-600">
+                                    <span className="text-gray-500">Địa chỉ giao hàng: </span>
+                                    <strong>
+                                      {[req.customer?.addressDetail, req.customer?.ward, req.customer?.district, req.customer?.province].filter(Boolean).join(', ') || 'Chưa cập nhật'}
+                                    </strong>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* Modal Tiếp Nhận & Báo Giá */}
+              {quotingModal.isOpen && quotingModal.request && (
+                <div 
+                  className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150"
+                  onClick={() => setQuotingModal(m => ({ ...m, isOpen: false }))}
+                >
+                  <div 
+                    className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden animate-in zoom-in-95 duration-150"
+                    onClick={e => e.stopPropagation()}
+                  >
+                    <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gradient-to-r from-emerald-50 to-teal-50">
+                      <div>
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 uppercase tracking-wider">
+                          Tiếp Nhận Yêu Cầu
+                        </span>
+                        <h3 className="text-lg font-bold text-gray-900 mt-1">Báo Giá & Thời Gian Hoàn Thành</h3>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setQuotingModal(m => ({ ...m, isOpen: false }))}
+                        className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 bg-white hover:bg-gray-100 text-lg font-bold cursor-pointer"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleSubmitQuote} className="p-6 space-y-4">
+                      {quotingModal.error && (
+                        <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 font-medium">
+                          ⚠️ {quotingModal.error}
+                        </div>
+                      )}
+
+                      {/* Tóm tắt sản phẩm */}
+                      <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100 text-xs space-y-1">
+                        <p className="font-bold text-sm text-gray-900">{quotingModal.request.productType}</p>
+                        <p className="text-gray-600">
+                          Kích thước: <strong>{quotingModal.request.length} × {quotingModal.request.width} × {quotingModal.request.height} cm</strong>
+                        </p>
+                        <p className="text-gray-600">
+                          Chất liệu: <strong>{quotingModal.request.material || 'Xưởng tư vấn'}</strong> · SL: <strong>{quotingModal.request.quantity}</strong>
+                        </p>
+                        {quotingModal.request.budgetMin && (
+                          <p className="text-emerald-700 font-semibold">
+                            Ngân sách khách mong đợi: {money(quotingModal.request.budgetMin)} - {money(quotingModal.request.budgetMax)}
+                          </p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1.5">
+                          Báo giá trọn gói (VNĐ) <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="number"
+                          min="10000"
+                          step="10000"
+                          required
+                          placeholder="Ví dụ: 3500000"
+                          className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-bold text-emerald-700 text-base"
+                          value={quotingModal.price}
+                          onChange={e => setQuotingModal(m => ({ ...m, price: e.target.value }))}
+                        />
+                        <p className="text-[11px] text-gray-400 mt-1">
+                          Giá hoàn thiện đã bao gồm vật liệu, gia công theo yêu cầu của khách.
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1.5">
+                          Thời gian hoàn thiện dự kiến (Số ngày) <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="180"
+                          required
+                          placeholder="7"
+                          className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-bold text-gray-900"
+                          value={quotingModal.productionDays}
+                          onChange={e => setQuotingModal(m => ({ ...m, productionDays: e.target.value }))}
+                        />
+                        <p className="text-[11px] text-gray-400 mt-1">
+                          Số ngày xưởng cần để hoàn thành sản phẩm và sẵn sàng bàn giao cho khách.
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1.5">
+                          Ghi chú / Cam kết chất lượng từ xưởng
+                        </label>
+                        <textarea
+                          rows={3}
+                          placeholder="Gỗ sồi tự nhiên chuẩn tẩm sấy, sơn PU 5 lớp chống trầy, bảo hành kết cấu 24 tháng..."
+                          className="w-full px-4 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                          value={quotingModal.note}
+                          onChange={e => setQuotingModal(m => ({ ...m, note: e.target.value }))}
+                        />
+                      </div>
+
+                      <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 leading-relaxed">
+                        ⚡ <strong>Lưu ý:</strong> Sau khi bạn xác nhận gửi báo giá, yêu cầu này sẽ thuộc về xưởng của bạn và <strong>tự động ẩn ngay lập tức khỏi tất cả các xưởng khác</strong> trên hệ thống. Khách hàng sẽ nhận được thông báo và email chi tiết.
+                      </div>
+
+                      <div className="flex gap-3 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => setQuotingModal(m => ({ ...m, isOpen: false }))}
+                          className="w-1/3 py-2.5 border border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-colors text-sm cursor-pointer"
+                        >
+                          Hủy
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={quotingModal.submitting}
+                          className="w-2/3 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-md shadow-emerald-700/20 active:scale-[0.99] transition-all text-sm disabled:bg-gray-400 cursor-pointer"
+                        >
+                          {quotingModal.submitting ? 'Đang gửi báo giá...' : '🚀 Tiếp Nhận & Gửi Báo Giá'}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
                 </div>
               )}
             </div>

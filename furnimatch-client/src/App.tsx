@@ -6,6 +6,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Products from './pages/Products';
 import RequestQuotation from './pages/RequestQuotation';
+import MyRequests from './pages/MyRequests';
 import AdminDashboard from './pages/AdminDashboard';
 import SellerDashboard from './pages/SellerDashboard';
 import ManageProducts from './pages/ManageProducts';
@@ -39,6 +40,7 @@ function App() {
             <Route path="/orders" element={<Orders />} />
             <Route path="/wallet" element={<Wallet />} />
             <Route path="/request-quotation" element={<RequestQuotation />} />
+            <Route path="/my-requests" element={<MyRequests />} />
             <Route path="/admin/dashboard" element={<AdminDashboard />} />
             <Route path="/seller/dashboard" element={<SellerDashboard />} />
             <Route path="/seller/products" element={<ManageProducts />} />

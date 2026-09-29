@@ -53,10 +53,27 @@ const Header = () => {
 
   const menuItems = (): MenuItem[] => {
     const common = [{ to: '/', label: 'Trang chủ' }];
-    if (user?.role === 'SELLER') return [...common, { to: `/shop/${user.userId}`, label: 'Gian hàng' }, { to: '/seller/dashboard', label: 'Quản lý đơn hàng' }, { to: '/seller/products', label: 'Sản phẩm' }];
+    if (user?.role === 'SELLER') return [
+      ...common, 
+      { to: `/shop/${user.userId}`, label: 'Gian hàng' }, 
+      { to: '/seller/dashboard', label: 'Quản lý đơn hàng' }, 
+      { to: '/seller/dashboard?tab=QUOTES', label: 'Đơn đặt theo yêu cầu' },
+      { to: '/seller/products', label: 'Sản phẩm' }
+    ];
     if (user?.role === 'ADMIN') return [...common, { to: '/admin/dashboard', label: 'Quản trị hệ thống' }];
-    const browse = [{ to: '/products', label: 'Danh mục' }, { to: '/compare', label: `So sánh${comparisonCount ? ` (${comparisonCount})` : ''}` }, { to: '/space-planner', label: 'Tính không gian' }];
-    if (user?.role === 'CUSTOMER') return [...common, ...browse, { to: '/favorites', label: 'Yêu thích' }, { to: '/orders', label: 'Đơn mua' }];
+    const browse = [
+      { to: '/products', label: 'Danh mục' }, 
+      { to: '/request-quotation', label: 'Đặt theo yêu cầu' },
+      { to: '/compare', label: `So sánh${comparisonCount ? ` (${comparisonCount})` : ''}` }, 
+      { to: '/space-planner', label: 'Tính không gian' }
+    ];
+    if (user?.role === 'CUSTOMER') return [
+      ...common, 
+      ...browse, 
+      { to: '/my-requests', label: 'Yêu cầu của tôi' },
+      { to: '/favorites', label: 'Yêu thích' }, 
+      { to: '/orders', label: 'Đơn mua' }
+    ];
     return [...common, ...browse];
   };
 
@@ -103,6 +120,28 @@ const Header = () => {
                       <Wallet size={16} className="text-emerald-600" />
                       Ví & Rút tiền
                     </Link>
+
+                    {user.role === 'SELLER' && (
+                      <Link 
+                        to="/seller/dashboard?tab=QUOTES" 
+                        onClick={() => setIsDropdownOpen(false)}
+                        className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 transition"
+                      >
+                        <span className="text-base">🪵</span>
+                        Đơn đặt theo yêu cầu
+                      </Link>
+                    )}
+
+                    {user.role === 'CUSTOMER' && (
+                      <Link 
+                        to="/my-requests" 
+                        onClick={() => setIsDropdownOpen(false)}
+                        className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 transition"
+                      >
+                        <span className="text-base">🪵</span>
+                        Yêu cầu đặt làm của tôi
+                      </Link>
+                    )}
                     
                     <button 
                       onClick={() => { setIsDropdownOpen(false); setIsPasswordModalOpen(true); }}
