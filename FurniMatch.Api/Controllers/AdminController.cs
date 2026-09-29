@@ -430,7 +430,6 @@ namespace FurniMatch.Api.Controllers
                     request.PaymentReceiptUrl = url;
                 }
             }
-            }
 
             if (!string.IsNullOrWhiteSpace(form?.Note))
             {
