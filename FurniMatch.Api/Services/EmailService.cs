@@ -56,8 +56,40 @@ namespace FurniMatch.Api.Services
                     return; // Gửi bằng HTTP thành công, thoát hàm
                 }
 
-                // NẾU KHÔNG CÓ WEBHOOK -> DÙNG SMTP PORT 587 NHƯ CŨ (Chỉ chạy được ở Localhost)
                 var senderEmail = emailSettings["SenderEmail"];
+                var brevoApiKey = emailSettings["BrevoApiKey"];
+                if (!string.IsNullOrWhiteSpace(brevoApiKey))
+                {
+                    // DÙNG BREVO HTTP API (Không bị Render chặn)
+                    var senderName = "FurniMatch System";
+                    var payload = new
+                    {
+                        sender = new { name = senderName, email = senderEmail },
+                        to = new[] { new { email = toEmail } },
+                        subject = subject,
+                        htmlContent = body
+                    };
+
+                    _httpClient.DefaultRequestHeaders.Clear();
+                    _httpClient.DefaultRequestHeaders.Add("api-key", brevoApiKey);
+                    _httpClient.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+
+                    var content = new StringContent(JsonSerializer.Serialize(payload), System.Text.Encoding.UTF8, "application/json");
+                    var response = await _httpClient.PostAsync("https://api.brevo.com/v3/smtp/email", content);
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        _logger.LogInformation("Email sent successfully via Brevo to {Email}", toEmail);
+                    }
+                    else
+                    {
+                        var errorResp = await response.Content.ReadAsStringAsync();
+                        _logger.LogWarning("Failed to send email via Brevo. Status: {StatusCode}, Error: {Error}", response.StatusCode, errorResp);
+                    }
+                    return; // Nếu có cấu hình Brevo thì dùng Brevo, không chạy tiếp xuống SMTP
+                }
+
+                // NẾU KHÔNG CÓ BREVO KEY -> DÙNG SMTP PORT 587 NHƯ CŨ (Chỉ chạy được ở Localhost)
                 var senderPassword = emailSettings["SenderPassword"];
                 var host = emailSettings["Host"];
                 var port = int.Parse(emailSettings["Port"] ?? "587");
