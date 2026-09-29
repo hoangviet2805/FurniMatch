@@ -38,7 +38,6 @@ export default function Checkout() {
                 }
                 if (foundQuote && foundReq) {
                     setItems([{
-                        id: 0,
                         productId: 0,
                         name: foundReq.productType,
                         price: foundQuote.price,
