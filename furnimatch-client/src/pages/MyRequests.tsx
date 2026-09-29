@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 import RequestQuotation from './RequestQuotation';
 
@@ -25,6 +26,7 @@ const statusStyle: Record<string, string> = {
 };
 
 const MyRequests = () => {
+  const navigate = useNavigate();
   const [requests, setRequests] = useState<any[]>([]);
   const [selected, setSelected] = useState<any>(null);
   const [filter, setFilter] = useState('ALL');
@@ -92,7 +94,7 @@ const MyRequests = () => {
     if (!confirmModal.quotationId) return;
     setConfirmModal({ isOpen: false, quotationId: null, shopName: '', price: 0, days: 0, submitting: false });
     // Chuyển hướng sang trang thanh toán kèm ID của báo giá
-    window.location.href = `/checkout?quoteId=${confirmModal.quotationId}`;
+    navigate(`/checkout?quoteId=${confirmModal.quotationId}`);
   };
 
   const visible = useMemo(() => {
