@@ -24,8 +24,11 @@ export default function Checkout() {
 
     useEffect(() => {
         if (quoteId) {
-            api.get('/quotationrequests').then(res => {
-                const reqs = res.data || [];
+            Promise.all([
+                api.get('/quotationrequests'),
+                api.get('/orders').catch(() => ({ data: [] }))
+            ]).then(([reqRes, ordRes]) => {
+                const reqs = reqRes.data || [];
                 let foundQuote = null;
                 let foundReq = null;
                 for (const r of reqs) {
@@ -45,6 +48,27 @@ export default function Checkout() {
                         sizeLabel: 'Gia công theo yêu cầu',
                         imageUrl: foundReq.imageUrl || foundReq.pattern
                     }]);
+
+                    // Kiểm tra xem có đơn hàng nào PENDING cho báo giá này chưa
+                    const orders = ordRes.data;
+                    const pendingOrder = orders.find((o: any) => {
+                        if (o.paymentStatus !== 'PENDING') return false;
+                        try {
+                            const parsedItems = JSON.parse(o.itemsJson || '[]');
+                            return parsedItems[0]?.QuotationId === Number(quoteId) || parsedItems[0]?.quotationId === Number(quoteId);
+                        } catch { return false; }
+                    });
+
+                    if (pendingOrder) {
+                        api.get(`/orders/${pendingOrder.orderId}/sepay`).then(qrRes => {
+                            setPay({
+                                orderId: pendingOrder.orderId,
+                                orderCode: pendingOrder.orderCode,
+                                qrCodeUrl: qrRes.data.qrCodeUrl,
+                                expiredAt: qrRes.data.expiredAt || pendingOrder.paymentExpiredAt
+                            });
+                        }).catch(() => { /* Lỗi/hết hạn => kệ, vẫn hiện form checkout */ });
+                    }
                 } else {
                     setError('Không tìm thấy thông tin báo giá.');
                 }
