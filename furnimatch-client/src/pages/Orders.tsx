@@ -448,6 +448,10 @@ export default function Orders() {
 
   const currentReviewItem = reviewItems[reviewStep];
   const resolveImgUrl = (url?: string) => !url ? '' : url.startsWith('http') ? url : `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+  const isVideoFile = (url: string) => {
+    if (!url) return false;
+    return url.match(/\.(mp4|webm|ogg|mov)$/i);
+  };
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-12">
@@ -902,10 +906,16 @@ export default function Orders() {
                     {reviewMedia.map((m, i) => (
                       <div key={i} className="relative group aspect-square rounded-xl overflow-hidden border bg-gray-100">
                         {m.isVideo
-                          ? <div className="h-full flex flex-col items-center justify-center gap-1 text-gray-500">
-                              <Video className="w-6 h-6" />
-                              <span className="text-[10px] px-1 text-center leading-tight truncate w-full text-center">{m.name}</span>
-                            </div>
+                          ? (
+                              <div className="relative w-full h-full bg-black flex items-center justify-center">
+                                <video src={resolveImgUrl(m.url)} className="w-full h-full object-cover opacity-80" preload="metadata" />
+                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                  <div className="bg-black/50 rounded-full p-1.5 text-white">
+                                    <Video className="w-4 h-4" />
+                                  </div>
+                                </div>
+                              </div>
+                            )
                           : <img src={resolveImgUrl(m.url)} alt="" className="h-full w-full object-cover" />}
                         <button
                           onClick={() => setReviewMedia(prev => prev.filter((_, idx) => idx !== i))}
@@ -1034,11 +1044,26 @@ export default function Orders() {
                           {rv.comment && <p className="text-sm text-gray-600 leading-relaxed">{rv.comment}</p>}
                           {mediaUrls.length > 0 && (
                             <div className="flex gap-2 mt-3 flex-wrap">
-                              {mediaUrls.map((url, i) => (
-                                <a key={i} href={resolveImgUrl(url)} target="_blank" rel="noreferrer">
-                                  <img src={resolveImgUrl(url)} alt="" className="h-16 w-16 rounded-xl object-cover border hover:opacity-80 transition-opacity" />
-                                </a>
-                              ))}
+                              {mediaUrls.map((url, i) => {
+                                const isVideo = isVideoFile(url);
+                                const resolvedUrl = resolveImgUrl(url);
+                                return (
+                                  <a key={i} href={resolvedUrl} target="_blank" rel="noreferrer" className="relative group h-16 w-16 rounded-xl overflow-hidden border">
+                                    {isVideo ? (
+                                      <>
+                                        <video src={resolvedUrl} className="h-full w-full object-cover group-hover:opacity-80 transition-opacity" preload="metadata" />
+                                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                          <div className="bg-black/50 rounded-full p-1 text-white shadow-sm">
+                                            <Video className="w-3 h-3" />
+                                          </div>
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <img src={resolvedUrl} alt="" className="h-full w-full object-cover group-hover:opacity-80 transition-opacity" />
+                                    )}
+                                  </a>
+                                );
+                              })}
                             </div>
                           )}
                         </div>
