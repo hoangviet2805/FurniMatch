@@ -98,7 +98,7 @@ namespace FurniMatch.Api.Controllers
                 CustomerId = customerId,
                 CategoryId = category?.CategoryId ?? 1,
                 ProductType = productType,
-                Pattern = uploadedImageUrl != null && uploadedImageUrl.Length > 500 ? uploadedImageUrl.Substring(0, 500) : uploadedImageUrl,
+                Pattern = uploadedImageUrl != null && uploadedImageUrl.Length > 100 ? uploadedImageUrl.Substring(0, 100) : uploadedImageUrl,
                 ImageUrl = uploadedImageUrl,
                 Length = dto.Length > 0 ? dto.Length : 120,
                 Width = dto.Width > 0 ? dto.Width : 60,
