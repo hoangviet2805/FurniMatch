@@ -187,6 +187,23 @@ const ManageProducts = () => {
     e.preventDefault();
     if (!thumbnailImage) return setAlertInfo({isOpen: true, message: 'Vui lòng chọn ảnh đại diện cho sản phẩm.', type: 'error'});
 
+    for (let i = 0; i < variants.length; i++) {
+      const v = variants[i];
+      const l = Number(v.length);
+      const w = Number(v.width);
+      const h = Number(v.height);
+      const p = Number(v.price);
+      const d = Number(v.productionDays);
+      const s = Number(v.stock);
+
+      if (v.length === '' || v.length === null || v.length === undefined || isNaN(l) || l <= 0) return setAlertInfo({isOpen: true, message: `Chiều dài phân loại "${v.sizeName}" phải là số lớn hơn 0.`, type: 'error'});
+      if (v.width === '' || v.width === null || v.width === undefined || isNaN(w) || w <= 0) return setAlertInfo({isOpen: true, message: `Chiều rộng phân loại "${v.sizeName}" phải là số lớn hơn 0.`, type: 'error'});
+      if (v.height === '' || v.height === null || v.height === undefined || isNaN(h) || h <= 0) return setAlertInfo({isOpen: true, message: `Chiều cao phân loại "${v.sizeName}" phải là số lớn hơn 0.`, type: 'error'});
+      if (v.price === '' || v.price === null || v.price === undefined || isNaN(p) || p <= 0) return setAlertInfo({isOpen: true, message: `Giá bán phân loại "${v.sizeName}" phải là số lớn hơn 0.`, type: 'error'});
+      if (v.productionDays === '' || v.productionDays === null || v.productionDays === undefined || isNaN(d) || d <= 0) return setAlertInfo({isOpen: true, message: `Thời gian thi công phân loại "${v.sizeName}" phải là số lớn hơn 0.`, type: 'error'});
+      if (v.stock === '' || v.stock === null || v.stock === undefined || isNaN(s) || s < 0) return setAlertInfo({isOpen: true, message: `Số lượng kho phân loại "${v.sizeName}" phải là số lớn hoặc bằng 0.`, type: 'error'});
+    }
+
     setSubmitting(true);
     try {
       // Create FormData for multipart submission
@@ -307,6 +324,23 @@ const ManageProducts = () => {
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingProduct) return;
+
+    for (let i = 0; i < editingVariants.length; i++) {
+      const v = editingVariants[i];
+      const l = Number(v.length);
+      const w = Number(v.width);
+      const h = Number(v.height);
+      const p = Number(v.price);
+      const d = Number(v.productionDays);
+      const s = Number(v.stock);
+
+      if (v.length === '' || v.length === null || v.length === undefined || isNaN(l) || l <= 0) return setAlertInfo({isOpen: true, message: `Chiều dài phân loại "${v.sizeName}" phải là số lớn hơn 0.`, type: 'error'});
+      if (v.width === '' || v.width === null || v.width === undefined || isNaN(w) || w <= 0) return setAlertInfo({isOpen: true, message: `Chiều rộng phân loại "${v.sizeName}" phải là số lớn hơn 0.`, type: 'error'});
+      if (v.height === '' || v.height === null || v.height === undefined || isNaN(h) || h <= 0) return setAlertInfo({isOpen: true, message: `Chiều cao phân loại "${v.sizeName}" phải là số lớn hơn 0.`, type: 'error'});
+      if (v.price === '' || v.price === null || v.price === undefined || isNaN(p) || p <= 0) return setAlertInfo({isOpen: true, message: `Giá bán phân loại "${v.sizeName}" phải là số lớn hơn 0.`, type: 'error'});
+      if (v.productionDays === '' || v.productionDays === null || v.productionDays === undefined || isNaN(d) || d <= 0) return setAlertInfo({isOpen: true, message: `Thời gian thi công phân loại "${v.sizeName}" phải là số lớn hơn 0.`, type: 'error'});
+      if (v.stock === '' || v.stock === null || v.stock === undefined || isNaN(s) || s < 0) return setAlertInfo({isOpen: true, message: `Số lượng kho phân loại "${v.sizeName}" phải là số lớn hoặc bằng 0.`, type: 'error'});
+    }
 
     // Nếu không có bất kỳ thay đổi nào, không thực hiện thay đổi gì và đóng modal
     if (!checkIfHasChanges()) {
