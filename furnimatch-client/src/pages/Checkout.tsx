@@ -53,10 +53,18 @@ export default function Checkout() {
                     const orders = ordRes.data;
                     const pendingOrder = orders.find((o: any) => {
                         if (o.paymentStatus !== 'PENDING') return false;
-                        try {
-                            const parsedItems = JSON.parse(o.itemsJson || '[]');
-                            return parsedItems[0]?.QuotationId === Number(quoteId) || parsedItems[0]?.quotationId === Number(quoteId);
-                        } catch { return false; }
+                        if (o.orderCode && o.orderCode.startsWith('QT-')) {
+                            try {
+                                const parsedItems = JSON.parse(o.itemsJson || '[]');
+                                const qId = parsedItems[0]?.QuotationId || parsedItems[0]?.quotationId;
+                                if (qId) {
+                                    return qId === Number(quoteId);
+                                }
+                                // Fallback cho các đơn hàng cũ chưa lưu QuotationId
+                                return true;
+                            } catch { return true; }
+                        }
+                        return false;
                     });
 
                     if (pendingOrder) {
