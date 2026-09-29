@@ -1153,7 +1153,7 @@ export default function SellerDashboard() {
       request: req,
       price: defaultPrice,
       productionDays: '7',
-      note: 'Xưởng cam kết sử dụng chất liệu chuẩn chất lượng, bàn giao đúng hạn và bảo hành 2 năm.',
+      note: 'Xưởng cam kết sử dụng chất liệu chuẩn chất lượng, bàn giao đúng hạn.',
       submitting: false,
       error: ''
     });
@@ -1167,6 +1167,13 @@ export default function SellerDashboard() {
     if (isNaN(priceNum) || priceNum <= 0) {
       setQuotingModal(m => ({ ...m, error: 'Vui lòng nhập báo giá hợp lệ (lớn hơn 0).' }));
       return;
+    }
+    
+    if (quotingModal.request.budgetMin > 0 && quotingModal.request.budgetMax > 0) {
+      if (priceNum < quotingModal.request.budgetMin || priceNum > quotingModal.request.budgetMax) {
+        setQuotingModal(m => ({ ...m, error: `Giá báo phải nằm trong khoảng ngân sách khách mong đợi: ${money(quotingModal.request.budgetMin)} - ${money(quotingModal.request.budgetMax)}.` }));
+        return;
+      }
     }
 
     const daysNum = parseInt(quotingModal.productionDays, 10);
@@ -2281,11 +2288,10 @@ export default function SellerDashboard() {
                           Ghi chú / Cam kết chất lượng từ xưởng
                         </label>
                         <textarea
-                          rows={3}
-                          placeholder="Gỗ sồi tự nhiên chuẩn tẩm sấy, sơn PU 5 lớp chống trầy, bảo hành kết cấu 24 tháng..."
-                          className="w-full px-4 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                          rows={2}
+                          readOnly
+                          className="w-full px-4 py-3 text-sm border border-emerald-500 bg-emerald-50 text-emerald-800 font-medium rounded-xl focus:outline-none opacity-90 cursor-not-allowed"
                           value={quotingModal.note}
-                          onChange={e => setQuotingModal(m => ({ ...m, note: e.target.value }))}
                         />
                       </div>
 
