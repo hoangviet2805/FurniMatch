@@ -2036,13 +2036,14 @@ export default function SellerDashboard() {
                             const myQuote = req.quotations?.[0];
                             const reqImage = req.imageUrl || req.pattern;
                             const isChosen = req.status === 'SELLER_SELECTED' || myQuote?.status === 'ACCEPTED';
+                            const isWaitingPayment = req.status === 'WAITING_PAYMENT' && myQuote?.status === 'WAITING_PAYMENT';
                             const isRejected = myQuote?.status === 'REJECTED';
 
                             return (
                               <div 
                                 key={req.quotationRequestId} 
                                 className={`rounded-2xl border p-6 shadow-sm relative overflow-hidden ${
-                                  isChosen ? 'border-emerald-400 bg-emerald-50/20 ring-2 ring-emerald-200' : 'border-gray-200 bg-white'
+                                  isChosen ? 'border-emerald-400 bg-emerald-50/20 ring-2 ring-emerald-200' : isWaitingPayment ? 'border-amber-400 bg-amber-50/20 ring-2 ring-amber-200' : 'border-gray-200 bg-white'
                                 }`}
                               >
                                 <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-4 pb-4 border-b border-gray-100">
@@ -2081,6 +2082,11 @@ export default function SellerDashboard() {
                                       <CheckCircle className="w-4 h-4" />
                                       🎉 Khách Hàng Đã Chọn Xưởng Bạn!
                                     </span>
+                                  ) : isWaitingPayment ? (
+                                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-amber-500 text-white shadow-sm shadow-amber-500/20 self-start">
+                                      <Clock className="w-4 h-4" />
+                                      ⏳ Khách Đã Chọn - Đang Chờ Thanh Toán!
+                                    </span>
                                   ) : isRejected ? (
                                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-600 self-start">
                                       Khách đã chọn xưởng khác
@@ -2109,7 +2115,7 @@ export default function SellerDashboard() {
                                   <div>
                                     <p className="text-xs text-gray-500">Trạng thái yêu cầu</p>
                                     <p className="font-bold text-emerald-700 mt-0.5">
-                                      {isChosen ? 'Đã chốt gia công' : isRejected ? 'Đã đóng' : 'Đang mở'}
+                                      {isChosen ? 'Đã chốt gia công' : isWaitingPayment ? 'Chờ thanh toán' : isRejected ? 'Đã đóng' : 'Đang mở'}
                                     </p>
                                   </div>
                                 </div>

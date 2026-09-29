@@ -153,9 +153,9 @@ public class OrdersController : ControllerBase
             
         if (quotation == null || quotation.QuotationRequest == null || quotation.QuotationRequest.CustomerId != UserId) return BadRequest(new { message = "Không tìm thấy báo giá hoặc báo giá không thuộc về bạn." });
         
-        // Cập nhật trạng thái
-        quotation.Status = "ACCEPTED";
-        quotation.QuotationRequest.Status = "SELLER_SELECTED";
+        // Cập nhật trạng thái thành chờ thanh toán
+        quotation.Status = "WAITING_PAYMENT";
+        quotation.QuotationRequest.Status = "WAITING_PAYMENT";
         
         // Tạo đơn hàng ảo từ quotation
         var order = new Order
@@ -179,6 +179,7 @@ public class OrdersController : ControllerBase
             ItemsJson = System.Text.Json.JsonSerializer.Serialize(new[] {
                 new {
                     ProductId = 0,
+                    QuotationId = quotation.QuotationId,
                     Name = quotation.QuotationRequest.ProductType,
                     SizeLabel = $"{quotation.QuotationRequest.Length}x{quotation.QuotationRequest.Width}x{quotation.QuotationRequest.Height}cm",
                     Price = quotation.Price,
@@ -266,7 +267,20 @@ public class OrdersController : ControllerBase
             {
                 if (await _sepay.HasMatchingPaymentAsync(order))
                 {
-                    order.PaymentStatus = "PAID"; order.OrderStatus = "CONFIRMED"; order.LegacyStatus = "CONFIRMED"; order.UpdatedAt = DateTime.UtcNow; await _db.SaveChangesAsync();
+                    order.PaymentStatus = "PAID"; order.OrderStatus = "CONFIRMED"; order.LegacyStatus = "CONFIRMED"; order.UpdatedAt = DateTime.UtcNow;
+                    if (order.OrderCode.StartsWith("QT-") && !string.IsNullOrEmpty(order.ItemsJson))
+                    {
+                        try {
+                            using var doc = System.Text.Json.JsonDocument.Parse(order.ItemsJson);
+                            if (doc.RootElement.GetArrayLength() > 0 && (doc.RootElement[0].TryGetProperty("QuotationId", out var qIdProp) || doc.RootElement[0].TryGetProperty("quotationId", out qIdProp)))
+                            {
+                                var quotationId = qIdProp.GetInt32();
+                                var qt = await _db.Quotations.Include(q => q.QuotationRequest).FirstOrDefaultAsync(q => q.QuotationId == quotationId);
+                                if (qt != null) { qt.Status = "ACCEPTED"; if (qt.QuotationRequest != null) qt.QuotationRequest.Status = "SELLER_SELECTED"; }
+                            }
+                        } catch {}
+                    }
+                    await _db.SaveChangesAsync();
                     await SendOrderEmailToSeller(order.SellerId, order.OrderCode, order.TotalAmount);
                 }
             }
@@ -382,6 +396,18 @@ public class OrdersController : ControllerBase
         order.PaymentStatus = "EXPIRED";
         order.OrderStatus = "CANCELLED";
         order.LegacyStatus = "CANCELLED";
+        if (order.OrderCode.StartsWith("QT-") && !string.IsNullOrEmpty(order.ItemsJson))
+        {
+            try {
+                using var doc = System.Text.Json.JsonDocument.Parse(order.ItemsJson);
+                if (doc.RootElement.GetArrayLength() > 0 && (doc.RootElement[0].TryGetProperty("QuotationId", out var qIdProp) || doc.RootElement[0].TryGetProperty("quotationId", out qIdProp)))
+                {
+                    var quotationId = qIdProp.GetInt32();
+                    var qt = await _db.Quotations.Include(q => q.QuotationRequest).FirstOrDefaultAsync(q => q.QuotationId == quotationId);
+                    if (qt != null) { qt.Status = "CANCELLED"; if (qt.QuotationRequest != null) qt.QuotationRequest.Status = "CANCELLED"; }
+                }
+            } catch {}
+        }
         if (!string.IsNullOrEmpty(order.ItemsJson))
         {
             try

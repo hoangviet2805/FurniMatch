@@ -9,6 +9,7 @@ const statusText: Record<string, string> = {
   OPEN: 'Đang tìm xưởng', 
   CLAIMED: 'Đã có xưởng nhận', 
   RECEIVING_QUOTES: 'Đang nhận báo giá', 
+  WAITING_PAYMENT: 'Chờ thanh toán',
   SELLER_SELECTED: 'Đã chốt chọn xưởng', 
   COMPLETED: 'Hoàn tất', 
   EXPIRED: 'Đã hết hạn', 
@@ -19,6 +20,7 @@ const statusStyle: Record<string, string> = {
   OPEN: 'bg-sky-100 text-sky-700', 
   CLAIMED: 'bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold', 
   RECEIVING_QUOTES: 'bg-violet-100 text-violet-700 font-semibold', 
+  WAITING_PAYMENT: 'bg-amber-100 text-amber-700 font-bold shadow-xs',
   SELLER_SELECTED: 'bg-emerald-600 text-white font-bold shadow-xs', 
   COMPLETED: 'bg-emerald-100 text-emerald-700', 
   EXPIRED: 'bg-gray-100 text-gray-600', 
@@ -299,6 +301,7 @@ const MyRequests = () => {
                   const seller = quote.seller;
                   const shopName = seller?.shopName || seller?.fullName || 'Xưởng mộc';
                   const isAccepted = quote.status === 'ACCEPTED' || selected.status === 'SELLER_SELECTED';
+                  const isWaitingPayment = quote.status === 'WAITING_PAYMENT' && selected.status === 'WAITING_PAYMENT';
                   const isRejected = quote.status === 'REJECTED';
 
                   return (
@@ -307,6 +310,8 @@ const MyRequests = () => {
                       className={`rounded-2xl border-2 p-4 relative overflow-hidden transition-all ${
                         isAccepted 
                           ? 'border-emerald-500 bg-emerald-50/60 ring-2 ring-emerald-200' 
+                          : isWaitingPayment
+                          ? 'border-amber-400 bg-amber-50/60 ring-2 ring-amber-200'
                           : isRejected 
                           ? 'border-gray-200 bg-gray-50 opacity-60' 
                           : 'border-emerald-200 bg-emerald-50/30'
@@ -341,7 +346,7 @@ const MyRequests = () => {
                       </div>
 
                       {/* Nút chọn xưởng */}
-                      {selected.status !== 'SELLER_SELECTED' && selected.status !== 'COMPLETED' && !isRejected && (
+                      {selected.status !== 'SELLER_SELECTED' && selected.status !== 'WAITING_PAYMENT' && selected.status !== 'COMPLETED' && !isRejected && (
                         <div className="mt-3">
                           <button
                             type="button"
@@ -353,11 +358,25 @@ const MyRequests = () => {
                           </button>
                         </div>
                       )}
+                      
+                      {/* Nút tiếp tục thanh toán */}
+                      {isWaitingPayment && (
+                        <div className="mt-3">
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/checkout?quoteId=${quote.quotationId}`)}
+                            className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-500/20 transition-all hover:scale-[1.01] active:scale-[0.99] cursor-pointer flex items-center justify-center gap-1.5"
+                          >
+                            <span>⏳</span>
+                            <span>Đang Chờ Thanh Toán (Nhấn để tiếp tục)</span>
+                          </button>
+                        </div>
+                      )}
 
                       {isAccepted && (
                         <div className="mt-3 text-center text-xs font-bold text-emerald-800 bg-emerald-100 py-2 rounded-xl flex items-center justify-center gap-1.5">
                           <span>🎉</span>
-                          <span>Bạn đã chọn xưởng này gia công cho đơn hàng</span>
+                          <span>Bạn đã thanh toán & chốt xưởng này gia công</span>
                         </div>
                       )}
 
