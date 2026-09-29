@@ -4,8 +4,7 @@ namespace FurniMatch.Api.DTOs
 {
     public class UpdateProfileDto
     {
-        [Required]
-        public string FullName { get; set; } = string.Empty;
+        public string? FullName { get; set; }
 
         public string? Phone { get; set; }
 

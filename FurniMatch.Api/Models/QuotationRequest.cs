@@ -17,8 +17,10 @@ namespace FurniMatch.Api.Models
         [MaxLength(100)]
         public string? ProductType { get; set; }
 
-        [MaxLength(100)]
+        [MaxLength(500)]
         public string? Pattern { get; set; }
+
+        public string? ImageUrl { get; set; }
 
         public double Length { get; set; }
         public double Width { get; set; }

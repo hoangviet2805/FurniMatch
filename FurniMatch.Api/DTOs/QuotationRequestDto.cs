@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Http;
 
 namespace FurniMatch.Api.DTOs
 {
@@ -8,6 +9,9 @@ namespace FurniMatch.Api.DTOs
         
         public string? ProductType { get; set; }
         public string? Pattern { get; set; }
+
+        public IFormFile? ImageFile { get; set; }
+        public string? ImageUrl { get; set; }
 
         public double Length { get; set; }
         public double Width { get; set; }

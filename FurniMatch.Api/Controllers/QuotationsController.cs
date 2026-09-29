@@ -56,27 +56,41 @@ namespace FurniMatch.Api.Controllers
                 return NotFound(new { message = "Không tìm thấy yêu cầu đặt hàng này." });
             }
 
-            if (request.Status != "OPEN")
+            if (request.Status != "OPEN" && request.Status != "RECEIVING_QUOTES")
             {
-                return BadRequest(new { message = "Yêu cầu này đã được xưởng khác tiếp nhận trước đó hoặc đã đóng." });
+                return BadRequest(new { message = "Yêu cầu này đã được khách hàng chốt xưởng gia công hoặc đã đóng." });
             }
 
-            // Tiếp nhận yêu cầu: Đổi trạng thái sang CLAIMED để ẩn khỏi tất cả xưởng khác
-            request.Status = "CLAIMED";
+            // Chuyển sang RECEIVING_QUOTES (Vẫn mở cho các xưởng khác gửi báo giá cạnh tranh)
+            request.Status = "RECEIVING_QUOTES";
 
-            var quotation = new Quotation
+            var existingQuotation = await _context.Quotations
+                .FirstOrDefaultAsync(q => q.QuotationRequestId == dto.QuotationRequestId && q.SellerId == sellerId);
+
+            Quotation quotation;
+            if (existingQuotation != null)
             {
-                QuotationRequestId = dto.QuotationRequestId,
-                SellerId = sellerId,
-                Price = dto.Price,
-                ProductionDays = dto.ProductionDays,
-                Note = dto.Note?.Trim(),
-                Status = "ACCEPTED",
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
-
-            _context.Quotations.Add(quotation);
+                existingQuotation.Price = dto.Price;
+                existingQuotation.ProductionDays = dto.ProductionDays;
+                existingQuotation.Note = dto.Note?.Trim();
+                existingQuotation.UpdatedAt = DateTime.UtcNow;
+                quotation = existingQuotation;
+            }
+            else
+            {
+                quotation = new Quotation
+                {
+                    QuotationRequestId = dto.QuotationRequestId,
+                    SellerId = sellerId,
+                    Price = dto.Price,
+                    ProductionDays = dto.ProductionDays,
+                    Note = dto.Note?.Trim(),
+                    Status = "PENDING",
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                _context.Quotations.Add(quotation);
+            }
 
             var formattedPrice = dto.Price.ToString("N0") + " đ";
             var sellerName = !string.IsNullOrEmpty(seller.ShopName) ? seller.ShopName : seller.FullName;
@@ -85,8 +99,8 @@ namespace FurniMatch.Api.Controllers
             _context.Notifications.Add(new Notification
             {
                 UserId = request.CustomerId,
-                Title = "Xưởng đã tiếp nhận yêu cầu đặt hàng của bạn! 🎉",
-                Message = $"Xưởng '{sellerName}' đã tiếp nhận yêu cầu '{request.ProductType}'. Báo giá: {formattedPrice}, thời gian làm dự kiến: {dto.ProductionDays} ngày.",
+                Title = "Xưởng mộc vừa gửi báo giá mới cho bạn! 🪵",
+                Message = $"Xưởng '{sellerName}' đã gửi báo giá cho yêu cầu '{request.ProductType}'. Báo giá: {formattedPrice}, thời gian dự kiến: {dto.ProductionDays} ngày.",
                 IsRead = false,
                 CreatedAt = DateTime.UtcNow
             });
@@ -108,28 +122,28 @@ namespace FurniMatch.Api.Controllers
                 {
                     try
                     {
-                        string subject = $"🎉 [FurniMatch] Xưởng '{sellerName}' đã tiếp nhận yêu cầu đặt làm: {productType}";
+                        string subject = $"🎉 [FurniMatch] Xưởng '{sellerName}' đã gửi báo giá cho: {productType}";
                         string htmlBody = $@"
                         <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;'>
                             <div style='background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 24px; text-align: center; color: white;'>
-                                <h2 style='margin: 0; font-size: 20px;'>🎉 Xưởng Đã Tiếp Nhận & Báo Giá Đơn Hàng</h2>
+                                <h2 style='margin: 0; font-size: 20px;'>🎉 Bạn Có Báo Giá Mới Từ Xưởng Mộc</h2>
                                 <p style='margin: 6px 0 0 0; font-size: 14px;'>Khách hàng: {customerName}</p>
                             </div>
                             <div style='padding: 24px; background: white;'>
                                 <p style='font-size: 14px; color: #374151; line-height: 1.6;'>
-                                    Tin vui! Yêu cầu đặt làm nội thất <strong>'{productType}'</strong> của bạn đã được xưởng <strong>{sellerName}</strong> tiếp nhận với thông tin báo giá chi tiết như sau:
+                                    Yêu cầu đặt làm nội thất <strong>'{productType}'</strong> của bạn đã nhận được báo giá từ xưởng <strong>{sellerName}</strong>:
                                 </p>
                                 <div style='background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 18px; margin: 18px 0;'>
                                     <p style='margin: 0 0 8px 0; font-size: 15px; color: #166534;'><strong>💰 Báo giá:</strong> <span style='font-size: 18px; font-weight: bold; color: #15803d;'>{formattedPrice}</span></p>
-                                    <p style='margin: 0 0 8px 0; font-size: 14px; color: #374151;'><strong>⏱️ Thời gian làm dự kiến:</strong> {dto.ProductionDays} ngày</p>
+                                    <p style='margin: 0 0 8px 0; font-size: 14px; color: #374151;'><strong>⏱️ Thời gian hoàn thành dự kiến:</strong> {dto.ProductionDays} ngày</p>
                                     <p style='margin: 0 0 8px 0; font-size: 14px; color: #374151;'><strong>📝 Ghi chú từ xưởng:</strong> {note}</p>
                                     <hr style='border: none; border-top: 1px dashed #cbd5e1; margin: 12px 0;' />
-                                    <p style='margin: 0 0 4px 0; font-size: 14px; color: #1e293b;'><strong>🏪 Xưởng tiếp nhận:</strong> {sellerName}</p>
+                                    <p style='margin: 0 0 4px 0; font-size: 14px; color: #1e293b;'><strong>🏪 Xưởng báo giá:</strong> {sellerName}</p>
                                     <p style='margin: 0 0 4px 0; font-size: 14px; color: #374151;'><strong>📞 Hotline xưởng:</strong> {sellerPhone}</p>
                                     <p style='margin: 0; font-size: 14px; color: #374151;'><strong>📍 Địa chỉ xưởng:</strong> {sellerAddress}</p>
                                 </div>
                                 <div style='text-align: center; margin: 25px 0 10px 0;'>
-                                    <a href='https://furnimatch-2.onrender.com/my-requests' style='background: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block;'>Xem Chi Tiết Yêu Cầu Của Bạn</a>
+                                    <a href='https://furnimatch-2.onrender.com/my-requests' style='background: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block;'>Xem Chi Tiết & Chốt Xưởng Này</a>
                                 </div>
                             </div>
                         </div>";
@@ -141,7 +155,7 @@ namespace FurniMatch.Api.Controllers
             }
 
             return Ok(new { 
-                message = "Đã tiếp nhận yêu cầu và gửi báo giá cho khách hàng thành công!",
+                message = "Đã gửi báo giá cho khách hàng thành công! Bạn có thể theo dõi phản hồi của khách trong mục 'Yêu cầu xưởng đã nhận'.",
                 quotation 
             });
         }
@@ -154,29 +168,113 @@ namespace FurniMatch.Api.Controllers
 
             var quotation = await _context.Quotations
                 .Include(q => q.QuotationRequest)
+                    .ThenInclude(qr => qr!.Customer)
+                .Include(q => q.Seller)
                 .FirstOrDefaultAsync(q => q.QuotationId == id);
 
-            if (quotation == null || quotation.QuotationRequest!.CustomerId != customerId)
+            if (quotation == null || quotation.QuotationRequest == null || quotation.QuotationRequest.CustomerId != customerId)
             {
-                return Unauthorized();
+                return Unauthorized(new { message = "Bạn không có quyền thao tác trên báo giá này." });
             }
 
-            quotation.Status = "ACCEPTED";
-            quotation.QuotationRequest.Status = "COMPLETED";
+            if (quotation.QuotationRequest.Status == "SELLER_SELECTED" || quotation.QuotationRequest.Status == "COMPLETED")
+            {
+                return BadRequest(new { message = "Yêu cầu này đã được chốt xưởng trước đó." });
+            }
 
-            // Mark other quotations as REJECTED if any
+            // Chốt chọn xưởng này
+            quotation.Status = "ACCEPTED";
+            quotation.QuotationRequest.Status = "SELLER_SELECTED";
+            quotation.UpdatedAt = DateTime.UtcNow;
+
+            // Đánh dấu từ chối các báo giá của các xưởng khác
             var otherQuotations = await _context.Quotations
+                .Include(q => q.Seller)
                 .Where(q => q.QuotationRequestId == quotation.QuotationRequestId && q.QuotationId != id)
                 .ToListAsync();
 
             foreach (var q in otherQuotations)
             {
                 q.Status = "REJECTED";
+                q.UpdatedAt = DateTime.UtcNow;
+
+                // Thông báo cho các xưởng không được chọn
+                _context.Notifications.Add(new Notification
+                {
+                    UserId = q.SellerId,
+                    Title = "Khách hàng đã chọn xưởng khác cho đơn đặt hàng",
+                    Message = $"Yêu cầu '{quotation.QuotationRequest.ProductType}' đã được khách hàng lựa chọn xưởng gia công khác. Cảm ơn xưởng đã gửi báo giá!",
+                    IsRead = false,
+                    CreatedAt = DateTime.UtcNow
+                });
             }
+
+            // Thông báo cho xưởng được chọn
+            _context.Notifications.Add(new Notification
+            {
+                UserId = quotation.SellerId,
+                Title = "🎉 Chúc mừng! Khách hàng đã chọn xưởng của bạn để gia công!",
+                Message = $"Khách hàng {quotation.QuotationRequest.Customer?.FullName} đã chấp nhận báo giá {quotation.Price:N0} đ cho yêu cầu '{quotation.QuotationRequest.ProductType}'. Hãy liên hệ khách hàng để tiến hành sản xuất ngay!",
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow
+            });
 
             await _context.SaveChangesAsync();
 
-            return Ok(new { message = "Đã xác nhận chốt báo giá thành công." });
+            // Gửi email cho xưởng thắng thầu trong background
+            if (quotation.Seller != null && !string.IsNullOrEmpty(quotation.Seller.Email))
+            {
+                var sellerEmail = quotation.Seller.Email;
+                var sellerName = !string.IsNullOrEmpty(quotation.Seller.ShopName) ? quotation.Seller.ShopName : quotation.Seller.FullName;
+                var customerName = quotation.QuotationRequest.Customer?.FullName ?? "Khách hàng";
+                var customerPhone = quotation.QuotationRequest.Customer?.Phone ?? "Chưa cập nhật";
+                var customerEmail = quotation.QuotationRequest.Customer?.Email ?? "Chưa cập nhật";
+                var customerAddress = string.Join(", ", new[] { 
+                    quotation.QuotationRequest.Customer?.AddressDetail, 
+                    quotation.QuotationRequest.Customer?.Ward, 
+                    quotation.QuotationRequest.Customer?.District, 
+                    quotation.QuotationRequest.Customer?.Province 
+                }.Where(s => !string.IsNullOrWhiteSpace(s)));
+                if (string.IsNullOrWhiteSpace(customerAddress)) customerAddress = "Chưa cập nhật";
+                var productType = quotation.QuotationRequest.ProductType;
+                var priceStr = quotation.Price.ToString("N0") + " đ";
+
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        string subject = $"🎉 [FurniMatch] Khách hàng {customerName} đã chọn xưởng của bạn cho đơn: {productType}";
+                        string htmlBody = $@"
+                        <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;'>
+                            <div style='background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 24px; text-align: center; color: white;'>
+                                <h2 style='margin: 0; font-size: 20px;'>🎉 Khách Hàng Đã Chốt Chọn Xưởng Của Bạn</h2>
+                                <p style='margin: 6px 0 0 0; font-size: 14px;'>Đơn đặt làm theo yêu cầu: {productType}</p>
+                            </div>
+                            <div style='padding: 24px; background: white;'>
+                                <p style='font-size: 14px; color: #374151; line-height: 1.6;'>
+                                    Xin chúc mừng <strong>{sellerName}</strong>! Khách hàng <strong>{customerName}</strong> đã tin tưởng và lựa chọn báo giá của xưởng bạn để tiến hành gia công sản phẩm.
+                                </p>
+                                <div style='background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 18px; margin: 18px 0;'>
+                                    <p style='margin: 0 0 8px 0; font-size: 15px; color: #166534;'><strong>💰 Báo giá đã chốt:</strong> <span style='font-size: 18px; font-weight: bold; color: #15803d;'>{priceStr}</span></p>
+                                    <p style='margin: 0 0 8px 0; font-size: 14px; color: #374151;'><strong>⏱️ Thời hạn gia công:</strong> {quotation.ProductionDays} ngày</p>
+                                    <hr style='border: none; border-top: 1px dashed #cbd5e1; margin: 12px 0;' />
+                                    <p style='margin: 0 0 6px 0; font-size: 14px; color: #1e293b;'><strong>👤 Khách hàng:</strong> {customerName}</p>
+                                    <p style='margin: 0 0 6px 0; font-size: 14px; color: #374151;'><strong>📞 Hotline liên hệ:</strong> {customerPhone}</p>
+                                    <p style='margin: 0 0 6px 0; font-size: 14px; color: #374151;'><strong>✉️ Email:</strong> {customerEmail}</p>
+                                    <p style='margin: 0; font-size: 14px; color: #374151;'><strong>📍 Địa chỉ giao hàng:</strong> {customerAddress}</p>
+                                </div>
+                                <div style='text-align: center; margin: 25px 0 10px 0;'>
+                                    <a href='https://furnimatch-2.onrender.com/seller/dashboard?tab=QUOTES' style='background: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block;'>Vào Quản Lý Đơn Xưởng</a>
+                                </div>
+                            </div>
+                        </div>";
+                        await _emailService.SendEmailAsync(sellerEmail, subject, htmlBody);
+                    }
+                    catch { /* Ignore background email failures */ }
+                });
+            }
+
+            return Ok(new { message = "Đã xác nhận chốt xưởng thành công! Thông tin liên hệ đã sẵn sàng." });
         }
     }
 }

@@ -303,19 +303,19 @@ namespace FurniMatch.Api.Controllers
                 }
             }
 
-            user.FullName = dto.FullName;
-            user.Phone = dto.Phone;
-            user.ShopName = dto.ShopName;
-            user.ShopDescription = dto.ShopDescription;
-            user.AvatarUrl = dto.AvatarUrl;
-            user.CoverUrl = dto.CoverUrl;
+            if (!string.IsNullOrWhiteSpace(dto.FullName)) user.FullName = dto.FullName;
+            if (!string.IsNullOrWhiteSpace(dto.Phone)) user.Phone = dto.Phone;
+            if (dto.ShopName != null) user.ShopName = dto.ShopName;
+            if (dto.ShopDescription != null) user.ShopDescription = dto.ShopDescription;
+            if (dto.AvatarUrl != null) user.AvatarUrl = dto.AvatarUrl;
+            if (dto.CoverUrl != null) user.CoverUrl = dto.CoverUrl;
             user.IsCustomSizeSupported = dto.IsCustomSizeSupported;
-            user.Latitude = dto.Latitude;
-            user.Longitude = dto.Longitude;
-            user.Province = dto.Province;
-            user.District = dto.District;
-            user.Ward = dto.Ward;
-            user.AddressDetail = dto.AddressDetail;
+            if (dto.Latitude.HasValue) user.Latitude = dto.Latitude;
+            if (dto.Longitude.HasValue) user.Longitude = dto.Longitude;
+            if (!string.IsNullOrWhiteSpace(dto.Province)) user.Province = dto.Province;
+            if (!string.IsNullOrWhiteSpace(dto.District)) user.District = dto.District;
+            if (!string.IsNullOrWhiteSpace(dto.Ward)) user.Ward = dto.Ward;
+            if (!string.IsNullOrWhiteSpace(dto.AddressDetail)) user.AddressDetail = dto.AddressDetail;
 
             await _context.SaveChangesAsync();
 
@@ -340,6 +340,24 @@ namespace FurniMatch.Api.Controllers
                     user.Ward,
                     user.AddressDetail
                 }
+            });
+        }
+
+        [Authorize(Roles = "SELLER")]
+        [HttpPut("toggle-custom-size")]
+        public async Task<IActionResult> ToggleCustomSize()
+        {
+            var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var user = await _context.Users.FindAsync(userId);
+            if (user == null) return NotFound();
+
+            user.IsCustomSizeSupported = !user.IsCustomSizeSupported;
+            await _context.SaveChangesAsync();
+
+            return Ok(new
+            {
+                isCustomSizeSupported = user.IsCustomSizeSupported,
+                message = user.IsCustomSizeSupported ? "Đã bật nhận đặt hàng theo yêu cầu thành công." : "Đã tắt nhận đặt hàng theo yêu cầu."
             });
         }
         [HttpPost("forgot-password")]

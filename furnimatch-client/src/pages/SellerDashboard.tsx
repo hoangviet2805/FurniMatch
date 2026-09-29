@@ -1196,21 +1196,26 @@ export default function SellerDashboard() {
 
       setQuoteToast({
         type: 'success',
-        message: '🎉 Tiếp nhận thành công! Đã gửi báo giá và thời gian hoàn thành tới khách hàng. Yêu cầu đã chuyển sang mục "Yêu cầu đã nhận" và ẩn khỏi các xưởng khác.'
+        message: '🎉 Gửi báo giá thành công! Báo giá và thời gian hoàn thành đã được gửi tới khách hàng. Bạn có thể theo dõi tiến trình trong mục "Yêu cầu xưởng đã báo giá".'
       });
       setTimeout(() => setQuoteToast(null), 7000);
 
       await loadQuotes();
       setQuoteSubTab('CLAIMED');
     } catch (err: any) {
-      const errMsg = err?.response?.data?.message || (typeof err?.response?.data === 'string' ? err.response.data : 'Có lỗi xảy ra khi tiếp nhận yêu cầu.');
+      const errMsg = err?.response?.data?.message || (typeof err?.response?.data === 'string' ? err.response.data : 'Có lỗi xảy ra khi gửi báo giá.');
       setQuotingModal(m => ({ ...m, submitting: false, error: errMsg }));
     }
   };
 
   const handleEnableCustomOrder = async () => {
     try {
-      await api.put('/auth/profile', { isCustomSizeSupported: true });
+      try {
+        await api.put('/auth/toggle-custom-size', { isCustomSizeSupported: true });
+      } catch {
+        await api.put('/auth/profile', { isCustomSizeSupported: true });
+      }
+
       const userStr = localStorage.getItem('user');
       if (userStr) {
         const u = JSON.parse(userStr);
@@ -1218,9 +1223,16 @@ export default function SellerDashboard() {
         localStorage.setItem('user', JSON.stringify(u));
       }
       setQuotesData(d => ({ ...d, isCustomSizeSupported: true }));
+      setQuoteToast({
+        type: 'success',
+        message: '🎉 Đã kích hoạt tính năng "Nhận Đặt Hàng Theo Yêu Cầu" thành công! Bạn có thể xem các đơn đặt làm của khách hàng ngay bên dưới.'
+      });
+      setTimeout(() => setQuoteToast(null), 6000);
       await loadQuotes();
-    } catch {
-      alert('Không thể kích hoạt tính năng. Vui lòng thử lại trong trang Hồ sơ cá nhân.');
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || 'Không thể kích hoạt tính năng. Vui lòng kiểm tra lại thông tin hồ sơ.';
+      setQuoteToast({ type: 'error', message: msg });
+      setTimeout(() => setQuoteToast(null), 6000);
     }
   };
 
@@ -1842,7 +1854,7 @@ export default function SellerDashboard() {
                             : 'text-gray-600 hover:text-gray-900'
                         }`}
                       >
-                        <span>⚡ Yêu Cầu Mới Chờ Tiếp Nhận</span>
+                        <span>⚡ Yêu Cầu Mới Chờ Báo Giá</span>
                         <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
                           quoteSubTab === 'AVAILABLE' ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-700'
                         }`}>
@@ -1859,7 +1871,7 @@ export default function SellerDashboard() {
                             : 'text-gray-600 hover:text-gray-900'
                         }`}
                       >
-                        <span>📋 Yêu Cầu Xưởng Đã Nhận</span>
+                        <span>📋 Yêu Cầu Xưởng Đã Báo Giá</span>
                         <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
                           quoteSubTab === 'CLAIMED' ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-700'
                         }`}>
@@ -1870,14 +1882,14 @@ export default function SellerDashboard() {
 
                     <div className="text-xs text-gray-500 flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                      <span>Đang nhận yêu cầu theo năng lực gia công & bán kính xưởng</span>
+                      <span>Hệ thống mở cho tất cả xưởng mộc cùng tiếp nhận & báo giá</span>
                     </div>
                   </div>
 
                   <div className="p-3.5 bg-sky-50 border border-sky-200 rounded-xl text-xs text-sky-900 flex items-center gap-2.5">
                     <span className="text-base">💡</span>
                     <span>
-                      <strong>Quyền lợi tiếp nhận đơn hàng:</strong> Khi xưởng bấm <strong>"Tiếp Nhận & Báo Giá"</strong>, yêu cầu sẽ lập tức được chốt riêng cho xưởng của bạn và ẩn hoàn toàn khỏi tất cả các xưởng khác trên sàn!
+                      <strong>Cơ chế báo giá:</strong> Tất cả các xưởng đều có thể gửi báo giá cạnh tranh. Khi khách hàng bấm chọn xưởng của bạn để gia công, đơn hàng sẽ chính thức được chốt và ẩn khỏi các xưởng khác!
                     </span>
                   </div>
 
@@ -1891,82 +1903,108 @@ export default function SellerDashboard() {
                           </div>
                           <p className="font-bold text-gray-800">Hiện chưa có yêu cầu mới đang mở</p>
                           <p className="text-xs text-gray-500 mt-1 max-w-md mx-auto">
-                            Khi có khách hàng gửi yêu cầu đặt làm nội thất theo kích thước riêng, hệ thống sẽ lập tức gửi thông báo và email đến xưởng của bạn.
+                            Khi có khách hàng gửi yêu cầu đặt làm nội thất theo ảnh mẫu riêng, hệ thống sẽ lập tức gửi thông báo và email đến xưởng của bạn.
                           </p>
                         </div>
                       ) : (
                         <div className="grid gap-5">
-                          {quotesData.availableRequests.map((req: any) => (
-                            <div 
-                              key={req.quotationRequestId} 
-                              className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden"
-                            >
-                              <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-4 pb-4 border-b border-gray-100">
-                                <div>
-                                  <div className="flex items-center gap-2 mb-1.5">
-                                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
-                                      {req.category?.name || 'Nội thất đặt đóng'}
-                                    </span>
-                                    <span className="text-xs text-gray-400">
-                                      {new Date(req.createdAt).toLocaleDateString('vi-VN')}
-                                    </span>
+                          {quotesData.availableRequests.map((req: any) => {
+                            const reqImage = req.imageUrl || req.pattern;
+                            return (
+                              <div 
+                                key={req.quotationRequestId} 
+                                className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden"
+                              >
+                                <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-4 pb-4 border-b border-gray-100">
+                                  <div className="flex items-start gap-4">
+                                    {reqImage && (
+                                      <div 
+                                        onClick={() => handlePreviewImage(reqImage, req.productType || 'Ảnh mẫu khách gửi')}
+                                        className="w-20 h-20 rounded-xl overflow-hidden border border-emerald-200 shrink-0 bg-gray-50 cursor-pointer group relative shadow-xs hover:border-emerald-500"
+                                        title="Nhấn để xem ảnh phóng to"
+                                      >
+                                        <img 
+                                          src={reqImage} 
+                                          alt={req.productType || 'Ảnh mẫu'} 
+                                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                        />
+                                        <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold">
+                                          🔍 Xem
+                                        </div>
+                                      </div>
+                                    )}
+                                    <div>
+                                      <div className="flex items-center gap-2 mb-1.5">
+                                        <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
+                                          {req.category?.name || 'Nội thất đặt đóng'}
+                                        </span>
+                                        <span className="text-xs text-gray-400">
+                                          {new Date(req.createdAt).toLocaleDateString('vi-VN')}
+                                        </span>
+                                      </div>
+                                      <h3 className="text-xl font-bold text-gray-900">{req.productType}</h3>
+                                      {reqImage && (
+                                        <p className="text-xs text-emerald-600 font-medium mt-0.5">
+                                          📸 Khách đã đính kèm ảnh mẫu cần làm
+                                        </p>
+                                      )}
+                                    </div>
                                   </div>
-                                  <h3 className="text-xl font-bold text-gray-900">{req.productType}</h3>
+                                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 self-start">
+                                    <Clock className="w-3.5 h-3.5" />
+                                    Đang nhận báo giá
+                                  </span>
                                 </div>
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 self-start">
-                                  <Clock className="w-3.5 h-3.5" />
-                                  Chờ tiếp nhận
-                                </span>
+
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 py-4 border-b border-gray-100 text-sm">
+                                  <div>
+                                    <p className="text-xs text-gray-500">Kích thước (D × R × C)</p>
+                                    <p className="font-bold text-gray-900 mt-0.5">{req.length} × {req.width} × {req.height} cm</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-gray-500">Số lượng</p>
+                                    <p className="font-bold text-gray-900 mt-0.5">{req.quantity} cái/bộ</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-gray-500">Ngân sách dự kiến</p>
+                                    <p className="font-bold text-emerald-700 mt-0.5">
+                                      {req.budgetMin || req.budgetMax ? `${money(req.budgetMin)} – ${money(req.budgetMax)}` : 'Chưa định'}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-gray-500">Chất liệu / Tư vấn</p>
+                                    <p className="font-bold text-gray-900 mt-0.5">{req.material || 'Xưởng tư vấn'}</p>
+                                  </div>
+                                </div>
+
+                                {req.description && (
+                                  <div className="py-3 text-xs sm:text-sm text-gray-600 bg-gray-50/70 p-3.5 rounded-xl border border-gray-100 my-4">
+                                    <span className="font-bold text-gray-800">Yêu cầu từ khách: </span>
+                                    <span>{req.description}</span>
+                                  </div>
+                                )}
+
+                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pt-2">
+                                  <div className="text-xs text-gray-500 flex items-center gap-2">
+                                    <User className="w-4 h-4 text-gray-400" />
+                                    <span>Khách hàng: <strong className="text-gray-700">{req.customer?.fullName || 'Khách hàng'}</strong></span>
+                                    {req.customer?.province && (
+                                      <span className="text-gray-400">· 📍 {req.customer.district ? `${req.customer.district}, ` : ''}{req.customer.province}</span>
+                                    )}
+                                  </div>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenQuoteModal(req)}
+                                    className="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold shadow-md shadow-emerald-700/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer"
+                                  >
+                                    <span>🪵 Báo Giá Yêu Cầu Này</span>
+                                    <span>→</span>
+                                  </button>
+                                </div>
                               </div>
-
-                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 py-4 border-b border-gray-100 text-sm">
-                                <div>
-                                  <p className="text-xs text-gray-500">Kích thước (D × R × C)</p>
-                                  <p className="font-bold text-gray-900 mt-0.5">{req.length} × {req.width} × {req.height} cm</p>
-                                </div>
-                                <div>
-                                  <p className="text-xs text-gray-500">Chất liệu mong muốn</p>
-                                  <p className="font-bold text-gray-900 mt-0.5">{req.material || 'Xưởng tư vấn'}</p>
-                                </div>
-                                <div>
-                                  <p className="text-xs text-gray-500">Số lượng</p>
-                                  <p className="font-bold text-gray-900 mt-0.5">{req.quantity} cái/bộ</p>
-                                </div>
-                                <div>
-                                  <p className="text-xs text-gray-500">Ngân sách dự kiến</p>
-                                  <p className="font-bold text-emerald-700 mt-0.5">
-                                    {req.budgetMin || req.budgetMax ? `${money(req.budgetMin)} – ${money(req.budgetMax)}` : 'Chưa định'}
-                                  </p>
-                                </div>
-                              </div>
-
-                              {req.description && (
-                                <div className="py-3 text-xs sm:text-sm text-gray-600 bg-gray-50/70 p-3.5 rounded-xl border border-gray-100 my-4">
-                                  <span className="font-bold text-gray-800">Yêu cầu từ khách: </span>
-                                  <span>{req.description}</span>
-                                </div>
-                              )}
-
-                              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pt-2">
-                                <div className="text-xs text-gray-500 flex items-center gap-2">
-                                  <User className="w-4 h-4 text-gray-400" />
-                                  <span>Khách hàng: <strong className="text-gray-700">{req.customer?.fullName || 'Khách hàng'}</strong></span>
-                                  {req.customer?.province && (
-                                    <span className="text-gray-400">· 📍 {req.customer.district ? `${req.customer.district}, ` : ''}{req.customer.province}</span>
-                                  )}
-                                </div>
-
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenQuoteModal(req)}
-                                  className="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold shadow-md shadow-emerald-700/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer"
-                                >
-                                  <span>🪵 Tiếp Nhận & Báo Giá</span>
-                                  <span>→</span>
-                                </button>
-                              </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       )}
                     </>
@@ -1980,36 +2018,72 @@ export default function SellerDashboard() {
                           <div className="w-12 h-12 mx-auto rounded-full bg-gray-100 text-gray-400 flex items-center justify-center text-2xl mb-3">
                             🛠️
                           </div>
-                          <p className="font-bold text-gray-800">Xưởng chưa tiếp nhận yêu cầu nào</p>
+                          <p className="font-bold text-gray-800">Xưởng chưa gửi báo giá cho yêu cầu nào</p>
                           <p className="text-xs text-gray-500 mt-1">
-                            Hãy chuyển sang tab "Yêu cầu mới chờ tiếp nhận" để chọn đơn hàng phù hợp và gửi báo giá cho khách!
+                            Hãy chuyển sang tab "Yêu cầu mới chờ báo giá" để chọn đơn hàng phù hợp và gửi báo giá cho khách!
                           </p>
                         </div>
                       ) : (
                         <div className="grid gap-5">
                           {quotesData.myClaimedRequests.map((req: any) => {
                             const myQuote = req.quotations?.[0];
+                            const reqImage = req.imageUrl || req.pattern;
+                            const isChosen = req.status === 'SELLER_SELECTED' || myQuote?.status === 'ACCEPTED';
+                            const isRejected = myQuote?.status === 'REJECTED';
+
                             return (
                               <div 
                                 key={req.quotationRequestId} 
-                                className="rounded-2xl border border-emerald-200 bg-white p-6 shadow-sm relative overflow-hidden"
+                                className={`rounded-2xl border p-6 shadow-sm relative overflow-hidden ${
+                                  isChosen ? 'border-emerald-400 bg-emerald-50/20 ring-2 ring-emerald-200' : 'border-gray-200 bg-white'
+                                }`}
                               >
                                 <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-4 pb-4 border-b border-gray-100">
-                                  <div>
-                                    <div className="flex items-center gap-2 mb-1.5">
-                                      <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
-                                        {req.category?.name || 'Nội thất đặt đóng'}
-                                      </span>
-                                      <span className="text-xs text-gray-400">
-                                        Tiếp nhận: {new Date(req.createdAt).toLocaleDateString('vi-VN')}
-                                      </span>
+                                  <div className="flex items-start gap-4">
+                                    {reqImage && (
+                                      <div 
+                                        onClick={() => handlePreviewImage(reqImage, req.productType || 'Ảnh mẫu khách gửi')}
+                                        className="w-20 h-20 rounded-xl overflow-hidden border border-emerald-200 shrink-0 bg-gray-50 cursor-pointer group relative shadow-xs hover:border-emerald-500"
+                                        title="Nhấn để xem ảnh phóng to"
+                                      >
+                                        <img 
+                                          src={reqImage} 
+                                          alt={req.productType || 'Ảnh mẫu'} 
+                                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                        />
+                                        <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold">
+                                          🔍 Xem
+                                        </div>
+                                      </div>
+                                    )}
+                                    <div>
+                                      <div className="flex items-center gap-2 mb-1.5">
+                                        <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
+                                          {req.category?.name || 'Nội thất đặt đóng'}
+                                        </span>
+                                        <span className="text-xs text-gray-400">
+                                          Ngày gửi: {new Date(req.createdAt).toLocaleDateString('vi-VN')}
+                                        </span>
+                                      </div>
+                                      <h3 className="text-xl font-bold text-gray-900">{req.productType}</h3>
                                     </div>
-                                    <h3 className="text-xl font-bold text-gray-900">{req.productType}</h3>
                                   </div>
-                                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 self-start">
-                                    <CheckCircle className="w-3.5 h-3.5" />
-                                    Đã tiếp nhận & báo giá
-                                  </span>
+
+                                  {isChosen ? (
+                                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-600 text-white shadow-sm shadow-emerald-600/20 self-start animate-bounce">
+                                      <CheckCircle className="w-4 h-4" />
+                                      🎉 Khách Hàng Đã Chọn Xưởng Bạn!
+                                    </span>
+                                  ) : isRejected ? (
+                                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-600 self-start">
+                                      Khách đã chọn xưởng khác
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-sky-100 text-sky-800 self-start">
+                                      <Clock className="w-3.5 h-3.5" />
+                                      Đã gửi báo giá (Chờ khách chọn)
+                                    </span>
+                                  )}
                                 </div>
 
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 py-4 border-b border-gray-100 text-sm">
@@ -2018,16 +2092,18 @@ export default function SellerDashboard() {
                                     <p className="font-bold text-gray-900 mt-0.5">{req.length} × {req.width} × {req.height} cm</p>
                                   </div>
                                   <div>
-                                    <p className="text-xs text-gray-500">Chất liệu</p>
-                                    <p className="font-bold text-gray-900 mt-0.5">{req.material || 'Xưởng tư vấn'}</p>
-                                  </div>
-                                  <div>
                                     <p className="text-xs text-gray-500">Số lượng</p>
                                     <p className="font-bold text-gray-900 mt-0.5">{req.quantity} cái/bộ</p>
                                   </div>
                                   <div>
                                     <p className="text-xs text-gray-500">Ghi chú của khách</p>
                                     <p className="text-xs text-gray-700 mt-0.5 truncate">{req.description || 'Không có'}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-gray-500">Trạng thái yêu cầu</p>
+                                    <p className="font-bold text-emerald-700 mt-0.5">
+                                      {isChosen ? 'Đã chốt gia công' : isRejected ? 'Đã đóng' : 'Đang mở'}
+                                    </p>
                                   </div>
                                 </div>
 
@@ -2059,7 +2135,7 @@ export default function SellerDashboard() {
                                 <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 text-xs sm:text-sm">
                                   <p className="font-bold text-gray-900 mb-2 flex items-center gap-1.5">
                                     <Phone className="w-4 h-4 text-emerald-600" />
-                                    Thông tin liên hệ khách hàng để chốt sản xuất:
+                                    {isChosen ? 'Thông tin liên hệ khách hàng để tiến hành sản xuất:' : 'Thông tin khách hàng:'}
                                   </p>
                                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-gray-700">
                                     <div>
@@ -2092,7 +2168,7 @@ export default function SellerDashboard() {
                 </div>
               )}
 
-              {/* Modal Tiếp Nhận & Báo Giá */}
+              {/* Modal Báo Giá */}
               {quotingModal.isOpen && quotingModal.request && (
                 <div 
                   className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150"
@@ -2105,7 +2181,7 @@ export default function SellerDashboard() {
                     <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gradient-to-r from-emerald-50 to-teal-50">
                       <div>
                         <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 uppercase tracking-wider">
-                          Tiếp Nhận Yêu Cầu
+                          Gửi Báo Giá Cho Khách
                         </span>
                         <h3 className="text-lg font-bold text-gray-900 mt-1">Báo Giá & Thời Gian Hoàn Thành</h3>
                       </div>
@@ -2125,18 +2201,35 @@ export default function SellerDashboard() {
                         </div>
                       )}
 
-                      {/* Tóm tắt sản phẩm */}
-                      <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100 text-xs space-y-1">
-                        <p className="font-bold text-sm text-gray-900">{quotingModal.request.productType}</p>
-                        <p className="text-gray-600">
-                          Kích thước: <strong>{quotingModal.request.length} × {quotingModal.request.width} × {quotingModal.request.height} cm</strong>
-                        </p>
-                        <p className="text-gray-600">
-                          Chất liệu: <strong>{quotingModal.request.material || 'Xưởng tư vấn'}</strong> · SL: <strong>{quotingModal.request.quantity}</strong>
-                        </p>
+                      {/* Tóm tắt sản phẩm kèm ảnh mẫu */}
+                      <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100 text-xs space-y-2">
+                        <div className="flex gap-3 items-center">
+                          {(quotingModal.request.imageUrl || quotingModal.request.pattern) && (
+                            <img 
+                              src={quotingModal.request.imageUrl || quotingModal.request.pattern} 
+                              alt="Ảnh mẫu" 
+                              className="w-16 h-16 rounded-lg object-cover border border-emerald-200 shrink-0 bg-white"
+                            />
+                          )}
+                          <div>
+                            <p className="font-bold text-sm text-gray-900">{quotingModal.request.productType}</p>
+                            <p className="text-gray-600 mt-0.5">
+                              Kích thước: <strong>{quotingModal.request.length} × {quotingModal.request.width} × {quotingModal.request.height} cm</strong>
+                            </p>
+                            <p className="text-gray-600">
+                              Số lượng: <strong>{quotingModal.request.quantity} cái/bộ</strong>
+                            </p>
+                          </div>
+                        </div>
+
                         {quotingModal.request.budgetMin && (
-                          <p className="text-emerald-700 font-semibold">
+                          <p className="text-emerald-700 font-semibold pt-1 border-t border-gray-200">
                             Ngân sách khách mong đợi: {money(quotingModal.request.budgetMin)} - {money(quotingModal.request.budgetMax)}
+                          </p>
+                        )}
+                        {quotingModal.request.description && (
+                          <p className="text-gray-600 italic">
+                            "{quotingModal.request.description}"
                           </p>
                         )}
                       </div>
@@ -2156,7 +2249,7 @@ export default function SellerDashboard() {
                           onChange={e => setQuotingModal(m => ({ ...m, price: e.target.value }))}
                         />
                         <p className="text-[11px] text-gray-400 mt-1">
-                          Giá hoàn thiện đã bao gồm vật liệu, gia công theo yêu cầu của khách.
+                          Giá hoàn thiện đã bao gồm vật liệu, gia công theo mẫu yêu cầu của khách.
                         </p>
                       </div>
 
@@ -2192,8 +2285,8 @@ export default function SellerDashboard() {
                         />
                       </div>
 
-                      <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 leading-relaxed">
-                        ⚡ <strong>Lưu ý:</strong> Sau khi bạn xác nhận gửi báo giá, yêu cầu này sẽ thuộc về xưởng của bạn và <strong>tự động ẩn ngay lập tức khỏi tất cả các xưởng khác</strong> trên hệ thống. Khách hàng sẽ nhận được thông báo và email chi tiết.
+                      <div className="p-3 bg-sky-50 rounded-xl border border-sky-200 text-xs text-sky-900 leading-relaxed">
+                        💡 <strong>Lưu ý:</strong> Báo giá và thời gian hoàn thiện sẽ được gửi ngay đến khách hàng. Khách hàng sẽ xem xét và chọn xưởng phù hợp nhất để tiến hành gia công.
                       </div>
 
                       <div className="flex gap-3 pt-2">
@@ -2209,7 +2302,7 @@ export default function SellerDashboard() {
                           disabled={quotingModal.submitting}
                           className="w-2/3 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-md shadow-emerald-700/20 active:scale-[0.99] transition-all text-sm disabled:bg-gray-400 cursor-pointer"
                         >
-                          {quotingModal.submitting ? 'Đang gửi báo giá...' : '🚀 Tiếp Nhận & Gửi Báo Giá'}
+                          {quotingModal.submitting ? 'Đang gửi báo giá...' : '🚀 Gửi Báo Giá Cho Khách'}
                         </button>
                       </div>
                     </form>

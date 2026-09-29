@@ -96,6 +96,13 @@ using (var scope = app.Services.CreateScope())
     {
         // Auto-create database schema on PostgreSQL / Supabase if not exists
         context.Database.EnsureCreated();
+
+        // Ensure ImageUrl column exists in QuotationRequests
+        try
+        {
+            context.Database.ExecuteSqlRaw(@"ALTER TABLE ""QuotationRequests"" ADD COLUMN IF NOT EXISTS ""ImageUrl"" text;");
+        }
+        catch { }
     }
     catch (Exception ex)
     {

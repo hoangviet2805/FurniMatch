@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
@@ -5,12 +6,10 @@ using System.Threading.Tasks;
 using FurniMatch.Api.Data;
 using FurniMatch.Api.DTOs;
 using FurniMatch.Api.Models;
+using FurniMatch.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-
-using System;
-using FurniMatch.Api.Utils;
 
 namespace FurniMatch.Api.Controllers
 {
@@ -19,33 +18,64 @@ namespace FurniMatch.Api.Controllers
     public class QuotationRequestsController : ControllerBase
     {
         private readonly FurniMatchDbContext _context;
-        private readonly FurniMatch.Api.Services.IEmailService _emailService;
+        private readonly IEmailService _emailService;
+        private readonly IPhotoService _photoService;
 
-        public QuotationRequestsController(FurniMatchDbContext context, FurniMatch.Api.Services.IEmailService emailService)
+        public QuotationRequestsController(
+            FurniMatchDbContext context, 
+            IEmailService emailService,
+            IPhotoService photoService)
         {
             _context = context;
             _emailService = emailService;
+            _photoService = photoService;
         }
 
         [Authorize(Roles = "CUSTOMER")]
         [HttpPost]
-        public async Task<IActionResult> CreateRequest([FromBody] QuotationRequestDto dto)
+        public async Task<IActionResult> CreateRequest([FromForm] QuotationRequestDto dto)
         {
             var customerId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
             var customer = await _context.Users.FindAsync(customerId);
 
             if (customer == null) return Unauthorized();
 
+            var category = await _context.Categories.FindAsync(dto.CategoryId > 0 ? dto.CategoryId : 1);
+            var categoryName = category?.Name ?? "nội thất";
+
+            // Xử lý upload ảnh mẫu sản phẩm
+            string? uploadedImageUrl = dto.ImageUrl;
+            if (dto.ImageFile != null && dto.ImageFile.Length > 0)
+            {
+                try
+                {
+                    uploadedImageUrl = await _photoService.AddMediaAsync(dto.ImageFile, "furnimatch_custom_requests");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Image Upload Warning]: {ex.Message}");
+                }
+            }
+
+            var productType = !string.IsNullOrWhiteSpace(dto.ProductType) 
+                ? dto.ProductType.Trim() 
+                : $"Đặt đóng {categoryName} theo ảnh mẫu";
+
+            var material = !string.IsNullOrWhiteSpace(dto.Material)
+                ? dto.Material.Trim()
+                : "Xưởng tư vấn chất liệu";
+
             var request = new QuotationRequest
             {
                 CustomerId = customerId,
-                CategoryId = dto.CategoryId > 0 ? dto.CategoryId : 1,
-                ProductType = dto.ProductType?.Trim() ?? "Sản phẩm đặt làm theo yêu cầu",
-                Pattern = dto.Pattern?.Trim(),
+                CategoryId = category?.CategoryId ?? 1,
+                ProductType = productType,
+                Pattern = uploadedImageUrl,
+                ImageUrl = uploadedImageUrl,
                 Length = dto.Length,
                 Width = dto.Width,
                 Height = dto.Height,
-                Material = dto.Material?.Trim(),
+                Material = material,
                 FrameType = dto.FrameType?.Trim(),
                 Color = dto.Color?.Trim(),
                 Quantity = dto.Quantity > 0 ? dto.Quantity : 1,
@@ -57,41 +87,13 @@ namespace FurniMatch.Api.Controllers
             };
 
             _context.QuotationRequests.Add(request);
-            await _context.SaveChangesAsync(); // Save to get QuotationRequestId
+            await _context.SaveChangesAsync();
 
-            // 1. Tìm các Xưởng (Seller) hỗ trợ làm theo yêu cầu (IsCustomSizeSupported = true) và đang ACTIVE
-            var sellers = await _context.Users
+            // Tìm TẤT CẢ các Xưởng (Seller) hỗ trợ làm theo yêu cầu (IsCustomSizeSupported = true) và đang ACTIVE
+            var targetSellers = await _context.Users
                 .Include(u => u.Role)
                 .Where(u => u.Role != null && u.Role.RoleName == "SELLER" && u.IsCustomSizeSupported && u.Status == "ACTIVE")
                 .ToListAsync();
-
-            var targetSellers = new List<User>();
-            bool hasCustomerCoords = customer.Latitude.HasValue && customer.Longitude.HasValue;
-
-            foreach (var seller in sellers)
-            {
-                if (hasCustomerCoords && seller.Latitude.HasValue && seller.Longitude.HasValue && dto.RadiusKm > 0)
-                {
-                    var distance = DistanceHelper.CalculateDistanceInKm(
-                        customer.Latitude.Value, customer.Longitude.Value,
-                        seller.Latitude.Value, seller.Longitude.Value);
-
-                    if (distance <= dto.RadiusKm)
-                    {
-                        targetSellers.Add(seller);
-                    }
-                }
-                else
-                {
-                    targetSellers.Add(seller);
-                }
-            }
-
-            // Fallback: nếu lọc theo bán kính không có xưởng nào, gửi tới tất cả xưởng nhận làm theo yêu cầu
-            if (targetSellers.Count == 0 && sellers.Count > 0)
-            {
-                targetSellers = sellers;
-            }
 
             int matchedSellersCount = 0;
             foreach (var seller in targetSellers)
@@ -100,7 +102,7 @@ namespace FurniMatch.Api.Controllers
                 {
                     UserId = seller.UserId,
                     Title = "Yêu cầu đặt làm theo yêu cầu mới! 🪵",
-                    Message = $"Khách hàng {customer.FullName} vừa tạo yêu cầu '{request.ProductType}'. Hãy vào tiếp nhận và gửi báo giá ngay!",
+                    Message = $"Khách hàng {customer.FullName} vừa tạo yêu cầu '{request.ProductType}'. Hãy vào xem ảnh mẫu và gửi báo giá ngay!",
                     IsRead = false,
                     CreatedAt = DateTime.UtcNow
                 });
@@ -113,11 +115,12 @@ namespace FurniMatch.Api.Controllers
 
                 // Gửi email thông báo cho các xưởng trong background
                 var customerName = customer.FullName;
-                var productType = request.ProductType;
                 var dimensions = $"{request.Length} × {request.Width} × {request.Height} cm";
-                var material = request.Material ?? "Chưa chỉ định";
                 var quantity = request.Quantity;
                 var desc = request.Description ?? "Không có mô tả thêm";
+                var imgHtml = !string.IsNullOrEmpty(uploadedImageUrl) 
+                    ? $"<div style='text-align: center; margin: 15px 0;'><img src='{uploadedImageUrl}' style='max-width: 100%; max-height: 250px; border-radius: 8px; border: 1px solid #e5e7eb;' alt='Ảnh mẫu' /></div>" 
+                    : "";
                 var sellerEmails = targetSellers.Where(s => !string.IsNullOrEmpty(s.Email)).Select(s => s.Email).ToList();
 
                 _ = Task.Run(async () =>
@@ -135,17 +138,17 @@ namespace FurniMatch.Api.Controllers
                                 </div>
                                 <div style='padding: 24px; background: white;'>
                                     <p style='font-size: 14px; color: #374151; line-height: 1.6;'>
-                                        Khách hàng vừa gửi yêu cầu đặt đóng nội thất theo kích thước riêng. Bạn hãy nhanh tay tiếp nhận và gửi báo giá để nhận đơn hàng trước các xưởng khác!
+                                        Khách hàng vừa gửi yêu cầu đặt đóng nội thất kèm ảnh mẫu thiết kế. Hãy xem yêu cầu và nhanh tay gửi báo giá cạnh tranh!
                                     </p>
+                                    {imgHtml}
                                     <div style='background: #f3f4f6; border-left: 4px solid #10b981; padding: 14px 18px; margin: 18px 0; border-radius: 4px;'>
-                                        <p style='margin: 0 0 6px 0; font-size: 14px; color: #111827;'><strong>Sản phẩm:</strong> {productType}</p>
+                                        <p style='margin: 0 0 6px 0; font-size: 14px; color: #111827;'><strong>Loại món đồ:</strong> {productType}</p>
                                         <p style='margin: 0 0 6px 0; font-size: 14px; color: #374151;'><strong>Kích thước:</strong> {dimensions}</p>
-                                        <p style='margin: 0 0 6px 0; font-size: 14px; color: #374151;'><strong>Chất liệu:</strong> {material}</p>
                                         <p style='margin: 0 0 6px 0; font-size: 14px; color: #374151;'><strong>Số lượng:</strong> {quantity}</p>
-                                        <p style='margin: 0; font-size: 14px; color: #374151;'><strong>Ghi chú:</strong> {desc}</p>
+                                        <p style='margin: 0; font-size: 14px; color: #374151;'><strong>Ghi chú từ khách:</strong> {desc}</p>
                                     </div>
                                     <div style='text-align: center; margin: 25px 0 10px 0;'>
-                                        <a href='https://furnimatch-2.onrender.com/seller/dashboard?tab=QUOTES' style='background: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block;'>Xem Yêu Cầu & Báo Giá Ngay</a>
+                                        <a href='https://furnimatch-2.onrender.com/seller/dashboard?tab=QUOTES' style='background: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block;'>Xem Chi Tiết & Báo Giá Ngay</a>
                                     </div>
                                 </div>
                             </div>";
@@ -160,7 +163,7 @@ namespace FurniMatch.Api.Controllers
             return Ok(new { 
                 Request = request, 
                 MatchedSellers = matchedSellersCount,
-                Message = $"Đã gửi yêu cầu tới {matchedSellersCount} xưởng sản xuất nhận may đo/gia công theo yêu cầu."
+                Message = $"Đã gửi yêu cầu tới {matchedSellersCount} xưởng sản xuất nhận gia công theo yêu cầu."
             });
         }
 
@@ -196,9 +199,10 @@ namespace FurniMatch.Api.Controllers
                     });
                 }
 
-                // 1. Các yêu cầu đang OPEN (chưa có seller nào nhận)
+                // 1. Các yêu cầu đang OPEN hoặc RECEIVING_QUOTES mà xưởng này CHƯA gửi báo giá
+                // (Tất cả seller đều có thể nhận & gửi báo giá cho đến khi khách hàng chốt chọn 1 xưởng)
                 var availableRequests = await _context.QuotationRequests
-                    .Where(qr => qr.Status == "OPEN")
+                    .Where(qr => (qr.Status == "OPEN" || qr.Status == "RECEIVING_QUOTES") && !qr.Quotations.Any(q => q.SellerId == userId))
                     .Include(qr => qr.Category)
                     .Include(qr => qr.Customer)
                     .OrderByDescending(qr => qr.CreatedAt)
