@@ -4,7 +4,7 @@ import { repairResponseText } from './text';
 const rawApiUrl = (import.meta.env.VITE_API_URL ? String(import.meta.env.VITE_API_URL).trim() : '');
 const rawBaseUrl = (import.meta.env.VITE_API_BASE_URL ? String(import.meta.env.VITE_API_BASE_URL).trim() : '');
 
-export const API_BASE_URL = rawBaseUrl || (rawApiUrl ? rawApiUrl.replace(/\/api\/?$/, '') : 'https://furnimatch-2.onrender.com');
+export const API_BASE_URL = rawBaseUrl || (rawApiUrl ? rawApiUrl.replace(/\/api\/?$/, '') : 'https://furnimatch-1.onrender.com');
 export const API_URL = rawApiUrl || `${API_BASE_URL}/api`;
 
 export const getImageUrl = (url?: string) => {
@@ -15,9 +15,6 @@ export const getImageUrl = (url?: string) => {
 
 const api = axios.create({
   baseURL: API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
 });
 
 api.interceptors.request.use(
@@ -28,7 +25,12 @@ api.interceptors.request.use(
     }
     // If sending FormData, delete Content-Type so browser sets boundary automatically
     if (config.data instanceof FormData && config.headers) {
+      if (typeof (config.headers as any).delete === 'function') {
+        (config.headers as any).delete('Content-Type');
+        (config.headers as any).delete('content-type');
+      }
       delete config.headers['Content-Type'];
+      delete config.headers['content-type'];
     }
     return config;
   },

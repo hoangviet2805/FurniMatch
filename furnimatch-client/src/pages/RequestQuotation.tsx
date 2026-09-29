@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import api from '../utils/api';
+import api, { API_URL } from '../utils/api';
 
 interface Props {
   onSuccess?: () => void;
@@ -129,35 +129,50 @@ const RequestQuotation = ({ onSuccess, onCancel }: Props) => {
         body.append('imageUrl', imagePreview);
       }
 
-      // Không tự truyền Content-Type để Axios và trình duyệt tự sinh boundary chính xác
-      const response = await api.post('/quotationrequests', body);
+      // Dùng native fetch gửi FormData trực tiếp để trình duyệt tự sinh boundary multipart/form-data
+      const response = await fetch(`${API_URL}/quotationrequests`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: body
+      });
 
-      setSuccessMessage(response.data.message || 'Đã gửi yêu cầu đặt hàng tới các xưởng thành công!');
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        let msg = '';
+        if (data?.message) {
+          msg = data.message;
+        } else if (typeof data === 'string' && data.trim()) {
+          msg = data;
+        } else if (data?.detail) {
+          msg = data.detail;
+        } else if (data?.title) {
+          msg = data.title;
+          if (data?.errors) {
+            const details = Object.values(data.errors).flat().join(', ');
+            if (details) msg += `: ${details}`;
+          }
+        } else if (response.status === 401) {
+          msg = 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại để tiếp tục.';
+        } else if (response.status === 403) {
+          msg = 'Tài khoản của bạn không có quyền thực hiện thao tác này.';
+        } else {
+          msg = `Lỗi máy chủ (${response.status}). Vui lòng thử lại sau.`;
+        }
+        throw new Error(msg);
+      }
+
+      setSuccessMessage(data?.message || 'Đã gửi yêu cầu đặt hàng tới các xưởng thành công!');
       if (onSuccess) {
         setTimeout(onSuccess, 1500);
       }
     } catch (err: any) {
       console.error('Submit quotation error:', err);
-      const data = err.response?.data;
-      let msg = '';
-      if (data?.message) {
-        msg = data.message;
-      } else if (typeof data === 'string' && data.trim()) {
-        msg = data;
-      } else if (data?.detail) {
-        msg = data.detail;
-      } else if (data?.title) {
-        msg = data.title;
-        if (data?.errors) {
-          const details = Object.values(data.errors).flat().join(', ');
-          if (details) msg += `: ${details}`;
-        }
-      } else if (err.response?.status === 401) {
-        msg = 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại để tiếp tục.';
-      } else if (err.response?.status === 403) {
-        msg = 'Tài khoản của bạn không có quyền thực hiện thao tác này.';
-      } else {
-        msg = err.message || 'Có lỗi xảy ra khi gửi yêu cầu. Vui lòng thử lại sau.';
+      let msg = err.message || 'Có lỗi xảy ra khi gửi yêu cầu. Vui lòng thử lại sau.';
+      if (err.name === 'TypeError' && err.message?.toLowerCase().includes('fetch')) {
+        msg = 'Không thể kết nối đến máy chủ. Vui lòng thử lại sau giây lát (máy chủ có thể đang tải lại).';
       }
       setErrorMessage(msg);
     } finally {
