@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import api from '../utils/api';
+import api, { getImageUrl } from '../utils/api';
 import { Package, User, MapPin, Phone, CheckCircle, Clock, Truck, Hammer, XCircle, ClipboardList, Wallet, ArrowDownToLine, History, FileText, AlertTriangle, CheckCircle2, Eye, ShieldAlert, ZoomIn, ZoomOut, RotateCcw, X, ExternalLink } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
@@ -272,7 +272,7 @@ function WalletSection() {
                                 type="button"
                                 onClick={() => setReceiptPreviewModal({
                                   isOpen: true,
-                                  url: w.paymentReceiptUrl.startsWith('http') ? w.paymentReceiptUrl : `https://furnimatch-2.onrender.com${w.paymentReceiptUrl}`,
+                                  url: getImageUrl(w.paymentReceiptUrl),
                                   item: w
                                 })}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-xs font-bold border border-emerald-200 transition-all shadow-sm"
@@ -675,7 +675,7 @@ function SellerDisputesSection({
                         <p className="text-xs text-gray-500 font-medium mb-1.5">Ảnh bằng chứng khách gửi ({images.length} ảnh):</p>
                         <div className="flex items-center gap-2 flex-wrap">
                           {images.map((img: string, idx: number) => {
-                            const fullUrl = img.startsWith('http') ? img : `https://furnimatch-2.onrender.com${img.startsWith('/') ? '' : '/'}${img}`;
+                            const fullUrl = getImageUrl(img);
                             return (
                               <button
                                 key={idx}

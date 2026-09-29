@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import api from '../utils/api';
+import api, { getImageUrl } from '../utils/api';
 import { getComparisonIds, toggleComparison, setComparisonProductIds, clearComparison } from '../utils/comparison';
 
 const money = (value?: number) => value ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value) : 'Liên hệ';
 const firstPrice = (product: any) => product.productVariants?.length ? Math.min(...product.productVariants.map((variant: any) => variant.price)) : product.price;
-const imageUrl = (url?: string) => url?.startsWith('http') ? url : `https://furnimatch-2.onrender.com${url}`;
+const imageUrl = getImageUrl;
 
 const CompareProducts = () => {
   const [products, setProducts] = useState<any[]>([]);

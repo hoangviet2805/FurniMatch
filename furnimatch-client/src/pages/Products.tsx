@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import api from '../utils/api';
+import api, { getImageUrl } from '../utils/api';
 import { isFavorite, toggleFavorite } from '../utils/favorites';
 
 const Products = () => {
@@ -187,7 +187,7 @@ const Products = () => {
                     {product.productImages && product.productImages.length > 0 ? (
                       (() => {
                         const thumb = product.productImages.find((img: any) => img.isThumbnail) || product.productImages[0];
-                        const imgUrl = thumb.imageUrl.startsWith('http') ? thumb.imageUrl : `https://furnimatch-2.onrender.com${thumb.imageUrl.startsWith('/') ? '' : '/'}${thumb.imageUrl}`;
+                        const imgUrl = getImageUrl(thumb.imageUrl);
                         return (
                           <img 
                             src={imgUrl} 

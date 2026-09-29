@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import api, { getShopInfo, getShopProducts } from '../utils/api';
+import api, { getShopInfo, getShopProducts, getImageUrl } from '../utils/api';
 import { useProvinces } from '../hooks/useProvinces';
 import {
   Settings, Camera, MapPin, Package, Phone, CheckCircle,
@@ -31,10 +31,7 @@ interface Product {
   primaryImage: string;
 }
 
-const resolveImageUrl = (url?: string) => {
-  if (!url) return '';
-  return url.startsWith('http') ? url : `https://furnimatch-2.onrender.com${url}`;
-};
+const resolveImageUrl = getImageUrl;
 
 // ─── Modal Tùy Chỉnh Gian Hàng ──────────────────────────────────────────────
 interface EditShopModalProps {

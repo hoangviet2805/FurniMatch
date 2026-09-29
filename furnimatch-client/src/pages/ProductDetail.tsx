@@ -1,18 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import api from '../utils/api';
+import api, { getImageUrl } from '../utils/api';
 import { isFavorite, toggleFavorite } from '../utils/favorites';
 import { addRecentlyViewed, isCompared, toggleComparison } from '../utils/comparison';
 import { saveCart } from '../utils/cart';
 
-const imageUrl = (url?: string) => url?.startsWith('http') ? url : `https://furnimatch-2.onrender.com${url}`;
+const imageUrl = getImageUrl;
 const money = (value: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
 
-const resolveMediaUrl = (url: string) => {
-  if (!url) return '';
-  if (url.startsWith('http://') || url.startsWith('https://')) return url;
-  return `https://furnimatch-2.onrender.com${url.startsWith('/') ? '' : '/'}${url}`;
-};
+const resolveMediaUrl = getImageUrl;
 
 const isVideoFile = (url: string) => {
   const clean = url.split('?')[0].toLowerCase();
