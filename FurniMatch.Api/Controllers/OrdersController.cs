@@ -141,6 +141,64 @@ public class OrdersController : ControllerBase
             .ToListAsync();
         return Ok(orders);
     }
+
+    [HttpPost("quotation"), Authorize(Roles = "CUSTOMER")]
+    public async Task<IActionResult> CreateFromQuotation(CreateOrderFromQuotationRequest request)
+    {
+        if (request.QuotationId <= 0 || string.IsNullOrWhiteSpace(request.RecipientName) || string.IsNullOrWhiteSpace(request.Phone) || string.IsNullOrWhiteSpace(request.Address)) return BadRequest(new { message = "Vui lòng điền đủ thông tin nhận hàng." });
+        
+        var quotation = await _db.Quotations
+            .Include(q => q.QuotationRequest)
+            .FirstOrDefaultAsync(q => q.QuotationId == request.QuotationId);
+            
+        if (quotation == null || quotation.QuotationRequest == null || quotation.QuotationRequest.CustomerId != UserId) return BadRequest(new { message = "Không tìm thấy báo giá hoặc báo giá không thuộc về bạn." });
+        
+        // Cập nhật trạng thái
+        quotation.Status = "ACCEPTED";
+        quotation.QuotationRequest.Status = "SELLER_SELECTED";
+        
+        // Tạo đơn hàng ảo từ quotation
+        var order = new Order
+        {
+            OrderCode = "QT-" + DateTime.UtcNow.Ticks.ToString().Substring(8, 6),
+            CustomerId = UserId,
+            SellerId = quotation.SellerId,
+            RecipientName = request.RecipientName,
+            RecipientPhone = request.Phone,
+            Address = request.Address,
+            Note = request.Note,
+            ShippingFee = request.ShippingFee,
+            Subtotal = quotation.Price,
+            TotalAmount = quotation.Price + request.ShippingFee,
+            PaymentMethod = "SEPAY",
+            PaymentStatus = "PENDING",
+            OrderStatus = "PENDING",
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
+            PaymentExpiredAt = DateTime.UtcNow.AddMinutes(15),
+            ItemsJson = System.Text.Json.JsonSerializer.Serialize(new[] {
+                new {
+                    ProductId = 0,
+                    Name = quotation.QuotationRequest.ProductType,
+                    SizeLabel = $"{quotation.QuotationRequest.Length}x{quotation.QuotationRequest.Width}x{quotation.QuotationRequest.Height}cm",
+                    Price = quotation.Price,
+                    Quantity = 1,
+                    ImageUrl = quotation.QuotationRequest.ImageUrl ?? ""
+                }
+            })
+        };
+
+        _db.Orders.Add(order);
+        await _db.SaveChangesAsync();
+
+        var bankAccount = "9998188188"; 
+        var bankId = "MB";
+        var amount = (int)order.TotalAmount;
+        var sepayUrl = $"https://qr.sepay.vn/img?acc={bankAccount}&bank={bankId}&amount={amount}&des={order.OrderCode}";
+
+        return Ok(new { orderId = order.OrderId, orderCode = order.OrderCode, qrCodeUrl = sepayUrl, expiredAt = order.PaymentExpiredAt });
+    }
+
     [HttpGet("seller"), Authorize(Roles = "SELLER")]
     public async Task<IActionResult> Seller()
     {
@@ -605,3 +663,5 @@ public sealed class CreateDisputeRequest { public string Reason { get; set; } = 
 public sealed class CreateDisputeForm { public string Reason { get; set; } = ""; public List<IFormFile>? Images { get; set; } }
 public sealed class UpdateShippingInfoRequest { public string RecipientName { get; set; } = ""; public string Phone { get; set; } = ""; public string Address { get; set; } = ""; public string? Note { get; set; } }
 
+p u b l i c   s e a l e d   c l a s s   C r e a t e O r d e r F r o m Q u o t a t i o n R e q u e s t   {   p u b l i c   i n t   Q u o t a t i o n I d   {   g e t ;   s e t ;   }   p u b l i c   s t r i n g   R e c i p i e n t N a m e   {   g e t ;   s e t ;   }   =   " " ;   p u b l i c   s t r i n g   P h o n e   {   g e t ;   s e t ;   }   =   " " ;   p u b l i c   s t r i n g   A d d r e s s   {   g e t ;   s e t ;   }   =   " " ;   p u b l i c   s t r i n g ?   N o t e   {   g e t ;   s e t ;   }   p u b l i c   d e c i m a l   S h i p p i n g F e e   {   g e t ;   s e t ;   }   p u b l i c   s t r i n g   P a y m e n t M e t h o d   {   g e t ;   s e t ;   }   =   " S E P A Y " ;   }  
+ 

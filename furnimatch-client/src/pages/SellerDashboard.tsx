@@ -2135,21 +2135,25 @@ export default function SellerDashboard() {
                                 <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 text-xs sm:text-sm">
                                   <p className="font-bold text-gray-900 mb-2 flex items-center gap-1.5">
                                     <Phone className="w-4 h-4 text-emerald-600" />
-                                    {isChosen ? 'Thông tin liên hệ khách hàng để tiến hành sản xuất:' : 'Thông tin khách hàng:'}
+                                    {isChosen ? 'Thông tin liên hệ khách hàng để tiến hành sản xuất:' : 'Thông tin khách hàng (Ẩn thông tin liên hệ cho đến khi khách chọn xưởng):'}
                                   </p>
                                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-gray-700">
                                     <div>
                                       <span className="text-gray-500">Khách hàng: </span>
                                       <strong className="text-gray-900">{req.customer?.fullName}</strong>
                                     </div>
-                                    <div>
-                                      <span className="text-gray-500">Hotline: </span>
-                                      <strong className="text-emerald-700 font-mono">{req.customer?.phone || 'Chưa cung cấp'}</strong>
-                                    </div>
-                                    <div>
-                                      <span className="text-gray-500">Email: </span>
-                                      <span className="text-gray-900">{req.customer?.email}</span>
-                                    </div>
+                                    {isChosen && (
+                                      <>
+                                        <div>
+                                          <span className="text-gray-500">Hotline: </span>
+                                          <strong className="text-emerald-700 font-mono">{req.customer?.phone || 'Chưa cung cấp'}</strong>
+                                        </div>
+                                        <div>
+                                          <span className="text-gray-500">Email: </span>
+                                          <span className="text-gray-900">{req.customer?.email}</span>
+                                        </div>
+                                      </>
+                                    )}
                                   </div>
                                   <div className="mt-2 text-gray-600">
                                     <span className="text-gray-500">Địa chỉ giao hàng: </span>

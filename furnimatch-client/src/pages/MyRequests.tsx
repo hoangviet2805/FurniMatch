@@ -90,23 +90,9 @@ const MyRequests = () => {
 
   const handleConfirmAccept = async () => {
     if (!confirmModal.quotationId) return;
-    setConfirmModal(m => ({ ...m, submitting: true }));
-
-    try {
-      await api.post(`/quotations/${confirmModal.quotationId}/accept`);
-      setConfirmModal({ isOpen: false, quotationId: null, shopName: '', price: 0, days: 0, submitting: false });
-      setToast({
-        type: 'success',
-        message: `🎉 Chúc mừng! Bạn đã chốt gia công với "${confirmModal.shopName}". Xưởng sẽ sớm liên hệ hotline của bạn để bắt đầu sản xuất!`
-      });
-      setTimeout(() => setToast(null), 8000);
-      fetchRequests();
-    } catch (err: any) {
-      const msg = err?.response?.data?.message || 'Có lỗi xảy ra khi xác nhận chốt xưởng.';
-      setToast({ type: 'error', message: msg });
-      setTimeout(() => setToast(null), 6000);
-      setConfirmModal(m => ({ ...m, submitting: false }));
-    }
+    setConfirmModal({ isOpen: false, quotationId: null, shopName: '', price: 0, days: 0, submitting: false });
+    // Chuyển hướng sang trang thanh toán kèm ID của báo giá
+    window.location.href = `/checkout?quoteId=${confirmModal.quotationId}`;
   };
 
   const visible = useMemo(() => {
@@ -344,11 +330,7 @@ const MyRequests = () => {
                             📝 Cam kết xưởng: <span className="italic font-medium">{quote.note}</span>
                           </p>
                         )}
-                        {seller?.phone && (
-                          <p className="text-emerald-800 font-medium">
-                            📞 Hotline xưởng: <a href={`tel:${seller.phone}`} className="font-bold underline text-emerald-700">{seller.phone}</a>
-                          </p>
-                        )}
+                        {/* Ẩn Hotline xưởng ở đây theo yêu cầu */}
                         {(seller?.addressDetail || seller?.province) && (
                           <p className="text-gray-500">
                             📍 Địa chỉ xưởng: {[seller?.addressDetail, seller?.ward, seller?.district, seller?.province].filter(Boolean).join(', ')}
