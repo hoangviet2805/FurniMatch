@@ -175,7 +175,7 @@ public class OrdersController : ControllerBase
             OrderStatus = "PENDING",
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow,
-            PaymentExpiredAt = DateTime.UtcNow.AddMinutes(15),
+            PaymentExpiredAt = DateTime.UtcNow.AddMinutes(_sepay.PaymentTimeoutMinutes),
             ItemsJson = System.Text.Json.JsonSerializer.Serialize(new[] {
                 new {
                     ProductId = 0,
@@ -192,12 +192,15 @@ public class OrdersController : ControllerBase
         _db.Orders.Add(order);
         await _db.SaveChangesAsync();
 
-        var bankAccount = "9998188188"; 
-        var bankId = "MB";
-        var amount = (int)order.TotalAmount;
-        var sepayUrl = $"https://qr.sepay.vn/img?acc={bankAccount}&bank={bankId}&amount={amount}&des={order.OrderCode}";
-
-        return Ok(new { orderId = order.OrderId, orderCode = order.OrderCode, qrCodeUrl = sepayUrl, expiredAt = order.PaymentExpiredAt });
+        try { 
+            var qrCodeUrl = await _sepay.CreateQrUrlAsync(order); 
+            return Ok(new { orderId = order.OrderId, orderCode = order.OrderCode, qrCodeUrl, expiredAt = order.PaymentExpiredAt }); 
+        }
+        catch (Exception ex) { 
+            order.PaymentStatus = "FAILED"; 
+            await _db.SaveChangesAsync(); 
+            return BadRequest(new { message = ex.Message }); 
+        }
     }
 
     [HttpGet("seller"), Authorize(Roles = "SELLER")]
