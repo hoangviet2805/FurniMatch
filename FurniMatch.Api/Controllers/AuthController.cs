@@ -26,13 +26,15 @@ namespace FurniMatch.Api.Controllers
         private readonly IConfiguration _configuration;
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly IWebHostEnvironment _env;
+        private readonly IPhotoService _photoService;
 
-        public AuthController(FurniMatchDbContext context, IConfiguration configuration, IServiceScopeFactory scopeFactory, IWebHostEnvironment env)
+        public AuthController(FurniMatchDbContext context, IConfiguration configuration, IServiceScopeFactory scopeFactory, IWebHostEnvironment env, IPhotoService photoService)
         {
             _context = context;
             _configuration = configuration;
             _scopeFactory = scopeFactory;
             _env = env;
+            _photoService = photoService;
         }
 
         [HttpPost("register")]
@@ -96,30 +98,20 @@ namespace FurniMatch.Api.Controllers
                     return BadRequest(new { message = "Bạn chỉ có thể tải lên tối đa 10 ảnh." });
                 }
 
-                var uploadsFolder = Path.Combine(_env.WebRootPath, "uploads", "seller-docs");
-                if (!Directory.Exists(uploadsFolder))
-                {
-                    Directory.CreateDirectory(uploadsFolder);
-                }
-
                 foreach (var file in dto.Documents)
                 {
                     if (file.Length > 0)
                     {
-                        var uniqueFileName = Guid.NewGuid().ToString() + "_" + file.FileName;
-                        var filePath = Path.Combine(uploadsFolder, uniqueFileName);
-
-                        using (var fileStream = new FileStream(filePath, FileMode.Create))
+                        var url = await _photoService.AddMediaAsync(file, "furnimatch_seller_docs");
+                        if (!string.IsNullOrEmpty(url))
                         {
-                            await file.CopyToAsync(fileStream);
+                            var sellerDoc = new SellerDocument
+                            {
+                                UserId = user.UserId,
+                                ImageUrl = url
+                            };
+                            _context.SellerDocuments.Add(sellerDoc);
                         }
-
-                        var sellerDoc = new SellerDocument
-                        {
-                            UserId = user.UserId,
-                            ImageUrl = $"/uploads/seller-docs/{uniqueFileName}"
-                        };
-                        _context.SellerDocuments.Add(sellerDoc);
                     }
                 }
                 await _context.SaveChangesAsync();

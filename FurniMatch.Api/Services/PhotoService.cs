@@ -9,6 +9,7 @@ namespace FurniMatch.Api.Services
     public interface IPhotoService
     {
         Task<string> AddPhotoAsync(IFormFile file);
+        Task<string> AddMediaAsync(IFormFile file, string folder);
     }
 
     public class PhotoService : IPhotoService
@@ -46,6 +47,38 @@ namespace FurniMatch.Api.Services
             }
 
             return uploadResult.SecureUrl.AbsoluteUri; // Trả về link ảnh vĩnh viễn (HTTPS)
+        }
+        public async Task<string> AddMediaAsync(IFormFile file, string folder)
+        {
+            if (file == null || file.Length == 0) return null;
+
+            var allowedVideos = new[] { ".mp4", ".mov", ".avi", ".mkv", ".webm" };
+            var ext = System.IO.Path.GetExtension(file.FileName).ToLowerInvariant();
+            var isVideo = allowedVideos.Contains(ext);
+
+            using (var stream = file.OpenReadStream())
+            {
+                if (isVideo)
+                {
+                    var uploadParams = new VideoUploadParams
+                    {
+                        File = new FileDescription(file.FileName, stream),
+                        Folder = folder
+                    };
+                    var uploadResult = await _cloudinary.UploadAsync(uploadParams);
+                    return uploadResult.SecureUrl.AbsoluteUri;
+                }
+                else
+                {
+                    var uploadParams = new ImageUploadParams
+                    {
+                        File = new FileDescription(file.FileName, stream),
+                        Folder = folder
+                    };
+                    var uploadResult = await _cloudinary.UploadAsync(uploadParams);
+                    return uploadResult.SecureUrl.AbsoluteUri;
+                }
+            }
         }
     }
 }

@@ -18,11 +18,13 @@ namespace FurniMatch.Api.Controllers
     {
         private readonly FurniMatchDbContext _context;
         private readonly IEmailService _emailService;
+        private readonly FurniMatch.Api.Services.IPhotoService _photoService;
 
-        public AdminController(FurniMatchDbContext context, IEmailService emailService)
+        public AdminController(FurniMatchDbContext context, IEmailService emailService, FurniMatch.Api.Services.IPhotoService photoService)
         {
             _context = context;
             _emailService = emailService;
+            _photoService = photoService;
         }
 
         [HttpGet("users")]
@@ -422,22 +424,12 @@ namespace FurniMatch.Api.Controllers
             // Xử lý lưu ảnh bill chuyển khoản đính kèm nếu có
             if (form?.ReceiptFile != null && form.ReceiptFile.Length > 0)
             {
-                var uploadsFolder = Path.Combine(env.WebRootPath ?? Path.Combine(env.ContentRootPath, "wwwroot"), "uploads", "receipts");
-                if (!Directory.Exists(uploadsFolder))
+                var url = await _photoService.AddMediaAsync(form.ReceiptFile, "furnimatch_receipts");
+                if (!string.IsNullOrEmpty(url))
                 {
-                    Directory.CreateDirectory(uploadsFolder);
+                    request.PaymentReceiptUrl = url;
                 }
-
-                var ext = Path.GetExtension(form.ReceiptFile.FileName);
-                var fileName = $"receipt_{request.WithdrawalRequestId}_{Guid.NewGuid():N}{ext}";
-                var filePath = Path.Combine(uploadsFolder, fileName);
-
-                using (var stream = new FileStream(filePath, FileMode.Create))
-                {
-                    await form.ReceiptFile.CopyToAsync(stream);
-                }
-
-                request.PaymentReceiptUrl = $"/uploads/receipts/{fileName}";
+            }
             }
 
             if (!string.IsNullOrWhiteSpace(form?.Note))

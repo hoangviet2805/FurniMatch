@@ -12,8 +12,8 @@ namespace FurniMatch.Api.Controllers;
 [ApiController, Route("api/orders"), Authorize]
 public class OrdersController : ControllerBase
 {
-    private readonly FurniMatchDbContext _db; private readonly SePayPaymentService _sepay; private readonly IEmailService _emailService;
-    public OrdersController(FurniMatchDbContext db, SePayPaymentService sepay, IEmailService emailService) { _db = db; _sepay = sepay; _emailService = emailService; }
+    private readonly FurniMatchDbContext _db; private readonly SePayPaymentService _sepay; private readonly IEmailService _emailService; private readonly FurniMatch.Api.Services.IPhotoService _photoService;
+    public OrdersController(FurniMatchDbContext db, SePayPaymentService sepay, IEmailService emailService, FurniMatch.Api.Services.IPhotoService photoService) { _db = db; _sepay = sepay; _emailService = emailService; _photoService = photoService; }
     private int UserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     [HttpPost, Authorize(Roles = "CUSTOMER")]
     public async Task<IActionResult> Create(CreateOrderRequest request)
@@ -385,9 +385,6 @@ public class OrdersController : ControllerBase
         var imageUrls = new List<string>();
         if (form.Images != null && form.Images.Count > 0)
         {
-            var uploadsFolder = Path.Combine(env.WebRootPath ?? Path.Combine(env.ContentRootPath, "wwwroot"), "uploads", "disputes");
-            if (!Directory.Exists(uploadsFolder)) Directory.CreateDirectory(uploadsFolder);
-
             foreach (var file in form.Images)
             {
                 if (file.Length > 0)
@@ -396,13 +393,11 @@ public class OrdersController : ControllerBase
                     var allowedExts = new[] { ".jpg", ".jpeg", ".png", ".webp" };
                     if (!allowedExts.Contains(ext)) continue;
 
-                    var fileName = $"dispute_{id}_{Guid.NewGuid():N}{ext}";
-                    var filePath = Path.Combine(uploadsFolder, fileName);
-                    using (var stream = new FileStream(filePath, FileMode.Create))
+                    var url = await _photoService.AddMediaAsync(file, "furnimatch_disputes");
+                    if (!string.IsNullOrEmpty(url))
                     {
-                        await file.CopyToAsync(stream);
+                        imageUrls.Add(url);
                     }
-                    imageUrls.Add($"/uploads/disputes/{fileName}");
                 }
             }
         }

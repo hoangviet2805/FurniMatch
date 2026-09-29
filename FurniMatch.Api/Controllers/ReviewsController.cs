@@ -14,11 +14,13 @@ public class ReviewsController : ControllerBase
 {
     private readonly FurniMatchDbContext _db;
     private readonly IWebHostEnvironment _env;
+    private readonly FurniMatch.Api.Services.IPhotoService _photoService;
 
-    public ReviewsController(FurniMatchDbContext db, IWebHostEnvironment env)
+    public ReviewsController(FurniMatchDbContext db, IWebHostEnvironment env, FurniMatch.Api.Services.IPhotoService photoService)
     {
         _db = db;
         _env = env;
+        _photoService = photoService;
     }
 
     private int UserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -41,20 +43,13 @@ public class ReviewsController : ControllerBase
         if (!allowedImages.Contains(ext) && !allowedVideos.Contains(ext))
             return BadRequest(new { message = "Định dạng file không được hỗ trợ. Chỉ chấp nhận ảnh (JPG, PNG, WEBP) và video (MP4, MOV)." });
 
-        var folder = Path.Combine(
-            _env.WebRootPath ?? Path.Combine(_env.ContentRootPath, "wwwroot"),
-            "uploads", "reviews");
+        var url = await _photoService.AddMediaAsync(file, "furnimatch_reviews");
+        if (string.IsNullOrEmpty(url))
+        {
+            return BadRequest(new { message = "Lỗi khi upload lên Cloudinary." });
+        }
 
-        if (!Directory.Exists(folder))
-            Directory.CreateDirectory(folder);
-
-        var fileName = $"review_{Guid.NewGuid():N}{ext}";
-        var filePath = Path.Combine(folder, fileName);
-
-        using (var stream = new FileStream(filePath, FileMode.Create))
-            await file.CopyToAsync(stream);
-
-        return Ok(new { url = $"/uploads/reviews/{fileName}", isVideo = allowedVideos.Contains(ext) });
+        return Ok(new { url = url, isVideo = allowedVideos.Contains(ext) });
     }
 
     // ─── POST REVIEW ─────────────────────────────────────────────────────────

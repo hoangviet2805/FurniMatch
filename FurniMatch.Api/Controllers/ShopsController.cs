@@ -17,11 +17,13 @@ namespace FurniMatch.Api.Controllers
     {
         private readonly FurniMatchDbContext _context;
         private readonly IWebHostEnvironment _env;
+        private readonly FurniMatch.Api.Services.IPhotoService _photoService;
 
-        public ShopsController(FurniMatchDbContext context, IWebHostEnvironment env)
+        public ShopsController(FurniMatchDbContext context, IWebHostEnvironment env, FurniMatch.Api.Services.IPhotoService photoService)
         {
             _context = context;
             _env = env;
+            _photoService = photoService;
         }
 
         [HttpGet("{sellerId}")]
@@ -66,20 +68,12 @@ namespace FurniMatch.Api.Controllers
             if (!allowed.Contains(ext))
                 return BadRequest(new { message = "Định dạng ảnh không hỗ trợ. Vui lòng chọn JPG, PNG, WEBP." });
 
-            var webRoot = _env.WebRootPath ?? Path.Combine(_env.ContentRootPath, "wwwroot");
-            var folder = Path.Combine(webRoot, "uploads", "shops");
-            if (!Directory.Exists(folder))
-                Directory.CreateDirectory(folder);
-
-            var fileName = $"{Guid.NewGuid()}{ext}";
-            var filePath = Path.Combine(folder, fileName);
-
-            using (var stream = new FileStream(filePath, FileMode.Create))
+            var url = await _photoService.AddMediaAsync(file, "furnimatch_shops");
+            if (string.IsNullOrEmpty(url))
             {
-                await file.CopyToAsync(stream);
+                return BadRequest(new { message = "Lỗi khi upload lên Cloudinary." });
             }
 
-            var url = $"/uploads/shops/{fileName}";
             return Ok(new { url });
         }
 
