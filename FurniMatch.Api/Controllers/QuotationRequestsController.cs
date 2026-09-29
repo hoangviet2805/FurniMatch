@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.IdentityModel.Tokens.Jwt;
+using System.IO;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using FurniMatch.Api.Data;
@@ -31,16 +33,27 @@ namespace FurniMatch.Api.Controllers
             _photoService = photoService;
         }
 
-        [Authorize(Roles = "CUSTOMER")]
+        [Authorize]
         [HttpPost]
         public async Task<IActionResult> CreateRequest([FromForm] QuotationRequestDto dto)
         {
-            var customerId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var customerIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier) 
+                                ?? User.FindFirstValue(JwtRegisteredClaimNames.Sub) 
+                                ?? User.FindFirstValue("sub");
+
+            if (string.IsNullOrEmpty(customerIdStr) || !int.TryParse(customerIdStr, out int customerId))
+            {
+                return Unauthorized(new { message = "Phiên đăng nhập không hợp lệ hoặc đã hết hạn. Vui lòng đăng nhập lại." });
+            }
+
             var customer = await _context.Users.FindAsync(customerId);
+            if (customer == null) 
+            {
+                return Unauthorized(new { message = "Tài khoản không tồn tại trên hệ thống. Vui lòng đăng nhập lại." });
+            }
 
-            if (customer == null) return Unauthorized();
-
-            var category = await _context.Categories.FindAsync(dto.CategoryId > 0 ? dto.CategoryId : 1);
+            var category = await _context.Categories.FindAsync(dto.CategoryId)
+                           ?? await _context.Categories.FirstOrDefaultAsync();
             var categoryName = category?.Name ?? "nội thất";
 
             // Xử lý upload ảnh mẫu sản phẩm
@@ -53,7 +66,22 @@ namespace FurniMatch.Api.Controllers
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[Image Upload Warning]: {ex.Message}");
+                    Console.WriteLine($"[Cloudinary Upload Warning]: {ex.Message}");
+                    // Fallback lưu cục bộ nếu Cloudinary gặp sự cố
+                    try
+                    {
+                        var uploadsFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "quotations");
+                        if (!Directory.Exists(uploadsFolder)) Directory.CreateDirectory(uploadsFolder);
+                        var ext = Path.GetExtension(dto.ImageFile.FileName);
+                        var fileName = $"{Guid.NewGuid()}{ext}";
+                        var filePath = Path.Combine(uploadsFolder, fileName);
+                        using (var stream = new FileStream(filePath, FileMode.Create))
+                        {
+                            await dto.ImageFile.CopyToAsync(stream);
+                        }
+                        uploadedImageUrl = $"/uploads/quotations/{fileName}";
+                    }
+                    catch { }
                 }
             }
 
@@ -70,11 +98,11 @@ namespace FurniMatch.Api.Controllers
                 CustomerId = customerId,
                 CategoryId = category?.CategoryId ?? 1,
                 ProductType = productType,
-                Pattern = uploadedImageUrl,
+                Pattern = uploadedImageUrl != null && uploadedImageUrl.Length > 500 ? uploadedImageUrl.Substring(0, 500) : uploadedImageUrl,
                 ImageUrl = uploadedImageUrl,
-                Length = dto.Length,
-                Width = dto.Width,
-                Height = dto.Height,
+                Length = dto.Length > 0 ? dto.Length : 120,
+                Width = dto.Width > 0 ? dto.Width : 60,
+                Height = dto.Height > 0 ? dto.Height : 75,
                 Material = material,
                 FrameType = dto.FrameType?.Trim(),
                 Color = dto.Color?.Trim(),
@@ -167,14 +195,22 @@ namespace FurniMatch.Api.Controllers
             });
         }
 
-        [Authorize(Roles = "SELLER,CUSTOMER")]
+        [Authorize]
         [HttpGet]
         public async Task<IActionResult> GetRequests([FromQuery] string? tab = null)
         {
-            var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-            var role = User.FindFirstValue(ClaimTypes.Role);
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier) 
+                            ?? User.FindFirstValue(JwtRegisteredClaimNames.Sub) 
+                            ?? User.FindFirstValue("sub");
 
-            if (role == "CUSTOMER")
+            if (string.IsNullOrEmpty(userIdStr) || !int.TryParse(userIdStr, out int userId))
+            {
+                return Unauthorized(new { message = "Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại." });
+            }
+
+            var role = User.FindFirstValue(ClaimTypes.Role) ?? "";
+
+            if (!role.Equals("SELLER", StringComparison.OrdinalIgnoreCase))
             {
                 var requests = await _context.QuotationRequests
                     .Where(qr => qr.CustomerId == userId)

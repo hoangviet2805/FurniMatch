@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using FurniMatch.Api.Data;
@@ -160,11 +161,18 @@ namespace FurniMatch.Api.Controllers
             });
         }
 
-        [Authorize(Roles = "CUSTOMER")]
+        [Authorize]
         [HttpPost("{id}/accept")]
         public async Task<IActionResult> AcceptQuotation(int id)
         {
-            var customerId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var customerIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier) 
+                                ?? User.FindFirstValue(JwtRegisteredClaimNames.Sub) 
+                                ?? User.FindFirstValue("sub");
+
+            if (string.IsNullOrEmpty(customerIdStr) || !int.TryParse(customerIdStr, out int customerId))
+            {
+                return Unauthorized(new { message = "Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại." });
+            }
 
             var quotation = await _context.Quotations
                 .Include(q => q.QuotationRequest)

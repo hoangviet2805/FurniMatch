@@ -98,6 +98,13 @@ const RequestQuotation = ({ onSuccess, onCancel }: Props) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setErrorMessage('Bạn chưa đăng nhập hoặc phiên đăng nhập đã hết hạn. Vui lòng đăng nhập tài khoản trước khi gửi yêu cầu.');
+      return;
+    }
+
     if (!imageFile && !imagePreview) {
       setErrorMessage('Vui lòng tải lên hình ảnh sản phẩm mẫu bạn cần xưởng làm.');
       return;
@@ -108,11 +115,11 @@ const RequestQuotation = ({ onSuccess, onCancel }: Props) => {
 
     try {
       const body = new FormData();
-      body.append('categoryId', String(formData.categoryId));
-      body.append('length', String(formData.length));
-      body.append('width', String(formData.width));
-      body.append('height', String(formData.height));
-      body.append('quantity', String(formData.quantity));
+      body.append('categoryId', String(formData.categoryId || 1));
+      body.append('length', String(formData.length || 120));
+      body.append('width', String(formData.width || 60));
+      body.append('height', String(formData.height || 75));
+      body.append('quantity', String(formData.quantity || 1));
       if (formData.budgetMin) body.append('budgetMin', String(formData.budgetMin));
       if (formData.budgetMax) body.append('budgetMax', String(formData.budgetMax));
       if (formData.description) body.append('description', formData.description.trim());
@@ -122,17 +129,36 @@ const RequestQuotation = ({ onSuccess, onCancel }: Props) => {
         body.append('imageUrl', imagePreview);
       }
 
-      const response = await api.post('/quotationrequests', body, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      // Không tự truyền Content-Type để Axios và trình duyệt tự sinh boundary chính xác
+      const response = await api.post('/quotationrequests', body);
 
       setSuccessMessage(response.data.message || 'Đã gửi yêu cầu đặt hàng tới các xưởng thành công!');
       if (onSuccess) {
         setTimeout(onSuccess, 1500);
       }
     } catch (err: any) {
-      console.error(err);
-      const msg = err.response?.data?.message || (typeof err.response?.data === 'string' ? err.response.data : 'Có lỗi xảy ra, vui lòng đăng nhập trước khi gửi yêu cầu.');
+      console.error('Submit quotation error:', err);
+      const data = err.response?.data;
+      let msg = '';
+      if (data?.message) {
+        msg = data.message;
+      } else if (typeof data === 'string' && data.trim()) {
+        msg = data;
+      } else if (data?.detail) {
+        msg = data.detail;
+      } else if (data?.title) {
+        msg = data.title;
+        if (data?.errors) {
+          const details = Object.values(data.errors).flat().join(', ');
+          if (details) msg += `: ${details}`;
+        }
+      } else if (err.response?.status === 401) {
+        msg = 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại để tiếp tục.';
+      } else if (err.response?.status === 403) {
+        msg = 'Tài khoản của bạn không có quyền thực hiện thao tác này.';
+      } else {
+        msg = err.message || 'Có lỗi xảy ra khi gửi yêu cầu. Vui lòng thử lại sau.';
+      }
       setErrorMessage(msg);
     } finally {
       setLoading(false);
