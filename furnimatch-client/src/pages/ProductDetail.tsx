@@ -4,6 +4,8 @@ import api, { getImageUrl } from '../utils/api';
 import { isFavorite, toggleFavorite } from '../utils/favorites';
 import { addRecentlyViewed, isCompared, toggleComparison } from '../utils/comparison';
 import { saveCart, addToCart, getCart, type CartItem } from '../utils/cart';
+import { openChatWithSeller } from '../utils/chat';
+import { MessageCircle } from 'lucide-react';
 
 const imageUrl = getImageUrl;
 const money = (value: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
@@ -163,6 +165,39 @@ const ProductDetail = () => {
     catch { setActionMessage('Không thể sao chép thông tin lúc này.'); }
   };
 
+  const handleChatWithSeller = () => {
+    if (!product?.sellerId) return;
+
+    const savedUser = localStorage.getItem('user');
+    if (!savedUser) {
+      if (confirm('Vui lòng đăng nhập để trò chuyện với xưởng sản xuất. Chuyển tới trang đăng nhập?')) {
+        navigate('/login');
+      }
+      return;
+    }
+
+    const currentUser = JSON.parse(savedUser);
+    if (currentUser.userId === product.sellerId) {
+      setActionMessage('Đây là sản phẩm từ chính xưởng của bạn.');
+      return;
+    }
+
+    // Mở khung chat và tự động gửi thông báo / tin nhắn hỏi về sản phẩm này cho xưởng
+    openChatWithSeller({
+      sellerId: product.sellerId,
+      sellerName: product.seller?.fullName,
+      shopName: product.seller?.shopName,
+      avatarUrl: product.seller?.avatarUrl,
+      product: {
+        productId: product.productId,
+        name: product.name,
+        price: selectedPrice || lowestPrice || product.price,
+        imageUrl: primaryImage?.imageUrl || product.productImages?.[0]?.imageUrl
+      },
+      autoSendInquiry: true
+    });
+  };
+
   // Review calculations
   const starCounts = useMemo(() => {
     const counts: Record<number, number> & { withMedia: number } = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0, withMedia: 0 };
@@ -253,8 +288,29 @@ const ProductDetail = () => {
           <p className="text-2xl font-bold text-emerald-600 mt-5">{lowestPrice ? `${money(lowestPrice)}${variants.length > 1 ? ' trở lên' : ''}` : 'Liên hệ để báo giá'}</p>
           <p className="text-gray-600 leading-7 mt-6 whitespace-pre-line">{product.description || 'Nhà sản xuất chưa bổ sung mô tả cho sản phẩm này.'}</p>
           
-          <div className="grid grid-cols-2 gap-3 mt-6 text-sm">
-            <div className="bg-gray-50 rounded-lg p-3"><span className="block text-gray-500">Xưởng sản xuất</span><Link to={`/shop/${product.sellerId}`} className="font-semibold text-gray-900 hover:text-emerald-600">{product.seller?.shopName || product.seller?.fullName || 'Nhà sản xuất'}</Link></div>
+          {/* Seller / Workshop Block with Chat Button */}
+          <div className="mt-6 rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-11 h-11 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-sm shadow-xs shrink-0">
+                {(product.seller?.shopName || product.seller?.fullName || 'X').charAt(0).toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <span className="block text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Xưởng sản xuất</span>
+                <Link to={`/shop/${product.sellerId}`} className="font-bold text-gray-900 hover:text-emerald-700 text-sm truncate block transition-colors">
+                  {product.seller?.shopName || product.seller?.fullName || 'Nhà sản xuất'}
+                </Link>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleChatWithSeller}
+              className="inline-flex items-center justify-center gap-2 bg-white hover:bg-emerald-50 text-emerald-700 hover:text-emerald-800 border border-emerald-300 px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-2xs hover:shadow-xs active:scale-98 cursor-pointer shrink-0"
+              title="Nhấn để chat với xưởng về sản phẩm này"
+            >
+              <MessageCircle size={16} className="text-emerald-600" />
+              <span>Chat với xưởng</span>
+            </button>
           </div>
 
           <div className="mt-7"><h2 className="font-bold text-gray-900 mb-3">Chọn kích thước <span className="text-rose-600">*</span></h2>{variants.length > 0 ? <div className="space-y-2">{variants.map((variant: any) => { const variantId = variant.productVariantId ?? variant.variantId; const selected = selectedVariantId === variantId; const isOutOfStock = typeof variant.stock === 'number' && variant.stock <= 0; return <button type="button" key={variantId} onClick={() => { setSelectedVariantId(variantId); setActionMessage(''); setBuyError(''); }} className={`w-full flex justify-between items-center rounded-lg border px-4 py-3 text-left text-sm transition-colors ${selected ? 'border-emerald-600 bg-emerald-50 ring-1 ring-emerald-200' : 'border-gray-200 hover:border-emerald-300'} ${isOutOfStock ? 'opacity-60 bg-gray-50 cursor-not-allowed' : ''}`}><span><strong className="flex items-center gap-2">{variantLabel(variant)}{isOutOfStock && <span className="text-xs font-semibold text-rose-600 bg-rose-100 px-2 py-0.5 rounded">Hết hàng</span>}</strong>{variant.productionDays ? <small className="block text-gray-500 mt-1">Sản xuất dự kiến {variant.productionDays} ngày{!isOutOfStock && typeof variant.stock === 'number' ? ` · Còn ${variant.stock}` : ''}</small> : null}</span><span className="font-bold text-emerald-600">{money(variant.price)}</span></button>; })}</div> : <div className="rounded-lg border border-emerald-600 bg-emerald-50 px-4 py-3 text-sm font-medium">Tiêu chuẩn</div>}</div>
@@ -298,27 +354,36 @@ const ProductDetail = () => {
                 </div>
               )}
 
-              <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 <button
                   type="button"
                   onClick={handleAddToCart}
-                  className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-2 border-emerald-600 rounded-xl px-4 py-3 font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs active:scale-[0.99]"
+                  className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-2 border-emerald-600 rounded-xl px-2.5 py-3 font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-[0.99] text-xs sm:text-sm"
                 >
                   <span className="text-base">🛒</span>
-                  <span>Thêm vào giỏ</span>
+                  <span>Thêm giỏ</span>
                 </button>
                 <button
                   type="button"
                   onClick={buyNow}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-4 py-3 font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-emerald-700/20 active:scale-[0.99]"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-2.5 py-3 font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-emerald-700/20 active:scale-[0.99] text-xs sm:text-sm"
                 >
                   <span className="text-base">⚡</span>
                   <span>Mua ngay</span>
                 </button>
                 <button
                   type="button"
+                  onClick={handleChatWithSeller}
+                  className="bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-300 rounded-xl px-2.5 py-3 font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-[0.99] text-xs sm:text-sm"
+                  title="Nhắn tin trực tiếp với xưởng về sản phẩm này"
+                >
+                  <MessageCircle size={17} className="text-teal-700" />
+                  <span>Chat tư vấn</span>
+                </button>
+                <button
+                  type="button"
                   onClick={updateComparison}
-                  className="rounded-xl border border-gray-300 px-4 py-3 font-semibold text-gray-700 hover:bg-gray-50 transition-colors flex items-center justify-center cursor-pointer"
+                  className="rounded-xl border border-gray-300 px-2.5 py-3 font-semibold text-gray-700 hover:bg-gray-50 transition-colors flex items-center justify-center cursor-pointer text-xs sm:text-sm"
                 >
                   {compared ? '✓ Bỏ so sánh' : '+ So sánh'}
                 </button>

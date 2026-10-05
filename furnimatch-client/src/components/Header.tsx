@@ -3,8 +3,9 @@ import { useEffect, useState, useRef } from 'react';
 import logoImg from '../assets/logo.png';
 import { cartCount } from '../utils/cart';
 import { getComparisonIds } from '../utils/comparison';
-import { ChevronDown, User as UserIcon, Key, LogOut, Wallet } from 'lucide-react';
+import { ChevronDown, User as UserIcon, Key, LogOut, Wallet, MessageCircle } from 'lucide-react';
 import ChangePasswordModal from './ChangePasswordModal';
+import { openChatWithSeller } from '../utils/chat';
 
 type MenuItem = { to: string; label: string };
 
@@ -85,6 +86,17 @@ const Header = () => {
             <img src={logoImg} alt="FurniMatch" className="h-12 w-auto object-contain sm:h-14" />
           </Link>
           <div className="flex items-center gap-2 sm:gap-3">
+            {user && (
+              <button 
+                type="button"
+                onClick={() => openChatWithSeller({})}
+                className="flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 transition hover:bg-emerald-100 sm:text-sm cursor-pointer"
+                title="Mở tin nhắn & trò chuyện"
+              >
+                <MessageCircle size={15} className="text-emerald-700" />
+                <span className="hidden sm:inline">Tin nhắn</span>
+              </button>
+            )}
             {user?.role !== 'SELLER' && user?.role !== 'ADMIN' && <Link to="/checkout" className="rounded-full bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 transition hover:bg-emerald-100 sm:text-sm">🛒 <span className="hidden sm:inline">Giỏ hàng</span>{cartItems ? ` (${cartItems})` : ''}</Link>}
             {user ? (
               <div className="relative" ref={dropdownRef}>
@@ -103,6 +115,14 @@ const Header = () => {
                       <p className="text-xs text-gray-500 truncate">{user.email || user.role}</p>
                     </div>
                     
+                    <button 
+                      onClick={() => { setIsDropdownOpen(false); openChatWithSeller({}); }}
+                      className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 transition text-left cursor-pointer"
+                    >
+                      <MessageCircle size={16} className="text-emerald-600" />
+                      Tin nhắn & Trò chuyện
+                    </button>
+
                     <Link 
                       to="/profile" 
                       onClick={() => setIsDropdownOpen(false)}

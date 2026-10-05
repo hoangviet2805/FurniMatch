@@ -30,6 +30,7 @@ namespace FurniMatch.Api.Data
         public DbSet<OrderDispute> OrderDisputes { get; set; }
         public DbSet<WithdrawalRequest> WithdrawalRequests { get; set; }
         public DbSet<OrderReview> OrderReviews { get; set; }
+        public DbSet<ChatMessage> ChatMessages { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -183,6 +184,25 @@ namespace FurniMatch.Api.Data
             modelBuilder.Entity<OrderReview>()
                 .HasIndex(r => new { r.OrderId, r.ProductId, r.CustomerId })
                 .IsUnique();
+
+            // ChatMessage
+            modelBuilder.Entity<ChatMessage>()
+                .HasOne(m => m.Sender)
+                .WithMany()
+                .HasForeignKey(m => m.SenderId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<ChatMessage>()
+                .HasOne(m => m.Receiver)
+                .WithMany()
+                .HasForeignKey(m => m.ReceiverId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<ChatMessage>()
+                .HasOne(m => m.Product)
+                .WithMany()
+                .HasForeignKey(m => m.ProductId)
+                .OnDelete(DeleteBehavior.SetNull);
         }
     }
 }

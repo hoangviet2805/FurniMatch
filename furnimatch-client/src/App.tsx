@@ -20,6 +20,7 @@ import SpacePlanner from './pages/SpacePlanner';
 import Checkout from './pages/Checkout';
 import Orders from './pages/Orders';
 import Wallet from './pages/Wallet';
+import ChatWidget from './components/ChatWidget';
 
 function App() {
   return (
@@ -50,6 +51,7 @@ function App() {
           </Routes>
         </main>
         
+        <ChatWidget />
         <Footer />
       </div>
     </Router>
