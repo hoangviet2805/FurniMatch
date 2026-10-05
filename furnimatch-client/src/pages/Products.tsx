@@ -3,6 +3,7 @@ import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import api, { getImageUrl } from '../utils/api';
 import { isFavorite, toggleFavorite } from '../utils/favorites';
 import { addToCart, type CartItem } from '../utils/cart';
+import { Star } from 'lucide-react';
 
 const Products = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -18,6 +19,19 @@ const Products = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 16;
   const [minutesToNextHour, setMinutesToNextHour] = useState<number>(60 - new Date().getMinutes());
+
+  // Reviews summary cho sản phẩm trong danh mục
+  const [productReviews, setProductReviews] = useState<Record<number, { total: number; avgRating: number }>>({});
+
+  useEffect(() => {
+    if (products.length === 0) return;
+    const ids = products.map((p: any) => p.productId).join(',');
+    api.get(`/reviews/summary?productIds=${ids}`)
+      .then(res => {
+        setProductReviews(res.data || {});
+      })
+      .catch(() => {});
+  }, [products]);
 
   // Quick Buy State
   const [quickBuyModal, setQuickBuyModal] = useState<{
@@ -274,68 +288,106 @@ const Products = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {products.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE).map((product: any) => (
-                <div key={product.productId} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow group flex flex-col relative">
-                  <button onClick={() => toggleSaved(product.productId)} className={`absolute z-10 top-3 right-3 w-9 h-9 rounded-full bg-white/95 shadow-sm text-xl ${favorites.includes(product.productId) || isFavorite(product.productId) ? 'text-rose-600' : 'text-gray-500 hover:text-rose-600'}`} aria-label="Lưu sản phẩm">{favorites.includes(product.productId) || isFavorite(product.productId) ? '♥' : '♡'}</button>
-                  <Link to={`/products/${product.productId}`} className="flex flex-col flex-1">
-                  <div className="h-48 bg-gray-100 relative overflow-hidden shrink-0">
-                    {product.productImages && product.productImages.length > 0 ? (
-                      (() => {
-                        const thumb = product.productImages.find((img: any) => img.isThumbnail) || product.productImages[0];
-                        const imgUrl = getImageUrl(thumb.imageUrl);
-                        return (
-                          <img 
-                            src={imgUrl} 
-                            alt={product.name} 
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
-                            onError={(e) => {
-                              e.currentTarget.onerror = null;
-                              e.currentTarget.src = 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&q=80&w=300';
-                            }}
-                          />
-                        );
-                      })()
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-gray-400">Không có ảnh</div>
-                    )}
-                    {product.customSizeSupported && (
-                      <div className="absolute top-2 right-2 bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded shadow-sm">
-                        May đo
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-4 flex flex-col flex-1">
-                    <div className="text-xs text-gray-500 mb-1 flex items-center gap-1">
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m3-4h1m-1 4h1m-5 8h8" /></svg>
-                      {product.seller?.shopName || 'Nhà sản xuất'}
-                    </div>
-                    <h3 className="text-sm font-semibold text-gray-900 line-clamp-2 flex-1 group-hover:text-emerald-600 transition-colors">{product.name}</h3>
-                    <div className="mt-3.5 flex items-center justify-between gap-2 pt-2 border-t border-gray-100">
-                      <div>
-                        <span className="text-[10px] text-gray-400 block font-medium leading-none mb-0.5">Giá từ</span>
-                        <div className="text-emerald-600 font-extrabold text-base">
-                          {product.productVariants && product.productVariants.length > 0 
-                            ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Math.min(...product.productVariants.map((v: any) => v.price)))
-                            : 'Liên hệ'}
+              {products.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE).map((product: any) => {
+                const reviewData = productReviews[product.productId];
+                return (
+                  <div key={product.productId} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow group flex flex-col relative">
+                    <button onClick={() => toggleSaved(product.productId)} className={`absolute z-10 top-3 right-3 w-9 h-9 rounded-full bg-white/95 shadow-sm text-xl ${favorites.includes(product.productId) || isFavorite(product.productId) ? 'text-rose-600' : 'text-gray-500 hover:text-rose-600'}`} aria-label="Lưu sản phẩm">{favorites.includes(product.productId) || isFavorite(product.productId) ? '♥' : '♡'}</button>
+                    <Link to={`/products/${product.productId}`} className="flex flex-col flex-1">
+                    <div className="h-48 bg-gray-100 relative overflow-hidden shrink-0">
+                      {product.productImages && product.productImages.length > 0 ? (
+                        (() => {
+                          const thumb = product.productImages.find((img: any) => img.isThumbnail) || product.productImages[0];
+                          const imgUrl = getImageUrl(thumb.imageUrl);
+                          return (
+                            <img 
+                              src={imgUrl} 
+                              alt={product.name} 
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                              onError={(e) => {
+                                e.currentTarget.onerror = null;
+                                e.currentTarget.src = 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&q=80&w=300';
+                              }}
+                            />
+                          );
+                        })()
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-400">Không có ảnh</div>
+                      )}
+                      {product.customSizeSupported && (
+                        <div className="absolute top-2 right-2 bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded shadow-sm">
+                          May đo
                         </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleQuickBuy(product);
-                        }}
-                        className="bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-xs shadow-emerald-700/20 transition-all flex items-center gap-1 cursor-pointer whitespace-nowrap"
-                        title="Mua ngay sản phẩm này"
-                      >
-                        <span>⚡</span>
-                        <span>Mua ngay</span>
-                      </button>
+                      )}
                     </div>
-                  </div></Link>
-                </div>
-              ))}
+                    <div className="p-4 flex flex-col flex-1">
+                      <div className="flex items-center justify-between text-xs text-gray-500 mb-1.5">
+                        <div className="flex items-center gap-1 truncate mr-2">
+                          <svg className="w-3 h-3 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m3-4h1m-1 4h1m-5 8h8" /></svg>
+                          <span className="truncate">{product.seller?.shopName || 'Nhà sản xuất'}</span>
+                        </div>
+                        {/* Rating link leading to product detail #reviews */}
+                        <span
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            navigate(`/products/${product.productId}#reviews`);
+                          }}
+                          className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 hover:text-amber-800 px-2 py-0.5 rounded-md border border-amber-200/60 transition-colors cursor-pointer shrink-0"
+                          title="Bấm để xem đánh giá sản phẩm"
+                        >
+                          <Star className="w-3 h-3 fill-amber-400 text-amber-500" />
+                          <span>{reviewData?.avgRating ? reviewData.avgRating.toFixed(1) : '5.0'}</span>
+                          <span className="text-gray-400 font-normal">({reviewData?.total ?? 0})</span>
+                        </span>
+                      </div>
+
+                      <h3 className="text-sm font-semibold text-gray-900 line-clamp-2 flex-1 group-hover:text-emerald-600 transition-colors">{product.name}</h3>
+
+                      {/* Quick review action row */}
+                      <div className="mt-2 flex items-center justify-between text-xs">
+                        <span
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            navigate(`/products/${product.productId}#reviews`);
+                          }}
+                          className="text-gray-500 hover:text-amber-700 hover:underline inline-flex items-center gap-1 cursor-pointer transition-colors"
+                          title="Xem phần đánh giá chi tiết của sản phẩm này"
+                        >
+                          <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-500" />
+                          <span>{reviewData && reviewData.total > 0 ? `Xem ${reviewData.total} đánh giá` : 'Xem đánh giá'}</span>
+                          <span className="text-[10px] text-gray-400">→</span>
+                        </span>
+                      </div>
+
+                      <div className="mt-2.5 flex items-center justify-between gap-2 pt-2 border-t border-gray-100">
+                        <div>
+                          <span className="text-[10px] text-gray-400 block font-medium leading-none mb-0.5">Giá từ</span>
+                          <div className="text-emerald-600 font-extrabold text-base">
+                            {product.productVariants && product.productVariants.length > 0 
+                              ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Math.min(...product.productVariants.map((v: any) => v.price)))
+                              : 'Liên hệ'}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleQuickBuy(product);
+                          }}
+                          className="bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-xs shadow-emerald-700/20 transition-all flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                          title="Mua ngay sản phẩm này"
+                        >
+                          <span>⚡</span>
+                          <span>Mua ngay</span>
+                        </button>
+                      </div>
+                    </div></Link>
+                  </div>
+                );
+              })}
             </div>
           )}
           

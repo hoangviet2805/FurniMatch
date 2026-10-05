@@ -206,6 +206,37 @@ public class ReviewsController : ControllerBase
             .FirstOrDefaultAsync();
         return Ok(new { reviewDeadlineDays = (config?.ReviewDeadlineDays > 0) ? config.ReviewDeadlineDays : 7 });
     }
+
+    // ─── GET REVIEWS SUMMARY FOR MULTIPLE PRODUCTS ───────────────────────────
+    /// <summary>Lấy tổng số và điểm đánh giá trung bình của danh sách sản phẩm (cho trang danh mục & gian hàng).</summary>
+    [HttpGet("summary"), AllowAnonymous]
+    public async Task<IActionResult> GetSummary([FromQuery] string? productIds)
+    {
+        if (string.IsNullOrWhiteSpace(productIds))
+            return Ok(new Dictionary<int, object>());
+
+        var ids = productIds.Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(s => int.TryParse(s.Trim(), out var id) ? id : 0)
+            .Where(id => id > 0)
+            .Distinct()
+            .ToList();
+
+        if (ids.Count == 0)
+            return Ok(new Dictionary<int, object>());
+
+        var stats = await _db.OrderReviews
+            .Where(r => ids.Contains(r.ProductId))
+            .GroupBy(r => r.ProductId)
+            .Select(g => new
+            {
+                ProductId = g.Key,
+                Total = g.Count(),
+                AvgRating = Math.Round(g.Average(r => (double)r.Rating), 1)
+            })
+            .ToDictionaryAsync(x => x.ProductId, x => new { x.Total, x.AvgRating });
+
+        return Ok(stats);
+    }
 }
 
 // ─── REQUEST DTOs ─────────────────────────────────────────────────────────────

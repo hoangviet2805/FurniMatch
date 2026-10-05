@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useLocation } from 'react-router-dom';
 import api, { getImageUrl } from '../utils/api';
 import { isFavorite, toggleFavorite } from '../utils/favorites';
 import { addRecentlyViewed, isCompared, toggleComparison } from '../utils/comparison';
@@ -23,6 +23,7 @@ const isVideoFile = (url: string) => {
 const ProductDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [product, setProduct] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [activeImage, setActiveImage] = useState(0);
@@ -69,6 +70,21 @@ const ProductDetail = () => {
       })
       .finally(() => setLoadingReviews(false));
   }, [id]);
+
+  // Tự động cuộn đến phần đánh giá nếu URL có hash #reviews hoặc tab=reviews
+  useEffect(() => {
+    if (loading) return;
+    const hash = location.hash;
+    if (hash === '#reviews' || hash === '#reviews-section' || location.search.includes('tab=reviews')) {
+      const timer = setTimeout(() => {
+        const el = document.getElementById('reviews-section') || document.getElementById('reviews');
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [loading, location.hash, location.search]);
 
   const variants = useMemo(() => product?.productVariants ?? [], [product]);
   const primaryImage = product?.productImages?.[activeImage];
@@ -338,7 +354,16 @@ const ProductDetail = () => {
               </span>
 
               {/* Star Rating Overview Link */}
-              <a href="#reviews-section" className="flex items-center gap-1.5 hover:opacity-80 transition-opacity text-sm">
+              <a 
+                href="#reviews" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  const el = document.getElementById('reviews-section') || document.getElementById('reviews');
+                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }}
+                className="flex items-center gap-1.5 hover:opacity-80 transition-opacity text-sm cursor-pointer"
+                title="Bấm để xem chi tiết nhận xét & đánh giá"
+              >
                 <span className="font-extrabold text-amber-500 text-base">
                   {reviewStats.avgRating > 0 ? reviewStats.avgRating.toFixed(1) : '5.0'}
                 </span>
@@ -778,7 +803,8 @@ const ProductDetail = () => {
       </div>
 
       {/* ===================== PRODUCT REVIEWS SECTION ===================== */}
-      <div id="reviews-section" className="mt-12 bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sm:p-10 scroll-mt-6">
+      <div id="reviews" className="relative -top-24 pointer-events-none" />
+      <div id="reviews-section" className="mt-12 bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sm:p-10 scroll-mt-24">
         <div className="border-b border-gray-100 pb-5 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
             <h2 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center gap-2">

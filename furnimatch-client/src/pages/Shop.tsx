@@ -475,9 +475,7 @@ const Shop: React.FC = () => {
   const ITEMS_PER_PAGE = 10;
 
   // ── Product reviews state ──
-  const [productReviews, setProductReviews] = useState<Record<number, { total: number; avgRating: number; data: any[] }>>({});
-  const [loadingReviews, setLoadingReviews] = useState<Record<number, boolean>>({});
-  const [expandedReviewProduct, setExpandedReviewProduct] = useState<number | null>(null);
+  const [productReviews, setProductReviews] = useState<Record<number, { total: number; avgRating: number }>>({});
 
   // Current logged in user info
   const userStr = localStorage.getItem('user');
@@ -516,16 +514,16 @@ const Shop: React.FC = () => {
     fetchShopData();
   }, [id]);
 
-  // Fetch reviews khi products load xong
-  const fetchProductReviews = async (productId: number) => {
-    if (productReviews[productId] || loadingReviews[productId]) return;
-    setLoadingReviews(prev => ({ ...prev, [productId]: true }));
-    try {
-      const res = await api.get(`/reviews/product/${productId}?pageSize=5`);
-      setProductReviews(prev => ({ ...prev, [productId]: res.data }));
-    } catch {}
-    finally { setLoadingReviews(prev => ({ ...prev, [productId]: false })); }
-  };
+  // Fetch review summary khi products load xong
+  useEffect(() => {
+    if (products.length === 0) return;
+    const ids = products.map((p: any) => p.productId).join(',');
+    api.get(`/reviews/summary?productIds=${ids}`)
+      .then(res => {
+        setProductReviews(res.data || {});
+      })
+      .catch(() => {});
+  }, [products]);
 
   if (loading) return <div className="text-center py-20 text-xl text-gray-600">Đang tải thông tin gian hàng...</div>;
   if (error || !shop) return <div className="text-center py-20 text-xl text-red-500">{error || 'Không tìm thấy gian hàng'}</div>;
@@ -711,96 +709,31 @@ const Shop: React.FC = () => {
                         </div>
                         {/* Rating summary */}
                         {reviewData && reviewData.total > 0 && (
-                          <div className="flex items-center gap-1">
-                            <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                            <span className="text-xs font-semibold text-gray-700">{reviewData.avgRating}</span>
-                            <span className="text-xs text-gray-400">({reviewData.total})</span>
+                          <div className="flex items-center gap-1 bg-amber-50 text-amber-800 px-2 py-0.5 rounded-full text-xs font-bold border border-amber-200/60">
+                            <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-500" />
+                            <span>{reviewData.avgRating > 0 ? reviewData.avgRating.toFixed(1) : '5.0'}</span>
+                            <span className="text-gray-500 font-normal">({reviewData.total})</span>
                           </div>
                         )}
                       </div>
                     </div>
                   </Link>
 
-                  {/* Toggle reviews button */}
-                  <div className="px-4 pb-4">
-                    <button
-                      onClick={() => {
-                        if (expandedReviewProduct === product.productId) {
-                          setExpandedReviewProduct(null);
-                        } else {
-                          setExpandedReviewProduct(product.productId);
-                          fetchProductReviews(product.productId);
-                        }
-                      }}
-                      className="w-full flex items-center justify-center gap-1.5 text-xs font-medium text-gray-500 hover:text-amber-600 py-2 border-t border-gray-100 hover:bg-amber-50/50 rounded-b-xl transition-colors cursor-pointer"
+                  {/* Nút Xem đánh giá dẫn trực tiếp đến phần đánh giá trong chi tiết sản phẩm */}
+                  <div className="px-4 pb-4 mt-auto">
+                    <Link
+                      to={`/products/${product.productId}#reviews`}
+                      className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-amber-900 bg-amber-50/70 hover:bg-amber-100 py-2 border border-amber-200/70 rounded-xl transition-all hover:shadow-xs group/rev"
+                      title="Xem chi tiết nhận xét & đánh giá của sản phẩm này"
                     >
-                      <Star className="w-3.5 h-3.5" />
-                      {expandedReviewProduct === product.productId ? 'Ẩn đánh giá' : (
-                        reviewData ? `Xem ${reviewData.total} đánh giá` : 'Xem đánh giá'
-                      )}
-                    </button>
-
-                    {/* Reviews panel */}
-                    {expandedReviewProduct === product.productId && (
-                      <div className="mt-3 space-y-3 max-h-72 overflow-y-auto pr-1">
-                        {loadingReviews[product.productId] ? (
-                          <div className="flex justify-center py-4">
-                            <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
-                          </div>
-                        ) : !reviewData || reviewData.total === 0 ? (
-                          <div className="text-center py-4 text-gray-400 text-xs">Chưa có đánh giá nào.</div>
-                        ) : (
-                          <>
-                            {/* Average rating row */}
-                            <div className="flex items-center gap-2 py-2 px-3 bg-amber-50 rounded-xl border border-amber-100">
-                              <span className="text-2xl font-extrabold text-amber-500">{reviewData.avgRating}</span>
-                              <div>
-                                <div className="flex gap-0.5">
-                                  {[1,2,3,4,5].map(s => (
-                                    <Star key={s} className={`w-3.5 h-3.5 ${s <= Math.round(reviewData.avgRating) ? 'fill-amber-400 text-amber-400' : 'fill-gray-200 text-gray-200'}`} />
-                                  ))}
-                                </div>
-                                <p className="text-xs text-gray-500">{reviewData.total} đánh giá</p>
-                              </div>
-                            </div>
-                            {reviewData.data.map((rv: any) => {
-                              let mediaUrls: string[] = [];
-                              try { mediaUrls = JSON.parse(rv.mediaJson || '[]'); } catch {}
-                              return (
-                                <div key={rv.reviewId} className="bg-gray-50 rounded-xl p-3 space-y-1.5">
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                      <div className="w-7 h-7 rounded-full bg-emerald-100 flex items-center justify-center text-xs font-bold text-emerald-700">
-                                        {(rv.customerName || 'K')[0].toUpperCase()}
-                                      </div>
-                                      <span className="text-xs font-semibold text-gray-800">{rv.customerName || 'Khách hàng'}</span>
-                                    </div>
-                                    <div className="flex gap-0.5">
-                                      {[1,2,3,4,5].map(s => (
-                                        <Star key={s} className={`w-3 h-3 ${s <= rv.rating ? 'fill-amber-400 text-amber-400' : 'fill-gray-200 text-gray-200'}`} />
-                                      ))}
-                                    </div>
-                                  </div>
-                                  {rv.comment && <p className="text-xs text-gray-600 leading-relaxed pl-9">{rv.comment}</p>}
-                                  {mediaUrls.length > 0 && (
-                                    <div className="flex gap-1.5 pl-9 flex-wrap">
-                                      {mediaUrls.slice(0, 4).map((url: string, i: number) => (
-                                        <a key={i} href={resolveImageUrl(url)} target="_blank" rel="noreferrer">
-                                          <img src={resolveImageUrl(url)} alt="" className="h-12 w-12 rounded-lg object-cover border hover:opacity-80 transition-opacity" />
-                                        </a>
-                                      ))}
-                                    </div>
-                                  )}
-                                  <p className="text-[10px] text-gray-400 pl-9">
-                                    {new Date(rv.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
-                                  </p>
-                                </div>
-                              );
-                            })}
-                          </>
-                        )}
-                      </div>
-                    )}
+                      <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-500 group-hover/rev:scale-110 transition-transform" />
+                      <span>
+                        {reviewData && reviewData.total > 0 
+                          ? `Xem ${reviewData.total} đánh giá (${reviewData.avgRating}★)` 
+                          : 'Xem đánh giá sản phẩm'}
+                      </span>
+                      <span className="text-[11px] text-amber-700 opacity-70 group-hover/rev:translate-x-0.5 transition-transform">→</span>
+                    </Link>
                   </div>
                 </div>
               );
