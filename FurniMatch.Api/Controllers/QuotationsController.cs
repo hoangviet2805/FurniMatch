@@ -62,6 +62,12 @@ namespace FurniMatch.Api.Controllers
                 return BadRequest(new { message = "Yêu cầu này đã được khách hàng chốt xưởng gia công hoặc đã đóng." });
             }
 
+            var maxBudget = request.BudgetMax ?? request.BudgetMin;
+            if (maxBudget.HasValue && maxBudget.Value > 0 && dto.Price > maxBudget.Value)
+            {
+                return BadRequest(new { message = $"Giá báo ({dto.Price:N0} đ) không được vượt quá mức giá cao nhất của khách hàng ({maxBudget.Value:N0} đ)." });
+            }
+
             // Chuyển sang RECEIVING_QUOTES (Vẫn mở cho các xưởng khác gửi báo giá cạnh tranh)
             request.Status = "RECEIVING_QUOTES";
 

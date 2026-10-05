@@ -1169,11 +1169,17 @@ export default function SellerDashboard() {
       return;
     }
     
-    if (quotingModal.request.budgetMin > 0 && quotingModal.request.budgetMax > 0) {
-      if (priceNum < quotingModal.request.budgetMin || priceNum > quotingModal.request.budgetMax) {
-        setQuotingModal(m => ({ ...m, error: `Giá báo phải nằm trong khoảng ngân sách khách mong đợi: ${money(quotingModal.request.budgetMin)} - ${money(quotingModal.request.budgetMax)}.` }));
-        return;
-      }
+    // Ngan sach cao nhat nguoi dung dua ra (cho phep bao gia tu 0 cho den gia cao nhat)
+    const maxBudget = Number(quotingModal.request.budgetMax) > 0 
+      ? Number(quotingModal.request.budgetMax) 
+      : (Number(quotingModal.request.budgetMin) > 0 ? Number(quotingModal.request.budgetMin) : 0);
+
+    if (maxBudget > 0 && priceNum > maxBudget) {
+      setQuotingModal(m => ({ 
+        ...m, 
+        error: `Giá báo không được vượt quá giá cao nhất của khách hàng: ${money(maxBudget)} (cho phép từ 0 đến ${money(maxBudget)}).` 
+      }));
+      return;
     }
 
     const daysNum = parseInt(quotingModal.productionDays, 10);
@@ -2239,10 +2245,26 @@ export default function SellerDashboard() {
                           </div>
                         </div>
 
-                        {quotingModal.request.budgetMin && (
-                          <p className="text-emerald-700 font-semibold pt-1 border-t border-gray-200">
-                            Ngân sách khách mong đợi: {money(quotingModal.request.budgetMin)} - {money(quotingModal.request.budgetMax)}
-                          </p>
+                        {(quotingModal.request.budgetMin || quotingModal.request.budgetMax) && (
+                          <div className="pt-2 border-t border-gray-200">
+                            <p className="text-emerald-700 font-semibold text-sm">
+                              Ngân sách khách mong đợi:{' '}
+                              {quotingModal.request.budgetMin && quotingModal.request.budgetMax ? (
+                                <>
+                                  {money(quotingModal.request.budgetMin)} – {money(quotingModal.request.budgetMax)}
+                                  <span className="text-xs font-normal text-gray-500 ml-1">
+                                    (Tối đa: {money(quotingModal.request.budgetMax)})
+                                  </span>
+                                </>
+                              ) : (
+                                money(quotingModal.request.budgetMax || quotingModal.request.budgetMin)
+                              )}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              ✨ Cho phép xưởng báo giá từ <strong>0 đ</strong> đến tối đa{' '}
+                              <strong>{money(quotingModal.request.budgetMax || quotingModal.request.budgetMin)}</strong>.
+                            </p>
+                          </div>
                         )}
                         {quotingModal.request.description && (
                           <p className="text-gray-600 italic">
@@ -2257,16 +2279,19 @@ export default function SellerDashboard() {
                         </label>
                         <input
                           type="number"
-                          min="10000"
+                          min="1000"
                           step="10000"
+                          max={quotingModal.request.budgetMax || quotingModal.request.budgetMin || undefined}
                           required
-                          placeholder="Ví dụ: 3500000"
+                          placeholder="Ví dụ: 1500000"
                           className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-bold text-emerald-700 text-base"
                           value={quotingModal.price}
                           onChange={e => setQuotingModal(m => ({ ...m, price: e.target.value }))}
                         />
                         <p className="text-[11px] text-gray-400 mt-1">
-                          Giá hoàn thiện đã bao gồm vật liệu, gia công theo mẫu yêu cầu của khách.
+                          {quotingModal.request.budgetMax || quotingModal.request.budgetMin
+                            ? `Cho phép báo giá từ 0 đ đến tối đa ${money(quotingModal.request.budgetMax || quotingModal.request.budgetMin)}.`
+                            : 'Giá hoàn thiện đã bao gồm vật liệu, gia công theo mẫu yêu cầu của khách.'}
                         </p>
                       </div>
 
