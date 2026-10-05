@@ -54,7 +54,7 @@ export const updateProduct = (id: number, data: any) => api.put(`/products/${id}
 
 export const getChatConversations = () => api.get('/chat/conversations');
 export const getChatMessages = (otherUserId: number) => api.get(`/chat/messages/${otherUserId}`);
-export const sendChatMessage = (data: { receiverId: number; content?: string; productId?: number }) => api.post('/chat/send', data);
+export const sendChatMessage = (data: { receiverId: number; content?: string; productId?: number; productPrice?: number }) => api.post('/chat/send', data);
 export const getChatUnreadCount = () => api.get('/chat/unread-count');
 export const getChatUser = (otherUserId: number) => api.get(`/chat/user/${otherUserId}`);
 

@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import api, { getImageUrl } from '../utils/api';
 import { isFavorite, toggleFavorite } from '../utils/favorites';
 import { addRecentlyViewed, isCompared, toggleComparison } from '../utils/comparison';
-import { saveCart, addToCart, getCart, type CartItem } from '../utils/cart';
+import { addToCart, type CartItem } from '../utils/cart';
 import { openChatWithSeller } from '../utils/chat';
 import { 
   MessageCircle, ChevronRight, ShieldCheck, Truck, RotateCcw, 
@@ -32,13 +32,8 @@ const ProductDetail = () => {
   const [actionMessage, setActionMessage] = useState('');
   const [buyError, setBuyError] = useState('');
   const [selectedVariantId, setSelectedVariantId] = useState<number | null>(null);
-  const quantity = 1;
+  const [quantity, setQuantity] = useState<number>(1);
   const [cartSuccessMessage, setCartSuccessMessage] = useState('');
-  const [replaceConfirm, setReplaceConfirm] = useState<{ isOpen: boolean; existingName: string; newItem: CartItem | null }>({
-    isOpen: false,
-    existingName: '',
-    newItem: null
-  });
   const user = JSON.parse(localStorage.getItem('user') || 'null');
 
   // ========== REVIEWS STATE ==========
@@ -93,7 +88,17 @@ const ProductDetail = () => {
     }
     const thumbImg = product.productImages?.find((img: any) => img.isThumbnail)?.imageUrl || product.productImages?.[0]?.imageUrl;
     const fullLabel = selectedVariant ? variantLabel(selectedVariant) : 'Tiêu chuẩn';
-    saveCart([{ productId: product.productId, variantId: selectedVariant?.productVariantId ?? selectedVariant?.variantId, name: product.name, sizeLabel: fullLabel, price: selectedPrice, quantity: 1, imageUrl: thumbImg, sellerName: product.seller?.shopName || product.seller?.fullName }]);
+    addToCart({ 
+      productId: product.productId, 
+      variantId: selectedVariant?.productVariantId ?? selectedVariant?.variantId, 
+      name: product.name, 
+      sizeLabel: fullLabel, 
+      price: selectedPrice, 
+      quantity: quantity, 
+      imageUrl: thumbImg, 
+      sellerName: product.seller?.shopName || product.seller?.fullName,
+      sellerId: product.sellerId 
+    });
     navigate('/checkout');
   };
 
@@ -103,9 +108,15 @@ const ProductDetail = () => {
     if (variants.length && !selectedVariant) { setBuyError('Vui lòng chọn phân loại trước khi thêm vào giỏ.'); return; }
     if (!localStorage.getItem('token')) { navigate(`/login?redirect=/products/${product.productId}`); return; }
     const stock = selectedVariant?.stock;
-    if (typeof stock === 'number' && stock <= 0) {
-      setBuyError('Sản phẩm này đã hết hàng.');
-      return;
+    if (typeof stock === 'number') {
+      if (stock <= 0) {
+        setBuyError('Sản phẩm này đã hết hàng.');
+        return;
+      }
+      if (quantity > stock) {
+        setBuyError(`Số lượng tối đa hiện có là ${stock}.`);
+        return;
+      }
     }
     const thumbImg = product.productImages?.find((img: any) => img.isThumbnail)?.imageUrl || product.productImages?.[0]?.imageUrl;
     const fullLabel = selectedVariant ? variantLabel(selectedVariant) : 'Tiêu chuẩn';
@@ -115,33 +126,18 @@ const ProductDetail = () => {
       name: product.name,
       sizeLabel: fullLabel,
       price: selectedPrice,
-      quantity: 1, // Tối đa 1 sản phẩm
+      quantity: quantity,
       imageUrl: thumbImg,
-      sellerName: product.seller?.shopName || product.seller?.fullName
+      sellerName: product.seller?.shopName || product.seller?.fullName,
+      sellerId: product.sellerId
     };
 
     const res = addToCart(item);
     if (res.success) {
       setCartSuccessMessage(res.message);
       setTimeout(() => setCartSuccessMessage(''), 5000);
-    } else if (res.needReplace) {
-      const currentCart = getCart();
-      setReplaceConfirm({
-        isOpen: true,
-        existingName: currentCart[0]?.name || 'sản phẩm hiện tại',
-        newItem: item
-      });
     } else {
       setBuyError(res.message);
-    }
-  };
-
-  const confirmReplaceCart = () => {
-    if (replaceConfirm.newItem) {
-      saveCart([{ ...replaceConfirm.newItem, quantity: 1 }]);
-      setReplaceConfirm({ isOpen: false, existingName: '', newItem: null });
-      setCartSuccessMessage('Đã cập nhật giỏ hàng với sản phẩm mới! 🛒');
-      setTimeout(() => setCartSuccessMessage(''), 5000);
     }
   };
 
@@ -470,15 +466,59 @@ const ProductDetail = () => {
 
             {/* Quantity & Subtotal Row */}
             {(!user || user.role === 'CUSTOMER') && (
-              <div className="mt-5 p-3.5 bg-gray-50 rounded-xl border border-gray-200/80 flex items-center justify-between gap-4">
-                <div>
-                  <span className="text-xs font-bold text-gray-800 uppercase tracking-wide block">Số lượng đặt</span>
-                  <span className="text-xs text-gray-500">Tối đa 1 sản phẩm mỗi đơn hàng</span>
-                </div>
+              <div className="mt-5 p-3.5 bg-gray-50 rounded-xl border border-gray-200/80 flex flex-wrap items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
+                  <span className="text-xs font-bold text-gray-800 uppercase tracking-wide">Số lượng:</span>
+                  <div className="flex items-center border border-gray-300 rounded-lg bg-white overflow-hidden shadow-2xs">
+                    <button
+                      type="button"
+                      onClick={() => setQuantity(prev => Math.max(1, prev - 1))}
+                      disabled={quantity <= 1}
+                      className="w-8 h-8 flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-base font-bold cursor-pointer"
+                    >
+                      −
+                    </button>
+                    <input
+                      type="number"
+                      min={1}
+                      max={typeof selectedVariant?.stock === 'number' && selectedVariant.stock > 0 ? selectedVariant.stock : 99}
+                      value={quantity}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        const maxStock = typeof selectedVariant?.stock === 'number' && selectedVariant.stock > 0 ? selectedVariant.stock : 99;
+                        if (isNaN(val) || val < 1) {
+                          setQuantity(1);
+                        } else if (val > maxStock) {
+                          setQuantity(maxStock);
+                        } else {
+                          setQuantity(val);
+                        }
+                      }}
+                      className="w-12 h-8 text-center text-sm font-bold text-gray-900 border-x border-gray-300 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const maxStock = typeof selectedVariant?.stock === 'number' && selectedVariant.stock > 0 ? selectedVariant.stock : 99;
+                        setQuantity(prev => Math.min(maxStock, prev + 1));
+                      }}
+                      disabled={typeof selectedVariant?.stock === 'number' && selectedVariant.stock > 0 ? quantity >= selectedVariant.stock : false}
+                      className="w-8 h-8 flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-base font-bold cursor-pointer"
+                    >
+                      +
+                    </button>
+                  </div>
+                  {typeof selectedVariant?.stock === 'number' && selectedVariant.stock > 0 && (
+                    <span className="text-xs text-gray-500">
+                      (Còn {selectedVariant.stock})
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
                   <span className="text-xs font-semibold text-gray-600">Tạm tính:</span>
-                  <span className="text-lg font-black text-emerald-700">
-                    {money(selectedPrice)}
+                  <span className="text-xl font-black text-emerald-700">
+                    {money(selectedPrice * quantity)}
                   </span>
                 </div>
               </div>
@@ -999,40 +1039,6 @@ const ProductDetail = () => {
                 className="max-h-[80vh] max-w-full object-contain rounded-2xl shadow-2xl bg-black/30"
               />
             )}
-          </div>
-        </div>
-      )}
-      {/* Modal xác nhận thay thế sản phẩm trong giỏ hàng (vì tối đa 1 sản phẩm) */}
-      {replaceConfirm.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 text-center animate-in zoom-in-95">
-            <div className="w-12 h-12 mx-auto rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center text-2xl mb-3">
-              🛒
-            </div>
-            <h3 className="text-lg font-bold text-gray-900 mb-2">Giỏ hàng đã có sản phẩm</h3>
-            <p className="text-sm text-gray-600 mb-4 leading-relaxed">
-              Giỏ hàng của bạn đang có sản phẩm: <strong>"{replaceConfirm.existingName}"</strong>.<br />
-              Hệ thống hiện hỗ trợ đặt <strong>tối đa 1 sản phẩm nội thất</strong> cho mỗi đơn hàng để đảm bảo tiến độ gia công.
-            </p>
-            <p className="text-xs text-emerald-800 font-semibold mb-5 bg-emerald-50 p-2.5 rounded-lg border border-emerald-100">
-              Bạn có muốn thay thế giỏ hàng bằng sản phẩm <strong>"{product?.name}"</strong> không?
-            </p>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setReplaceConfirm({ isOpen: false, existingName: '', newItem: null })}
-                className="w-1/2 py-2.5 border border-gray-300 text-gray-700 rounded-xl text-sm font-semibold hover:bg-gray-50 transition-colors cursor-pointer"
-              >
-                Giữ sản phẩm cũ
-              </button>
-              <button
-                type="button"
-                onClick={confirmReplaceCart}
-                className="w-1/2 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold shadow-md shadow-emerald-700/20 active:scale-[0.99] transition-all cursor-pointer"
-              >
-                ✓ Đổi sản phẩm này
-              </button>
-            </div>
           </div>
         </div>
       )}

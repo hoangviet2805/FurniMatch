@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import api from '../utils/api';
-import { getCart, saveCart, type CartItem } from '../utils/cart';
+import api, { getImageUrl } from '../utils/api';
+import { getCart, saveCart, updateCartQuantity, removeFromCart, type CartItem } from '../utils/cart';
 
 const money = (n: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n);
 type Pay = { orderId: number; orderCode: string; qrCodeUrl?: string; deeplink?: string; payUrl?: string; expiredAt: string };
@@ -21,6 +21,33 @@ export default function Checkout() {
     
     const subtotal = useMemo(() => items.reduce((s, x) => s + x.price * x.quantity, 0), [items]);
     const shipping = 0;
+
+    useEffect(() => {
+        if (quoteId) return;
+        const handleCartChanged = () => setItems(getCart());
+        window.addEventListener('cart-changed', handleCartChanged);
+        return () => window.removeEventListener('cart-changed', handleCartChanged);
+    }, [quoteId]);
+
+    const handleUpdateQty = (item: CartItem, newQty: number) => {
+        if (newQty <= 0) {
+            handleRemoveItem(item);
+            return;
+        }
+        updateCartQuantity(item.productId, item.variantId, newQty);
+        setItems(getCart());
+    };
+
+    const handleRemoveItem = (item: CartItem) => {
+        removeFromCart(item.productId, item.variantId);
+        setItems(getCart());
+    };
+
+    const distinctSellerIds = useMemo(() => {
+        const ids = items.map(x => x.sellerId).filter((id): id is number => typeof id === 'number');
+        return Array.from(new Set(ids));
+    }, [items]);
+    const hasMultipleSellers = distinctSellerIds.length > 1;
 
     useEffect(() => {
         if (quoteId) {
@@ -107,6 +134,10 @@ export default function Checkout() {
             setError('Số điện thoại không hợp lệ. Vui lòng nhập 10 số và bắt đầu bằng các đầu số 03, 05, 07, 08, 09.');
             return;
         }
+        if (!quoteId && hasMultipleSellers) {
+            setError('Giỏ hàng của bạn đang có sản phẩm từ các xưởng sản xuất khác nhau. Vui lòng xóa bớt hoặc thanh toán riêng các sản phẩm từ từng xưởng.');
+            return;
+        }
         setError('');
         try {
             let r;
@@ -143,7 +174,7 @@ export default function Checkout() {
     if (!items.length && !pay) return (
         <div className="max-w-2xl mx-auto px-4 py-20 text-center">
             <h1 className="text-2xl font-bold">Giỏ hàng đang trống</h1>
-            <Link className="mt-5 inline-block text-emerald-600" to="/products">Quay lại danh mục</Link>
+            <Link className="mt-5 inline-block text-emerald-600 font-semibold" to="/products">Quay lại danh mục</Link>
         </div>
     );
 
@@ -194,19 +225,99 @@ export default function Checkout() {
                         </div>
                     </div>
                 </section>
-                <aside className="h-fit rounded-2xl border bg-white p-6">
-                    <h2 className="font-bold">Đơn hàng của bạn</h2>
-                    {items.map((x, i) => (
-                        <div key={i} className="flex justify-between border-b py-4 text-sm">
-                            <span>{x.name}<small className="block text-gray-500">{x.sizeLabel} × {x.quantity}</small></span>
-                            <strong>{money(x.price * x.quantity)}</strong>
-                        </div>
-                    ))}
-                    <div className="mt-4">
-                        <p className="flex justify-between"><span>Tổng</span><strong className="text-emerald-600">{money(subtotal + shipping)}</strong></p>
-                        <p className="mt-1 text-xs font-medium text-rose-600 text-center">Giá này chưa bao gồm chi phí vận chuyển</p>
+                <aside className="h-fit rounded-2xl border bg-white p-6 shadow-sm">
+                    <div className="flex items-center justify-between pb-3 border-b">
+                        <h2 className="font-bold text-gray-900 text-lg">Đơn hàng của bạn</h2>
+                        <span className="text-xs font-semibold bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full">
+                            {items.reduce((s, x) => s + x.quantity, 0)} sản phẩm
+                        </span>
                     </div>
-                    <button className="mt-6 w-full rounded-lg bg-emerald-600 py-3 font-semibold text-white hover:bg-emerald-700">Tạo mã QR SePay</button>
+
+                    {hasMultipleSellers && !quoteId && (
+                        <div className="mt-3 p-3 bg-amber-50 border border-amber-300 rounded-xl text-xs text-amber-900 font-semibold leading-relaxed">
+                            ⚠️ Giỏ hàng đang có sản phẩm từ nhiều xưởng. Vui lòng xóa bớt để đặt hàng cùng 1 xưởng sản xuất.
+                        </div>
+                    )}
+
+                    <div className="divide-y divide-gray-100 max-h-[380px] overflow-y-auto pr-1">
+                        {items.map((x, i) => (
+                            <div key={i} className="py-4 text-sm flex gap-3 items-center justify-between">
+                                <div className="flex items-center gap-3 min-w-0">
+                                    {x.imageUrl && (
+                                        <img 
+                                            src={getImageUrl(x.imageUrl)} 
+                                            alt={x.name} 
+                                            className="w-12 h-12 object-cover rounded-lg border border-gray-100 shrink-0" 
+                                        />
+                                    )}
+                                    <div className="min-w-0">
+                                        <p className="font-bold text-gray-900 truncate text-sm">{x.name}</p>
+                                        <p className="text-xs text-gray-500 mt-0.5">{x.sizeLabel}</p>
+                                        {x.sellerName && (
+                                            <p className="text-[11px] text-emerald-700 font-medium truncate">Xưởng: {x.sellerName}</p>
+                                        )}
+                                        <p className="text-xs font-semibold text-gray-700 mt-0.5">{money(x.price)}</p>
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-col items-end gap-2 shrink-0">
+                                    <strong className="text-emerald-700 font-extrabold text-sm">{money(x.price * x.quantity)}</strong>
+                                    
+                                    {!quoteId ? (
+                                        <div className="flex items-center gap-1.5">
+                                            <div className="flex items-center border border-gray-200 rounded-lg bg-gray-50 overflow-hidden shadow-2xs">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleUpdateQty(x, x.quantity - 1)}
+                                                    className="w-6 h-6 flex items-center justify-center text-gray-600 hover:bg-gray-200 text-xs font-bold cursor-pointer"
+                                                    title="Giảm số lượng"
+                                                >
+                                                    −
+                                                </button>
+                                                <span className="w-7 text-center text-xs font-bold text-gray-900 bg-white">
+                                                    {x.quantity}
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleUpdateQty(x, x.quantity + 1)}
+                                                    className="w-6 h-6 flex items-center justify-center text-gray-600 hover:bg-gray-200 text-xs font-bold cursor-pointer"
+                                                    title="Tăng số lượng"
+                                                >
+                                                    +
+                                                </button>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleRemoveItem(x)}
+                                                className="text-gray-400 hover:text-rose-600 p-1 text-xs cursor-pointer transition-colors"
+                                                title="Xóa sản phẩm"
+                                            >
+                                                ✕
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <span className="text-xs text-gray-500">Số lượng: 1</span>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="mt-4 pt-4 border-t border-gray-100">
+                        <p className="flex justify-between items-baseline">
+                            <span className="text-sm text-gray-600 font-medium">Tổng tiền hàng:</span>
+                            <strong className="text-xl font-black text-emerald-600">{money(subtotal + shipping)}</strong>
+                        </p>
+                        <p className="mt-2 text-xs font-medium text-rose-600 text-center bg-rose-50 p-2 rounded-lg border border-rose-100">
+                            Giá này chưa bao gồm chi phí vận chuyển
+                        </p>
+                    </div>
+                    <button 
+                        disabled={hasMultipleSellers && !quoteId}
+                        className="mt-6 w-full rounded-xl bg-emerald-600 py-3.5 font-bold text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-md shadow-emerald-700/20 active:scale-[0.99] cursor-pointer"
+                    >
+                        Tạo mã QR SePay
+                    </button>
                 </aside>
             </div>
         </form>

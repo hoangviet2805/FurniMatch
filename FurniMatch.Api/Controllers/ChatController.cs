@@ -30,6 +30,28 @@ namespace FurniMatch.Api.Controllers
             public int ReceiverId { get; set; }
             public string? Content { get; set; }
             public int? ProductId { get; set; }
+            public decimal? ProductPrice { get; set; }
+        }
+
+        private static decimal ResolveProductPrice(Product? product, decimal? explicitPrice = null)
+        {
+            if (explicitPrice.HasValue && explicitPrice.Value > 0)
+            {
+                return explicitPrice.Value;
+            }
+            if (product == null) return 0;
+            if (product.ProductVariants != null && product.ProductVariants.Any())
+            {
+                var validVariantPrices = product.ProductVariants
+                    .Where(v => v.Price > 0)
+                    .Select(v => v.Price)
+                    .ToList();
+                if (validVariantPrices.Any())
+                {
+                    return validVariantPrices.Min();
+                }
+            }
+            return product.Price;
         }
 
         /// <summary>
@@ -45,6 +67,8 @@ namespace FurniMatch.Api.Controllers
                 .AsNoTracking()
                 .Include(m => m.Product)
                     .ThenInclude(p => p!.ProductImages)
+                .Include(m => m.Product)
+                    .ThenInclude(p => p!.ProductVariants)
                 .Where(m => m.SenderId == myId || m.ReceiverId == myId)
                 .OrderByDescending(m => m.CreatedAt)
                 .ToListAsync();
@@ -93,6 +117,9 @@ namespace FurniMatch.Api.Controllers
                         createdAt = lastMsg.CreatedAt,
                         productId = lastMsg.ProductId,
                         productName = lastMsg.Product?.Name,
+                        productPrice = lastMsg.ProductPrice.HasValue && lastMsg.ProductPrice.Value > 0
+                            ? lastMsg.ProductPrice.Value
+                            : ResolveProductPrice(lastMsg.Product),
                         productImage = lastMsg.Product?.ProductImages?.FirstOrDefault()?.ImageUrl
                     },
                     unreadCount
@@ -113,6 +140,8 @@ namespace FurniMatch.Api.Controllers
             var messages = await _db.ChatMessages
                 .Include(m => m.Product)
                     .ThenInclude(p => p!.ProductImages)
+                .Include(m => m.Product)
+                    .ThenInclude(p => p!.ProductVariants)
                 .Where(m => (m.SenderId == myId && m.ReceiverId == otherUserId) ||
                             (m.SenderId == otherUserId && m.ReceiverId == myId))
                 .OrderBy(m => m.CreatedAt)
@@ -145,7 +174,9 @@ namespace FurniMatch.Api.Controllers
                 {
                     productId = m.Product.ProductId,
                     name = m.Product.Name,
-                    price = m.Product.Price,
+                    price = m.ProductPrice.HasValue && m.ProductPrice.Value > 0
+                        ? m.ProductPrice.Value
+                        : ResolveProductPrice(m.Product),
                     imageUrl = m.Product.ProductImages.FirstOrDefault()?.ImageUrl
                 }
             });
@@ -182,6 +213,7 @@ namespace FurniMatch.Api.Controllers
             {
                 product = await _db.Products
                     .Include(p => p.ProductImages)
+                    .Include(p => p.ProductVariants)
                     .FirstOrDefaultAsync(p => p.ProductId == dto.ProductId.Value);
             }
 
@@ -198,11 +230,14 @@ namespace FurniMatch.Api.Controllers
                 }
             }
 
+            var finalPrice = ResolveProductPrice(product, dto.ProductPrice);
+
             var message = new ChatMessage
             {
                 SenderId = myId,
                 ReceiverId = dto.ReceiverId,
                 ProductId = dto.ProductId,
+                ProductPrice = dto.ProductId.HasValue ? finalPrice : null,
                 Content = content,
                 IsRead = false,
                 CreatedAt = DateTime.UtcNow
@@ -241,7 +276,7 @@ namespace FurniMatch.Api.Controllers
                 {
                     productId = product.ProductId,
                     name = product.Name,
-                    price = product.Price,
+                    price = finalPrice,
                     imageUrl = product.ProductImages.FirstOrDefault()?.ImageUrl
                 }
             });

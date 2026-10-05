@@ -113,6 +113,7 @@ using (var scope = app.Services.CreateScope())
                     ""SenderId"" integer NOT NULL,
                     ""ReceiverId"" integer NOT NULL,
                     ""ProductId"" integer NULL,
+                    ""ProductPrice"" numeric(18,2) NULL,
                     ""Content"" text NOT NULL,
                     ""IsRead"" boolean NOT NULL DEFAULT FALSE,
                     ""CreatedAt"" timestamp with time zone NOT NULL DEFAULT (now() at time zone 'utc'),
@@ -120,6 +121,7 @@ using (var scope = app.Services.CreateScope())
                     CONSTRAINT ""FK_ChatMessages_Users_ReceiverId"" FOREIGN KEY (""ReceiverId"") REFERENCES ""Users"" (""UserId"") ON DELETE RESTRICT,
                     CONSTRAINT ""FK_ChatMessages_Products_ProductId"" FOREIGN KEY (""ProductId"") REFERENCES ""Products"" (""ProductId"") ON DELETE SET NULL
                 );
+                ALTER TABLE ""ChatMessages"" ADD COLUMN IF NOT EXISTS ""ProductPrice"" numeric(18,2) NULL;
                 CREATE INDEX IF NOT EXISTS ""IX_ChatMessages_SenderId"" ON ""ChatMessages"" (""SenderId"");
                 CREATE INDEX IF NOT EXISTS ""IX_ChatMessages_ReceiverId"" ON ""ChatMessages"" (""ReceiverId"");
                 CREATE INDEX IF NOT EXISTS ""IX_ChatMessages_CreatedAt"" ON ""ChatMessages"" (""CreatedAt"");

@@ -20,6 +20,8 @@ namespace FurniMatch.Api.Models
         public int? ProductId { get; set; }
         public Product? Product { get; set; }
 
+        public decimal? ProductPrice { get; set; }
+
         [Required]
         public string Content { get; set; } = string.Empty;
 

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import api, { getImageUrl } from '../utils/api';
 import { isFavorite, toggleFavorite } from '../utils/favorites';
-import { saveCart, type CartItem } from '../utils/cart';
+import { addToCart, type CartItem } from '../utils/cart';
 
 const Products = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -24,10 +24,12 @@ const Products = () => {
     isOpen: boolean;
     product: any;
     selectedVariantId: number | null;
+    quantity?: number;
   }>({
     isOpen: false,
     product: null,
-    selectedVariantId: null
+    selectedVariantId: null,
+    quantity: 1
   });
   const [quickBuyToast, setQuickBuyToast] = useState<string>('');
 
@@ -118,18 +120,20 @@ const Products = () => {
         name: product.name,
         sizeLabel: fullLabel,
         price: variant.price,
-        quantity: 1, // Tối đa 1 sản phẩm
+        quantity: 1,
         imageUrl: imgUrl,
-        sellerName: product.seller?.shopName || product.seller?.fullName
+        sellerName: product.seller?.shopName || product.seller?.fullName,
+        sellerId: product.sellerId
       };
-      saveCart([item]);
+      addToCart(item);
       navigate('/checkout');
     } else {
       const firstInStock = variants.find((v: any) => typeof v.stock !== 'number' || v.stock > 0) || variants[0];
       setQuickBuyModal({
         isOpen: true,
         product,
-        selectedVariantId: firstInStock?.productVariantId ?? firstInStock?.variantId ?? null
+        selectedVariantId: firstInStock?.productVariantId ?? firstInStock?.variantId ?? null,
+        quantity: 1
       });
     }
   };
@@ -146,6 +150,13 @@ const Products = () => {
       return;
     }
 
+    const buyQty = Math.max(1, quickBuyModal.quantity || 1);
+    if (typeof chosenVariant.stock === 'number' && buyQty > chosenVariant.stock) {
+      setQuickBuyToast(`Chỉ còn ${chosenVariant.stock} sản phẩm trong kho.`);
+      setTimeout(() => setQuickBuyToast(''), 3000);
+      return;
+    }
+
     const thumb = quickBuyModal.product.productImages?.find((img: any) => img.isThumbnail) || quickBuyModal.product.productImages?.[0];
     const imgUrl = thumb?.imageUrl || '';
     const fullLabel = `${chosenVariant.sizeName || 'Tiêu chuẩn'} - ${chosenVariant.materialName || 'Mặc định'}`;
@@ -155,12 +166,13 @@ const Products = () => {
       name: quickBuyModal.product.name,
       sizeLabel: fullLabel,
       price: chosenVariant.price,
-      quantity: 1, // Tối đa 1 sản phẩm
+      quantity: buyQty,
       imageUrl: imgUrl,
-      sellerName: quickBuyModal.product.seller?.shopName || quickBuyModal.product.seller?.fullName
+      sellerName: quickBuyModal.product.seller?.shopName || quickBuyModal.product.seller?.fullName,
+      sellerId: quickBuyModal.product.sellerId
     };
-    saveCart([item]);
-    setQuickBuyModal({ isOpen: false, product: null, selectedVariantId: null });
+    addToCart(item);
+    setQuickBuyModal({ isOpen: false, product: null, selectedVariantId: null, quantity: 1 });
     navigate('/checkout');
   };
 
@@ -426,10 +438,49 @@ const Products = () => {
                 })}
               </div>
 
-              <p className="mt-3 text-[11px] text-emerald-700 bg-emerald-50 p-2.5 rounded-lg border border-emerald-100 flex items-center gap-1.5">
-                <span>💡</span>
-                <span>Mỗi đơn hàng nội thất hỗ trợ <strong>tối đa 1 sản phẩm</strong>. Nhấn "Mua ngay" để đến trang thanh toán.</span>
-              </p>
+              {/* Quantity selector in modal */}
+              {(() => {
+                const chosen = quickBuyModal.product.productVariants?.find((v: any) => (v.productVariantId ?? v.variantId) === quickBuyModal.selectedVariantId);
+                if (!chosen) return null;
+                const maxStock = typeof chosen.stock === 'number' && chosen.stock > 0 ? chosen.stock : 99;
+                return (
+                  <div className="mt-3.5 p-3 bg-gray-50 rounded-xl border border-gray-200/80 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-gray-700">Số lượng:</span>
+                      <div className="flex items-center border border-gray-300 rounded-lg bg-white overflow-hidden shadow-2xs">
+                        <button
+                          type="button"
+                          onClick={() => setQuickBuyModal(m => ({ ...m, quantity: Math.max(1, (m.quantity || 1) - 1) }))}
+                          disabled={(quickBuyModal.quantity || 1) <= 1}
+                          className="w-7 h-7 flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-40 text-sm font-bold cursor-pointer"
+                        >
+                          −
+                        </button>
+                        <span className="w-8 text-center text-xs font-bold text-gray-900">
+                          {quickBuyModal.quantity || 1}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setQuickBuyModal(m => ({ ...m, quantity: Math.min(maxStock, (m.quantity || 1) + 1) }))}
+                          disabled={(quickBuyModal.quantity || 1) >= maxStock}
+                          className="w-7 h-7 flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-40 text-sm font-bold cursor-pointer"
+                        >
+                          +
+                        </button>
+                      </div>
+                      {typeof chosen.stock === 'number' && chosen.stock > 0 && (
+                        <span className="text-[11px] text-gray-500">(Còn {chosen.stock})</span>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] text-gray-500 block uppercase font-semibold">Tạm tính</span>
+                      <span className="text-sm font-black text-emerald-700">
+                        {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(chosen.price * (quickBuyModal.quantity || 1))}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="flex gap-2 pt-2 border-t border-gray-100">

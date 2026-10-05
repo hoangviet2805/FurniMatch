@@ -14,7 +14,7 @@ import type {
 } from '../utils/chat';
 
 const formatMoney = (amount?: number) => {
-  if (typeof amount !== 'number') return '0 đ';
+  if (typeof amount !== 'number' || amount <= 0) return 'Liên hệ báo giá';
   return amount.toLocaleString('vi-VN') + ' đ';
 };
 
@@ -206,7 +206,8 @@ const ChatWidget: React.FC = () => {
             const sendRes = await sendChatMessage({
               receiverId: partner.userId,
               content: `Xin chào xưởng! Tôi muốn hỏi thêm thông tin về sản phẩm "${prod.name}".`,
-              productId: prod.productId
+              productId: prod.productId,
+              productPrice: prod.price
             });
 
             if (sendRes.data) {
@@ -243,6 +244,7 @@ const ChatWidget: React.FC = () => {
 
     const content = inputText.trim();
     const prodId = pendingProduct?.productId;
+    const prodPrice = pendingProduct?.price;
     setSending(true);
     setInputText('');
     const sentProd = pendingProduct;
@@ -252,7 +254,8 @@ const ChatWidget: React.FC = () => {
       const res = await sendChatMessage({
         receiverId: activeUser.userId,
         content: content || (sentProd ? `Xin chào xưởng! Tôi đang hỏi về sản phẩm "${sentProd.name}".` : ''),
-        productId: prodId
+        productId: prodId,
+        productPrice: prodPrice
       });
 
       if (res.data) {
