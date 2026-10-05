@@ -1,12 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import api, { getImageUrl } from '../utils/api';
 import { isFavorite, toggleFavorite } from '../utils/favorites';
+import { saveCart, type CartItem } from '../utils/cart';
 
 const Products = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const categoryIdParam = searchParams.get('categoryId');
   
+  const navigate = useNavigate();
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -16,6 +18,18 @@ const Products = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 16;
   const [minutesToNextHour, setMinutesToNextHour] = useState<number>(60 - new Date().getMinutes());
+
+  // Quick Buy State
+  const [quickBuyModal, setQuickBuyModal] = useState<{
+    isOpen: boolean;
+    product: any;
+    selectedVariantId: number | null;
+  }>({
+    isOpen: false,
+    product: null,
+    selectedVariantId: null
+  });
+  const [quickBuyToast, setQuickBuyToast] = useState<string>('');
 
   useEffect(() => {
     setFavorites(JSON.parse(localStorage.getItem('favoriteProductIds') ?? '[]'));
@@ -80,6 +94,75 @@ const Products = () => {
       if (intervalId) clearInterval(intervalId);
     };
   }, [fetchProducts]);
+
+  const handleQuickBuy = (product: any) => {
+    const variants = product.productVariants || [];
+    if (!variants.length) {
+      navigate(`/products/${product.productId}`);
+      return;
+    }
+
+    if (variants.length === 1) {
+      const variant = variants[0];
+      if (typeof variant.stock === 'number' && variant.stock <= 0) {
+        setQuickBuyToast('Sản phẩm này tạm thời đã hết hàng.');
+        setTimeout(() => setQuickBuyToast(''), 3000);
+        return;
+      }
+      const thumb = product.productImages?.find((img: any) => img.isThumbnail) || product.productImages?.[0];
+      const imgUrl = thumb?.imageUrl || '';
+      const fullLabel = `${variant.sizeName || 'Tiêu chuẩn'} - ${variant.materialName || 'Mặc định'}`;
+      const item: CartItem = {
+        productId: product.productId,
+        variantId: variant.productVariantId ?? variant.variantId,
+        name: product.name,
+        sizeLabel: fullLabel,
+        price: variant.price,
+        quantity: 1, // Tối đa 1 sản phẩm
+        imageUrl: imgUrl,
+        sellerName: product.seller?.shopName || product.seller?.fullName
+      };
+      saveCart([item]);
+      navigate('/checkout');
+    } else {
+      const firstInStock = variants.find((v: any) => typeof v.stock !== 'number' || v.stock > 0) || variants[0];
+      setQuickBuyModal({
+        isOpen: true,
+        product,
+        selectedVariantId: firstInStock?.productVariantId ?? firstInStock?.variantId ?? null
+      });
+    }
+  };
+
+  const handleConfirmQuickBuy = () => {
+    if (!quickBuyModal.product) return;
+    const variants = quickBuyModal.product.productVariants || [];
+    const chosenVariant = variants.find((v: any) => (v.productVariantId ?? v.variantId) === quickBuyModal.selectedVariantId);
+    if (!chosenVariant) return;
+
+    if (typeof chosenVariant.stock === 'number' && chosenVariant.stock <= 0) {
+      setQuickBuyToast('Phân loại này hiện đã hết hàng.');
+      setTimeout(() => setQuickBuyToast(''), 3000);
+      return;
+    }
+
+    const thumb = quickBuyModal.product.productImages?.find((img: any) => img.isThumbnail) || quickBuyModal.product.productImages?.[0];
+    const imgUrl = thumb?.imageUrl || '';
+    const fullLabel = `${chosenVariant.sizeName || 'Tiêu chuẩn'} - ${chosenVariant.materialName || 'Mặc định'}`;
+    const item: CartItem = {
+      productId: quickBuyModal.product.productId,
+      variantId: chosenVariant.productVariantId ?? chosenVariant.variantId,
+      name: quickBuyModal.product.name,
+      sizeLabel: fullLabel,
+      price: chosenVariant.price,
+      quantity: 1, // Tối đa 1 sản phẩm
+      imageUrl: imgUrl,
+      sellerName: quickBuyModal.product.seller?.shopName || quickBuyModal.product.seller?.fullName
+    };
+    saveCart([item]);
+    setQuickBuyModal({ isOpen: false, product: null, selectedVariantId: null });
+    navigate('/checkout');
+  };
 
   const handleCategoryClick = (id: number | null) => {
     const next = new URLSearchParams(searchParams);
@@ -215,12 +298,28 @@ const Products = () => {
                       {product.seller?.shopName || 'Nhà sản xuất'}
                     </div>
                     <h3 className="text-sm font-semibold text-gray-900 line-clamp-2 flex-1 group-hover:text-emerald-600 transition-colors">{product.name}</h3>
-                    <div className="mt-3 flex items-end justify-between">
-                      <div className="text-emerald-600 font-bold text-lg">
-                        {product.productVariants && product.productVariants.length > 0 
-                          ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Math.min(...product.productVariants.map((v: any) => v.price)))
-                          : 'Liên hệ'}
+                    <div className="mt-3.5 flex items-center justify-between gap-2 pt-2 border-t border-gray-100">
+                      <div>
+                        <span className="text-[10px] text-gray-400 block font-medium leading-none mb-0.5">Giá từ</span>
+                        <div className="text-emerald-600 font-extrabold text-base">
+                          {product.productVariants && product.productVariants.length > 0 
+                            ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Math.min(...product.productVariants.map((v: any) => v.price)))
+                            : 'Liên hệ'}
+                        </div>
                       </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleQuickBuy(product);
+                        }}
+                        className="bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-xs shadow-emerald-700/20 transition-all flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                        title="Mua ngay sản phẩm này"
+                      >
+                        <span>⚡</span>
+                        <span>Mua ngay</span>
+                      </button>
                     </div>
                   </div></Link>
                 </div>
@@ -251,6 +350,108 @@ const Products = () => {
           )}
         </div>
       </div>
+      {/* Toast thông báo lỗi / nhanh */}
+      {quickBuyToast && (
+        <div className="fixed top-6 right-6 z-50 p-4 rounded-2xl shadow-xl border bg-rose-50 border-rose-200 text-rose-900 flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-200 max-w-md">
+          <span className="text-xl">⚠️</span>
+          <p className="text-sm font-semibold flex-1 leading-snug">{quickBuyToast}</p>
+          <button onClick={() => setQuickBuyToast('')} className="text-gray-400 hover:text-gray-700 text-lg font-bold p-1 cursor-pointer">✕</button>
+        </div>
+      )}
+
+      {/* Quick Buy Modal khi bấm Mua ngay ở sản phẩm có nhiều phân loại */}
+      {quickBuyModal.isOpen && quickBuyModal.product && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150"
+          onClick={() => setQuickBuyModal({ isOpen: false, product: null, selectedVariantId: null })}
+        >
+          <div 
+            className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-in zoom-in-95 duration-150 text-left"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-start gap-3 pb-3 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                {quickBuyModal.product.productImages?.[0] && (
+                  <img 
+                    src={getImageUrl(quickBuyModal.product.productImages[0].imageUrl)} 
+                    alt={quickBuyModal.product.name}
+                    className="w-14 h-14 object-cover rounded-xl border border-gray-200"
+                  />
+                )}
+                <div>
+                  <h3 className="font-bold text-gray-900 text-sm line-clamp-1">{quickBuyModal.product.name}</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">{quickBuyModal.product.seller?.shopName || 'Nhà sản xuất'}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setQuickBuyModal({ isOpen: false, product: null, selectedVariantId: null })}
+                className="text-gray-400 hover:text-gray-600 text-lg font-bold p-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="py-4">
+              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
+                Chọn kích thước / phân loại <span className="text-rose-500">*</span>
+              </label>
+              <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                {quickBuyModal.product.productVariants?.map((v: any) => {
+                  const vId = v.productVariantId ?? v.variantId;
+                  const isSelected = quickBuyModal.selectedVariantId === vId;
+                  const isOut = typeof v.stock === 'number' && v.stock <= 0;
+                  return (
+                    <button
+                      key={vId}
+                      type="button"
+                      disabled={isOut}
+                      onClick={() => setQuickBuyModal(m => ({ ...m, selectedVariantId: vId }))}
+                      className={`w-full flex items-center justify-between p-3 rounded-xl border text-xs transition-all cursor-pointer ${
+                        isSelected 
+                          ? 'border-emerald-600 bg-emerald-50/70 ring-1 ring-emerald-500 text-gray-900 font-bold' 
+                          : isOut 
+                          ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed opacity-60' 
+                          : 'border-gray-200 bg-white hover:border-emerald-300 text-gray-700 font-medium'
+                      }`}
+                    >
+                      <div className="text-left">
+                        <p>{v.sizeName || 'Tiêu chuẩn'} - {v.materialName || 'Mặc định'}</p>
+                        {isOut && <span className="text-[10px] text-rose-500 font-semibold">Hết hàng</span>}
+                      </div>
+                      <span className="text-emerald-700 font-extrabold text-sm whitespace-nowrap">
+                        {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(v.price)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <p className="mt-3 text-[11px] text-emerald-700 bg-emerald-50 p-2.5 rounded-lg border border-emerald-100 flex items-center gap-1.5">
+                <span>💡</span>
+                <span>Mỗi đơn hàng nội thất hỗ trợ <strong>tối đa 1 sản phẩm</strong>. Nhấn "Mua ngay" để đến trang thanh toán.</span>
+              </p>
+            </div>
+
+            <div className="flex gap-2 pt-2 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setQuickBuyModal({ isOpen: false, product: null, selectedVariantId: null })}
+                className="w-1/3 py-2.5 border border-gray-300 text-gray-700 rounded-xl text-xs font-semibold hover:bg-gray-50 transition-colors cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmQuickBuy}
+                className="w-2/3 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-700/20 active:scale-[0.99] transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <span>⚡</span>
+                <span>Mua ngay</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

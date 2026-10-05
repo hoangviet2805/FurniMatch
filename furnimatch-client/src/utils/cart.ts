@@ -27,12 +27,28 @@ export const saveCart = (items: CartItem[]) => {
   window.dispatchEvent(new Event('cart-changed'));
 };
 
-export const addToCart = (item: CartItem) => {
+export const addToCart = (item: CartItem): { success: boolean; isDuplicate?: boolean; needReplace?: boolean; message: string } => {
   const items = getCart();
-  const existing = items.find(x => x.productId === item.productId && x.variantId === item.variantId);
-  if (existing) existing.quantity += item.quantity;
-  else items.push(item);
-  saveCart(items);
+  if (items.length > 0) {
+    const current = items[0];
+    if (current.productId === item.productId && current.variantId === item.variantId) {
+      return {
+        success: false,
+        isDuplicate: true,
+        message: 'Sản phẩm này đã có trong giỏ hàng (tối đa 1 sản phẩm).'
+      };
+    }
+    return {
+      success: false,
+      needReplace: true,
+      message: `Giỏ hàng hiện đã có sản phẩm "${current.name}". Giỏ hàng chỉ cho phép tối đa 1 sản phẩm.`
+    };
+  }
+  saveCart([{ ...item, quantity: 1 }]);
+  return {
+    success: true,
+    message: 'Đã thêm sản phẩm vào giỏ hàng thành công!'
+  };
 };
 
 export const cartCount = () => getCart().reduce((sum, item) => sum + item.quantity, 0);

@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import api, { getImageUrl } from '../utils/api';
 import { isFavorite, toggleFavorite } from '../utils/favorites';
 import { addRecentlyViewed, isCompared, toggleComparison } from '../utils/comparison';
-import { saveCart } from '../utils/cart';
+import { saveCart, addToCart, getCart, type CartItem } from '../utils/cart';
 
 const imageUrl = getImageUrl;
 const money = (value: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
@@ -27,7 +27,13 @@ const ProductDetail = () => {
   const [actionMessage, setActionMessage] = useState('');
   const [buyError, setBuyError] = useState('');
   const [selectedVariantId, setSelectedVariantId] = useState<number | null>(null);
-  const [quantity, setQuantity] = useState(1);
+  const quantity = 1;
+  const [cartSuccessMessage, setCartSuccessMessage] = useState('');
+  const [replaceConfirm, setReplaceConfirm] = useState<{ isOpen: boolean; existingName: string; newItem: CartItem | null }>({
+    isOpen: false,
+    existingName: '',
+    newItem: null
+  });
   const user = JSON.parse(localStorage.getItem('user') || 'null');
 
   // ========== REVIEWS STATE ==========
@@ -81,8 +87,56 @@ const ProductDetail = () => {
     }
     const thumbImg = product.productImages?.find((img: any) => img.isThumbnail)?.imageUrl || product.productImages?.[0]?.imageUrl;
     const fullLabel = selectedVariant ? variantLabel(selectedVariant) : 'Tiêu chuẩn';
-    saveCart([{ productId: product.productId, variantId: selectedVariant?.productVariantId ?? selectedVariant?.variantId, name: product.name, sizeLabel: fullLabel, price: selectedPrice, quantity, imageUrl: thumbImg, sellerName: product.seller?.shopName || product.seller?.fullName }]);
+    saveCart([{ productId: product.productId, variantId: selectedVariant?.productVariantId ?? selectedVariant?.variantId, name: product.name, sizeLabel: fullLabel, price: selectedPrice, quantity: 1, imageUrl: thumbImg, sellerName: product.seller?.shopName || product.seller?.fullName }]);
     navigate('/checkout');
+  };
+
+  const handleAddToCart = () => {
+    setBuyError('');
+    setCartSuccessMessage('');
+    if (variants.length && !selectedVariant) { setBuyError('Vui lòng chọn phân loại trước khi thêm vào giỏ.'); return; }
+    if (!localStorage.getItem('token')) { navigate(`/login?redirect=/products/${product.productId}`); return; }
+    const stock = selectedVariant?.stock;
+    if (typeof stock === 'number' && stock <= 0) {
+      setBuyError('Sản phẩm này đã hết hàng.');
+      return;
+    }
+    const thumbImg = product.productImages?.find((img: any) => img.isThumbnail)?.imageUrl || product.productImages?.[0]?.imageUrl;
+    const fullLabel = selectedVariant ? variantLabel(selectedVariant) : 'Tiêu chuẩn';
+    const item: CartItem = {
+      productId: product.productId,
+      variantId: selectedVariant?.productVariantId ?? selectedVariant?.variantId,
+      name: product.name,
+      sizeLabel: fullLabel,
+      price: selectedPrice,
+      quantity: 1, // Tối đa 1 sản phẩm
+      imageUrl: thumbImg,
+      sellerName: product.seller?.shopName || product.seller?.fullName
+    };
+
+    const res = addToCart(item);
+    if (res.success) {
+      setCartSuccessMessage(res.message);
+      setTimeout(() => setCartSuccessMessage(''), 5000);
+    } else if (res.needReplace) {
+      const currentCart = getCart();
+      setReplaceConfirm({
+        isOpen: true,
+        existingName: currentCart[0]?.name || 'sản phẩm hiện tại',
+        newItem: item
+      });
+    } else {
+      setBuyError(res.message);
+    }
+  };
+
+  const confirmReplaceCart = () => {
+    if (replaceConfirm.newItem) {
+      saveCart([{ ...replaceConfirm.newItem, quantity: 1 }]);
+      setReplaceConfirm({ isOpen: false, existingName: '', newItem: null });
+      setCartSuccessMessage('Đã cập nhật giỏ hàng với sản phẩm mới! 🛒');
+      setTimeout(() => setCartSuccessMessage(''), 5000);
+    }
   };
 
   const updateComparison = () => {
@@ -207,10 +261,68 @@ const ProductDetail = () => {
           
           {(!user || user.role === 'CUSTOMER') && (
             <>
-              <div className="mt-6 flex items-center justify-between gap-4"><div><h2 className="font-bold text-gray-900">Số lượng <span className="text-rose-600">*</span></h2><p className="mt-1 text-xs text-gray-500">Chọn số sản phẩm cần mua</p></div><div className="flex items-center rounded-lg border border-gray-300"><button type="button" aria-label="Giảm số lượng" onClick={() => { setQuantity(value => Math.max(1, value - 1)); setBuyError(''); }} className="px-4 py-2 text-lg hover:bg-gray-50">−</button><span className="min-w-10 text-center font-semibold">{quantity}</span><button type="button" aria-label="Tăng số lượng" onClick={() => { setQuantity(value => value + 1); setBuyError(''); }} className="px-4 py-2 text-lg hover:bg-gray-50">+</button></div></div>
-              <div className="mt-6 rounded-xl bg-emerald-50 p-4 flex items-center justify-between"><span className="text-sm text-gray-700">Tạm tính</span><strong className="text-xl text-emerald-700">{money(selectedPrice * quantity)}</strong></div>
-              {buyError && <p className="mt-5 text-lg font-bold text-rose-600" role="status">{buyError}</p>}
-              <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3"><button type="button" onClick={buyNow} className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-5 py-3 font-semibold transition-colors">Mua ngay</button><button onClick={updateComparison} className="rounded-lg border border-emerald-600 px-5 py-3 font-semibold text-emerald-700 hover:bg-emerald-50 transition-colors">{compared ? 'Bỏ so sánh' : 'Thêm so sánh'}</button></div>
+              <div className="mt-6 flex items-center justify-between gap-4">
+                <div>
+                  <h2 className="font-bold text-gray-900">Số lượng <span className="text-rose-600">*</span></h2>
+                  <p className="mt-1 text-xs text-emerald-700 font-medium">Hỗ trợ tối đa 1 sản phẩm nội thất mỗi đơn hàng</p>
+                </div>
+                <div className="flex items-center rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-1.5 text-sm font-bold text-gray-800 shadow-2xs">
+                  <span>1 cái/bộ</span>
+                </div>
+              </div>
+
+              <div className="mt-6 rounded-xl bg-emerald-50/80 border border-emerald-200/60 p-4 flex items-center justify-between">
+                <span className="text-sm font-semibold text-gray-700">Tạm tính (1 sản phẩm)</span>
+                <strong className="text-xl font-extrabold text-emerald-700">{money(selectedPrice)}</strong>
+              </div>
+
+              {buyError && (
+                <div className="mt-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-sm font-semibold text-rose-700 flex items-center gap-2">
+                  <span>⚠️</span>
+                  <span>{buyError}</span>
+                </div>
+              )}
+
+              {cartSuccessMessage && (
+                <div className="mt-4 p-3.5 bg-emerald-50 border border-emerald-300 rounded-xl flex items-center justify-between gap-3 text-sm text-emerald-900 shadow-sm animate-in fade-in">
+                  <div className="flex items-center gap-2 font-bold">
+                    <span>🎉</span>
+                    <span>{cartSuccessMessage}</span>
+                  </div>
+                  <Link 
+                    to="/checkout" 
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors shadow-xs"
+                  >
+                    Xem giỏ hàng →
+                  </Link>
+                </div>
+              )}
+
+              <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <button
+                  type="button"
+                  onClick={handleAddToCart}
+                  className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-2 border-emerald-600 rounded-xl px-4 py-3 font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs active:scale-[0.99]"
+                >
+                  <span className="text-base">🛒</span>
+                  <span>Thêm vào giỏ</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={buyNow}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-4 py-3 font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-emerald-700/20 active:scale-[0.99]"
+                >
+                  <span className="text-base">⚡</span>
+                  <span>Mua ngay</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={updateComparison}
+                  className="rounded-xl border border-gray-300 px-4 py-3 font-semibold text-gray-700 hover:bg-gray-50 transition-colors flex items-center justify-center cursor-pointer"
+                >
+                  {compared ? '✓ Bỏ so sánh' : '+ So sánh'}
+                </button>
+              </div>
             </>
           )}
           
@@ -482,6 +594,40 @@ const ProductDetail = () => {
                 className="max-h-[80vh] max-w-full object-contain rounded-2xl shadow-2xl bg-black/30"
               />
             )}
+          </div>
+        </div>
+      )}
+      {/* Modal xác nhận thay thế sản phẩm trong giỏ hàng (vì tối đa 1 sản phẩm) */}
+      {replaceConfirm.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 text-center animate-in zoom-in-95">
+            <div className="w-12 h-12 mx-auto rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center text-2xl mb-3">
+              🛒
+            </div>
+            <h3 className="text-lg font-bold text-gray-900 mb-2">Giỏ hàng đã có sản phẩm</h3>
+            <p className="text-sm text-gray-600 mb-4 leading-relaxed">
+              Giỏ hàng của bạn đang có sản phẩm: <strong>"{replaceConfirm.existingName}"</strong>.<br />
+              Hệ thống hiện hỗ trợ đặt <strong>tối đa 1 sản phẩm nội thất</strong> cho mỗi đơn hàng để đảm bảo tiến độ gia công.
+            </p>
+            <p className="text-xs text-emerald-800 font-semibold mb-5 bg-emerald-50 p-2.5 rounded-lg border border-emerald-100">
+              Bạn có muốn thay thế giỏ hàng bằng sản phẩm <strong>"{product?.name}"</strong> không?
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setReplaceConfirm({ isOpen: false, existingName: '', newItem: null })}
+                className="w-1/2 py-2.5 border border-gray-300 text-gray-700 rounded-xl text-sm font-semibold hover:bg-gray-50 transition-colors cursor-pointer"
+              >
+                Giữ sản phẩm cũ
+              </button>
+              <button
+                type="button"
+                onClick={confirmReplaceCart}
+                className="w-1/2 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold shadow-md shadow-emerald-700/20 active:scale-[0.99] transition-all cursor-pointer"
+              >
+                ✓ Đổi sản phẩm này
+              </button>
+            </div>
           </div>
         </div>
       )}
