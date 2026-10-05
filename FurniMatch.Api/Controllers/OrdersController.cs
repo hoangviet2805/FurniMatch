@@ -156,6 +156,34 @@ public class OrdersController : ControllerBase
         // Cập nhật trạng thái thành chờ thanh toán
         quotation.Status = "WAITING_PAYMENT";
         quotation.QuotationRequest.Status = "WAITING_PAYMENT";
+
+        // Hủy và xóa tất cả các báo giá của các nhà sản xuất khác
+        var otherQuotations = await _db.Quotations
+            .Where(q => q.QuotationRequestId == quotation.QuotationRequestId && q.QuotationId != quotation.QuotationId)
+            .ToListAsync();
+
+        if (otherQuotations.Any())
+        {
+            var otherQuoteIds = otherQuotations.Select(q => q.QuotationId).ToList();
+            var relatedContracts = await _db.EContracts.Where(e => otherQuoteIds.Contains(e.QuotationId)).ToListAsync();
+            if (relatedContracts.Any())
+            {
+                _db.EContracts.RemoveRange(relatedContracts);
+            }
+
+            foreach (var oq in otherQuotations)
+            {
+                _db.Notifications.Add(new Notification
+                {
+                    UserId = oq.SellerId,
+                    Title = "Khách hàng đã chọn xưởng khác cho đơn đặt hàng",
+                    Message = $"Yêu cầu '{quotation.QuotationRequest.ProductType}' đã được khách hàng chốt và tiến hành đặt hàng xưởng khác. Báo giá của xưởng đã bị hủy và xóa khỏi hệ thống.",
+                    IsRead = false,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+            _db.Quotations.RemoveRange(otherQuotations);
+        }
         
         // Tạo đơn hàng ảo từ quotation
         var order = new Order
@@ -279,7 +307,23 @@ public class OrdersController : ControllerBase
                             {
                                 var quotationId = qIdProp.GetInt32();
                                 var qt = await _db.Quotations.Include(q => q.QuotationRequest).FirstOrDefaultAsync(q => q.QuotationId == quotationId);
-                                if (qt != null) { qt.Status = "ACCEPTED"; if (qt.QuotationRequest != null) qt.QuotationRequest.Status = "SELLER_SELECTED"; }
+                                if (qt != null) { 
+                                    qt.Status = "ACCEPTED"; 
+                                    if (qt.QuotationRequest != null) qt.QuotationRequest.Status = "SELLER_SELECTED"; 
+                                    var remainingOthers = await _db.Quotations
+                                        .Where(q => q.QuotationRequestId == qt.QuotationRequestId && q.QuotationId != qt.QuotationId)
+                                        .ToListAsync();
+                                    if (remainingOthers.Any())
+                                    {
+                                        var remQuoteIds = remainingOthers.Select(q => q.QuotationId).ToList();
+                                        var remContracts = await _db.EContracts.Where(e => remQuoteIds.Contains(e.QuotationId)).ToListAsync();
+                                        if (remContracts.Any())
+                                        {
+                                            _db.EContracts.RemoveRange(remContracts);
+                                        }
+                                        _db.Quotations.RemoveRange(remainingOthers);
+                                    }
+                                }
                             }
                         } catch {}
                     }

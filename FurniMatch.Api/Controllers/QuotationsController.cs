@@ -191,9 +191,9 @@ namespace FurniMatch.Api.Controllers
                 return Unauthorized(new { message = "Bạn không có quyền thao tác trên báo giá này." });
             }
 
-            if (quotation.QuotationRequest.Status == "SELLER_SELECTED" || quotation.QuotationRequest.Status == "COMPLETED")
+            if (quotation.QuotationRequest.Status == "COMPLETED")
             {
-                return BadRequest(new { message = "Yêu cầu này đã được chốt xưởng trước đó." });
+                return BadRequest(new { message = "Yêu cầu này đã hoàn thành trước đó." });
             }
 
             // Chốt chọn xưởng này
@@ -201,26 +201,36 @@ namespace FurniMatch.Api.Controllers
             quotation.QuotationRequest.Status = "SELLER_SELECTED";
             quotation.UpdatedAt = DateTime.UtcNow;
 
-            // Đánh dấu từ chối các báo giá của các xưởng khác
+            // Hủy và xóa tất cả các báo giá của các nhà sản xuất khác
             var otherQuotations = await _context.Quotations
                 .Include(q => q.Seller)
                 .Where(q => q.QuotationRequestId == quotation.QuotationRequestId && q.QuotationId != id)
                 .ToListAsync();
 
-            foreach (var q in otherQuotations)
+            if (otherQuotations.Any())
             {
-                q.Status = "REJECTED";
-                q.UpdatedAt = DateTime.UtcNow;
-
-                // Thông báo cho các xưởng không được chọn
-                _context.Notifications.Add(new Notification
+                var otherQuoteIds = otherQuotations.Select(q => q.QuotationId).ToList();
+                var relatedContracts = await _context.EContracts.Where(e => otherQuoteIds.Contains(e.QuotationId)).ToListAsync();
+                if (relatedContracts.Any())
                 {
-                    UserId = q.SellerId,
-                    Title = "Khách hàng đã chọn xưởng khác cho đơn đặt hàng",
-                    Message = $"Yêu cầu '{quotation.QuotationRequest.ProductType}' đã được khách hàng lựa chọn xưởng gia công khác. Cảm ơn xưởng đã gửi báo giá!",
-                    IsRead = false,
-                    CreatedAt = DateTime.UtcNow
-                });
+                    _context.EContracts.RemoveRange(relatedContracts);
+                }
+
+                foreach (var q in otherQuotations)
+                {
+                    // Thông báo cho các xưởng không được chọn
+                    _context.Notifications.Add(new Notification
+                    {
+                        UserId = q.SellerId,
+                        Title = "Khách hàng đã chọn xưởng khác cho đơn đặt hàng",
+                        Message = $"Yêu cầu '{quotation.QuotationRequest.ProductType}' đã được khách hàng lựa chọn xưởng gia công khác. Báo giá của xưởng đã bị hủy và xóa khỏi hệ thống.",
+                        IsRead = false,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+
+                // Xóa hoàn toàn các báo giá của các xưởng khác
+                _context.Quotations.RemoveRange(otherQuotations);
             }
 
             // Thông báo cho xưởng được chọn

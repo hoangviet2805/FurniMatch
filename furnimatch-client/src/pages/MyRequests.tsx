@@ -94,9 +94,18 @@ const MyRequests = () => {
 
   const handleConfirmAccept = async () => {
     if (!confirmModal.quotationId) return;
-    setConfirmModal({ isOpen: false, quotationId: null, shopName: '', price: 0, days: 0, submitting: false });
-    // Chuyển hướng sang trang thanh toán kèm ID của báo giá
-    navigate(`/checkout?quoteId=${confirmModal.quotationId}`);
+    try {
+      setConfirmModal(m => ({ ...m, submitting: true }));
+      await api.post(`/quotations/${confirmModal.quotationId}/accept`);
+      setConfirmModal({ isOpen: false, quotationId: null, shopName: '', price: 0, days: 0, submitting: false });
+      // Chuyển hướng sang trang thanh toán kèm ID của báo giá
+      navigate(`/checkout?quoteId=${confirmModal.quotationId}`);
+    } catch (err: any) {
+      setConfirmModal(m => ({ ...m, submitting: false }));
+      const msg = err?.response?.data?.message || 'Có lỗi xảy ra khi đồng ý báo giá.';
+      setToast({ type: 'error', message: msg });
+      setTimeout(() => setToast(null), 5000);
+    }
   };
 
   const visible = useMemo(() => {
@@ -284,116 +293,117 @@ const MyRequests = () => {
                 <p><span className="text-gray-500">Ngân sách dự kiến:</span> <strong className="text-emerald-700">{money(selected.budgetMin)} – {money(selected.budgetMax)}</strong></p>
               </div>
 
-              <h3 className="mt-6 font-bold text-gray-900 text-sm uppercase tracking-wider flex items-center justify-between">
-                <span className="flex items-center gap-1.5">
-                  <span>🪵</span>
-                  <span>Báo Giá Từ Các Xưởng ({selected.quotations?.length || 0})</span>
-                </span>
-                {selected.status === 'SELLER_SELECTED' && (
-                  <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
-                    Đã chốt xưởng
-                  </span>
-                )}
-              </h3>
-              
-              <div className="mt-3 space-y-4">
-                {selected.quotations?.length ? selected.quotations.map((quote: any) => {
-                  const seller = quote.seller;
-                  const shopName = seller?.shopName || seller?.fullName || 'Xưởng mộc';
-                  const isAccepted = quote.status === 'ACCEPTED' || selected.status === 'SELLER_SELECTED';
-                  const isWaitingPayment = quote.status === 'WAITING_PAYMENT' && selected.status === 'WAITING_PAYMENT';
-                  const isRejected = quote.status === 'REJECTED';
+              {(() => {
+                const isChamberChosen = selected.status === 'SELLER_SELECTED' || selected.status === 'WAITING_PAYMENT' || selected.status === 'COMPLETED';
+                const displayQuotes = isChamberChosen
+                  ? (selected.quotations || []).filter((q: any) => q.status === 'ACCEPTED' || q.status === 'WAITING_PAYMENT')
+                  : (selected.quotations || []).filter((q: any) => q.status !== 'REJECTED' && q.status !== 'CANCELLED');
 
-                  return (
-                    <div 
-                      key={quote.quotationId} 
-                      className={`rounded-2xl border-2 p-4 relative overflow-hidden transition-all ${
-                        isAccepted 
-                          ? 'border-emerald-500 bg-emerald-50/60 ring-2 ring-emerald-200' 
-                          : isWaitingPayment
-                          ? 'border-amber-400 bg-amber-50/60 ring-2 ring-amber-200'
-                          : isRejected 
-                          ? 'border-gray-200 bg-gray-50 opacity-60' 
-                          : 'border-emerald-200 bg-emerald-50/30'
-                      }`}
-                    >
-                      <div className="flex justify-between items-start gap-2">
-                        <div>
-                          <p className="font-bold text-gray-900 text-base">{shopName}</p>
-                          <p className="text-xs text-gray-500 mt-0.5">Xưởng chuyên sản xuất theo yêu cầu</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-xs text-gray-500">Báo giá hoàn thiện</p>
-                          <p className="text-lg font-extrabold text-emerald-700">{money(quote.price)}</p>
-                        </div>
-                      </div>
+                return (
+                  <>
+                    <h3 className="mt-6 font-bold text-gray-900 text-sm uppercase tracking-wider flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <span>🪵</span>
+                        <span>{isChamberChosen ? `Báo Giá Xưởng Đã Chọn (${displayQuotes.length})` : `Báo Giá Từ Các Xưởng (${displayQuotes.length})`}</span>
+                      </span>
+                      {selected.status === 'SELLER_SELECTED' && (
+                        <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                          Đã chốt xưởng
+                        </span>
+                      )}
+                    </h3>
+                    
+                    <div className="mt-3 space-y-4">
+                      {displayQuotes.length ? displayQuotes.map((quote: any) => {
+                        const seller = quote.seller;
+                        const shopName = seller?.shopName || seller?.fullName || 'Xưởng mộc';
+                        const isAccepted = quote.status === 'ACCEPTED' || selected.status === 'SELLER_SELECTED';
+                        const isWaitingPayment = quote.status === 'WAITING_PAYMENT' && selected.status === 'WAITING_PAYMENT';
 
-                      <div className="mt-3 p-3 bg-white rounded-xl border border-emerald-100 text-xs space-y-1.5">
-                        <p className="text-gray-700">
-                          ⏱️ Thời gian làm dự kiến: <strong className="text-gray-900">{quote.productionDays} ngày</strong>
-                        </p>
-                        {quote.note && (
-                          <p className="text-gray-600">
-                            📝 Cam kết xưởng: <span className="italic font-medium">{quote.note}</span>
-                          </p>
-                        )}
-                        {/* Ẩn Hotline xưởng ở đây theo yêu cầu */}
-                        {(seller?.addressDetail || seller?.province) && (
-                          <p className="text-gray-500">
-                            📍 Địa chỉ xưởng: {[seller?.addressDetail, seller?.ward, seller?.district, seller?.province].filter(Boolean).join(', ')}
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Nút chọn xưởng */}
-                      {selected.status !== 'SELLER_SELECTED' && selected.status !== 'WAITING_PAYMENT' && selected.status !== 'COMPLETED' && !isRejected && (
-                        <div className="mt-3">
-                          <button
-                            type="button"
-                            onClick={() => openConfirmModal(quote)}
-                            className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-700/20 transition-all hover:scale-[1.01] active:scale-[0.99] cursor-pointer flex items-center justify-center gap-1.5"
+                        return (
+                          <div 
+                            key={quote.quotationId} 
+                            className={`rounded-2xl border-2 p-4 relative overflow-hidden transition-all ${
+                              isAccepted 
+                                ? 'border-emerald-500 bg-emerald-50/60 ring-2 ring-emerald-200' 
+                                : isWaitingPayment
+                                ? 'border-amber-400 bg-amber-50/60 ring-2 ring-amber-200' 
+                                : 'border-emerald-200 bg-emerald-50/30'
+                            }`}
                           >
-                            <span>✓</span>
-                            <span>Đồng Ý & Chọn Xưởng Này Gia Công</span>
-                          </button>
-                        </div>
-                      )}
-                      
-                      {/* Nút tiếp tục thanh toán */}
-                      {isWaitingPayment && (
-                        <div className="mt-3">
-                          <button
-                            type="button"
-                            onClick={() => navigate(`/checkout?quoteId=${quote.quotationId}`)}
-                            className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-500/20 transition-all hover:scale-[1.01] active:scale-[0.99] cursor-pointer flex items-center justify-center gap-1.5"
-                          >
-                            <span>⏳</span>
-                            <span>Đang Chờ Thanh Toán (Nhấn để tiếp tục)</span>
-                          </button>
-                        </div>
-                      )}
+                            <div className="flex justify-between items-start gap-2">
+                              <div>
+                                <p className="font-bold text-gray-900 text-base">{shopName}</p>
+                                <p className="text-xs text-gray-500 mt-0.5">Xưởng chuyên sản xuất theo yêu cầu</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-xs text-gray-500">Báo giá hoàn thiện</p>
+                                <p className="text-lg font-extrabold text-emerald-700">{money(quote.price)}</p>
+                              </div>
+                            </div>
 
-                      {isAccepted && (
-                        <div className="mt-3 text-center text-xs font-bold text-emerald-800 bg-emerald-100 py-2 rounded-xl flex items-center justify-center gap-1.5">
-                          <span>🎉</span>
-                          <span>Bạn đã thanh toán & chốt xưởng này gia công</span>
-                        </div>
-                      )}
+                            <div className="mt-3 p-3 bg-white rounded-xl border border-emerald-100 text-xs space-y-1.5">
+                              <p className="text-gray-700">
+                                ⏱️ Thời gian làm dự kiến: <strong className="text-gray-900">{quote.productionDays} ngày</strong>
+                              </p>
+                              {quote.note && (
+                                <p className="text-gray-600">
+                                  📝 Cam kết xưởng: <span className="italic font-medium">{quote.note}</span>
+                                </p>
+                              )}
+                              {(seller?.addressDetail || seller?.province) && (
+                                <p className="text-gray-500">
+                                  📍 Địa chỉ xưởng: {[seller?.addressDetail, seller?.ward, seller?.district, seller?.province].filter(Boolean).join(', ')}
+                                </p>
+                              )}
+                            </div>
 
-                      {isRejected && (
-                        <div className="mt-2 text-center text-xs text-gray-500 italic">
-                          Đã từ chối (Bạn đã chọn xưởng khác)
+                            {/* Nút chọn xưởng */}
+                            {selected.status !== 'SELLER_SELECTED' && selected.status !== 'WAITING_PAYMENT' && selected.status !== 'COMPLETED' && (
+                              <div className="mt-3">
+                                <button
+                                  type="button"
+                                  onClick={() => openConfirmModal(quote)}
+                                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-700/20 transition-all hover:scale-[1.01] active:scale-[0.99] cursor-pointer flex items-center justify-center gap-1.5"
+                                >
+                                  <span>✓</span>
+                                  <span>Đồng Ý Báo Giá & Chọn Xưởng Này</span>
+                                </button>
+                              </div>
+                            )}
+                            
+                            {/* Nút tiếp tục thanh toán */}
+                            {isWaitingPayment && (
+                              <div className="mt-3">
+                                <button
+                                  type="button"
+                                  onClick={() => navigate(`/checkout?quoteId=${quote.quotationId}`)}
+                                  className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-500/20 transition-all hover:scale-[1.01] active:scale-[0.99] cursor-pointer flex items-center justify-center gap-1.5"
+                                >
+                                  <span>⏳</span>
+                                  <span>Đang Chờ Thanh Toán (Nhấn để tiếp tục)</span>
+                                </button>
+                              </div>
+                            )}
+
+                            {isAccepted && (
+                              <div className="mt-3 text-center text-xs font-bold text-emerald-800 bg-emerald-100 py-2 rounded-xl flex items-center justify-center gap-1.5">
+                                <span>🎉</span>
+                                <span>Bạn đã đồng ý báo giá & chốt xưởng này gia công</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }) : (
+                        <div className="rounded-xl bg-gray-50 p-5 text-center text-gray-500 text-xs">
+                          <p className="font-medium text-gray-700 mb-1">Đang chờ xưởng gửi báo giá</p>
+                          <p>Hệ thống đã phát yêu cầu kèm ảnh mẫu tới các xưởng mộc. Bạn sẽ nhận được thông báo ngay khi có xưởng báo giá!</p>
                         </div>
                       )}
                     </div>
-                  );
-                }) : (
-                  <div className="rounded-xl bg-gray-50 p-5 text-center text-gray-500 text-xs">
-                    <p className="font-medium text-gray-700 mb-1">Đang chờ xưởng gửi báo giá</p>
-                    <p>Hệ thống đã phát yêu cầu kèm ảnh mẫu tới các xưởng mộc. Bạn sẽ nhận được thông báo ngay khi có xưởng báo giá!</p>
-                  </div>
-                )}
-              </div>
+                  </>
+                );
+              })()}
             </>
           ) : (
             <div className="py-20 text-center text-gray-500">
@@ -438,7 +448,7 @@ const MyRequests = () => {
               Bạn có chắc chắn muốn chọn xưởng <strong>{confirmModal.shopName}</strong> với mức giá <strong>{money(confirmModal.price)}</strong> và thời gian hoàn thành <strong>{confirmModal.days} ngày</strong>?
             </p>
             <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 text-left mb-5">
-              💡 <strong>Lưu ý:</strong> Sau khi bạn xác nhận, yêu cầu này sẽ được chốt riêng cho xưởng và <strong>tự động ẩn khỏi tất cả các xưởng khác</strong>. Xưởng sẽ liên hệ để tiến hành sản xuất.
+              💡 <strong>Lưu ý:</strong> Sau khi bạn xác nhận đồng ý, hệ thống sẽ chốt xưởng này, đồng thời <strong>hủy và xóa tất cả các báo giá của các nhà sản xuất khác</strong>.
             </div>
             <div className="flex gap-3">
               <button
