@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Http;
 
@@ -11,7 +12,9 @@ namespace FurniMatch.Api.DTOs
         public string? Pattern { get; set; }
 
         public IFormFile? ImageFile { get; set; }
+        public List<IFormFile>? ImageFiles { get; set; }
         public string? ImageUrl { get; set; }
+        public List<string>? ImageUrls { get; set; }
 
         public double Length { get; set; }
         public double Width { get; set; }

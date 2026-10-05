@@ -21,6 +21,7 @@ namespace FurniMatch.Api.Models
         public string? Pattern { get; set; }
 
         public string? ImageUrl { get; set; }
+        public string? ImagesJson { get; set; }
 
         public double Length { get; set; }
         public double Width { get; set; }

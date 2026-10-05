@@ -27,10 +27,23 @@ const statusStyle: Record<string, string> = {
   CANCELLED: 'bg-rose-100 text-rose-700' 
 };
 
+const getRequestImages = (req: any): string[] => {
+  if (!req) return [];
+  if (req.imagesJson) {
+    try {
+      const parsed = JSON.parse(req.imagesJson);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    } catch {}
+  }
+  const single = req.imageUrl || req.pattern;
+  return single ? [single] : [];
+};
+
 const MyRequests = () => {
   const navigate = useNavigate();
   const [requests, setRequests] = useState<any[]>([]);
   const [selected, setSelected] = useState<any>(null);
+  const [selectedImageIdx, setSelectedImageIdx] = useState<number>(0);
   const [filter, setFilter] = useState('ALL');
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -198,26 +211,37 @@ const MyRequests = () => {
               {visible.map(request => { 
                 const quotes = request.quotations || []; 
                 const cheapest = quotes.length ? Math.min(...quotes.map((quote: any) => quote.price)) : undefined; 
-                const reqImage = request.imageUrl || request.pattern;
+                const reqImages = getRequestImages(request);
+                const reqImage = reqImages[0];
                 const isSelected = selected?.quotationRequestId === request.quotationRequestId;
 
                 return (
                   <div 
                     key={request.quotationRequestId} 
-                    onClick={() => setSelected(request)} 
+                    onClick={() => { setSelected(request); setSelectedImageIdx(0); }} 
                     className={`w-full text-left rounded-2xl border bg-white p-5 transition-all hover:shadow-md cursor-pointer ${isSelected ? 'border-emerald-500 ring-2 ring-emerald-200 shadow-sm' : 'border-gray-100'}`}
                   >
                     <div className="flex justify-between items-start gap-4">
                       <div className="flex items-start gap-3.5">
                         {reqImage ? (
                           <div 
-                            onClick={(e) => { e.stopPropagation(); setPreviewImage({ isOpen: true, url: reqImage, title: request.productType }); }}
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              setSelected(request);
+                              setSelectedImageIdx(0);
+                              setPreviewImage({ isOpen: true, url: reqImage, title: request.productType }); 
+                            }}
                             className="w-16 h-16 rounded-xl overflow-hidden border border-emerald-200 shrink-0 bg-gray-50 relative group"
                           >
                             <img src={reqImage} alt={request.productType} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                             <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px] font-bold">
                               🔍
                             </div>
+                            {reqImages.length > 1 && (
+                              <span className="absolute bottom-1 right-1 bg-black/75 text-white text-[9px] font-extrabold px-1.5 py-0.2 rounded shadow-2xs">
+                                📷 {reqImages.length}
+                              </span>
+                            )}
                           </div>
                         ) : (
                           <div className="w-16 h-16 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-2xl shrink-0">
@@ -266,19 +290,50 @@ const MyRequests = () => {
               </div>
 
               {/* Ảnh mẫu của khách */}
-              {(selected.imageUrl || selected.pattern) && (
-                <div className="mt-4 rounded-xl overflow-hidden border border-emerald-100 relative group bg-gray-50">
-                  <img 
-                    src={selected.imageUrl || selected.pattern} 
-                    alt={selected.productType} 
-                    className="w-full max-h-48 object-cover cursor-pointer hover:scale-102 transition-transform"
-                    onClick={() => setPreviewImage({ isOpen: true, url: selected.imageUrl || selected.pattern, title: selected.productType })}
-                  />
-                  <div className="p-2 text-[11px] text-gray-500 text-center bg-gray-50 border-t border-gray-100">
-                    📸 Ảnh mẫu bạn đã gửi cho các xưởng (Nhấn để phóng to)
+              {(() => {
+                const reqImages = getRequestImages(selected);
+                if (reqImages.length === 0) return null;
+                const activeImg = reqImages[selectedImageIdx] || reqImages[0];
+                return (
+                  <div className="mt-4 rounded-xl overflow-hidden border border-emerald-100 bg-gray-50">
+                    <div className="relative group">
+                      <img 
+                        src={activeImg} 
+                        alt={selected.productType} 
+                        className="w-full max-h-56 object-cover cursor-pointer hover:scale-102 transition-transform"
+                        onClick={() => setPreviewImage({ 
+                          isOpen: true, 
+                          url: activeImg, 
+                          title: `${selected.productType} (${(selectedImageIdx || 0) + 1}/${reqImages.length})` 
+                        })}
+                      />
+                      <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-full pointer-events-none">
+                        {(selectedImageIdx || 0) + 1} / {reqImages.length}
+                      </div>
+                    </div>
+
+                    {reqImages.length > 1 && (
+                      <div className="p-2 flex gap-1.5 overflow-x-auto bg-white border-t border-gray-100 [scrollbar-width:thin]">
+                        {reqImages.map((imgUrl: string, idx: number) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => setSelectedImageIdx(idx)}
+                            className={`w-12 h-12 rounded-lg overflow-hidden border-2 shrink-0 transition-all cursor-pointer ${
+                              (selectedImageIdx ?? 0) === idx ? 'border-emerald-600 ring-2 ring-emerald-200' : 'border-gray-200 hover:border-emerald-300 opacity-70 hover:opacity-100'
+                            }`}
+                          >
+                            <img src={imgUrl} alt="" className="w-full h-full object-cover" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <div className="p-2 text-[11px] text-gray-500 text-center bg-gray-50 border-t border-gray-100">
+                      📸 Ảnh mẫu đã gửi cho các xưởng (Bấm vào ảnh để phóng to)
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               <h2 className="text-xl font-bold text-gray-900 mt-3">{selected.productType || 'Yêu cầu nội thất'}</h2>
               {selected.description && (

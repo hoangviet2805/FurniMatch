@@ -4,6 +4,7 @@ using System.Linq;
 using System.IdentityModel.Tokens.Jwt;
 using System.IO;
 using System.Security.Claims;
+using System.Text.Json;
 using System.Threading.Tasks;
 using FurniMatch.Api.Data;
 using FurniMatch.Api.DTOs;
@@ -56,13 +57,26 @@ namespace FurniMatch.Api.Controllers
                            ?? await _context.Categories.FirstOrDefaultAsync();
             var categoryName = category?.Name ?? "nội thất";
 
-            // Xử lý upload ảnh mẫu sản phẩm
-            string? uploadedImageUrl = dto.ImageUrl;
-            if (dto.ImageFile != null && dto.ImageFile.Length > 0)
+            // Xử lý upload danh sách ảnh mẫu sản phẩm (hỗ trợ nhiều ảnh)
+            var uploadedImageUrls = new List<string>();
+
+            // 1. Thu thập tất cả các file ảnh gửi lên
+            var filesToUpload = new List<Microsoft.AspNetCore.Http.IFormFile>();
+            if (dto.ImageFiles != null && dto.ImageFiles.Count > 0)
+            {
+                filesToUpload.AddRange(dto.ImageFiles.Where(f => f != null && f.Length > 0));
+            }
+            if (dto.ImageFile != null && dto.ImageFile.Length > 0 && !filesToUpload.Contains(dto.ImageFile))
+            {
+                filesToUpload.Add(dto.ImageFile);
+            }
+
+            foreach (var file in filesToUpload)
             {
                 try
                 {
-                    uploadedImageUrl = await _photoService.AddMediaAsync(dto.ImageFile, "furnimatch_custom_requests");
+                    var url = await _photoService.AddMediaAsync(file, "furnimatch_custom_requests");
+                    if (!string.IsNullOrEmpty(url)) uploadedImageUrls.Add(url);
                 }
                 catch (Exception ex)
                 {
@@ -72,18 +86,37 @@ namespace FurniMatch.Api.Controllers
                     {
                         var uploadsFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "quotations");
                         if (!Directory.Exists(uploadsFolder)) Directory.CreateDirectory(uploadsFolder);
-                        var ext = Path.GetExtension(dto.ImageFile.FileName);
+                        var ext = Path.GetExtension(file.FileName);
                         var fileName = $"{Guid.NewGuid()}{ext}";
                         var filePath = Path.Combine(uploadsFolder, fileName);
                         using (var stream = new FileStream(filePath, FileMode.Create))
                         {
-                            await dto.ImageFile.CopyToAsync(stream);
+                            await file.CopyToAsync(stream);
                         }
-                        uploadedImageUrl = $"/uploads/quotations/{fileName}";
+                        uploadedImageUrls.Add($"/uploads/quotations/{fileName}");
                     }
                     catch { }
                 }
             }
+
+            // 2. Nhận thêm URL ảnh có sẵn (nếu có)
+            if (dto.ImageUrls != null && dto.ImageUrls.Count > 0)
+            {
+                foreach (var u in dto.ImageUrls)
+                {
+                    if (!string.IsNullOrWhiteSpace(u) && !uploadedImageUrls.Contains(u))
+                    {
+                        uploadedImageUrls.Add(u);
+                    }
+                }
+            }
+            if (!string.IsNullOrWhiteSpace(dto.ImageUrl) && !uploadedImageUrls.Contains(dto.ImageUrl))
+            {
+                uploadedImageUrls.Add(dto.ImageUrl);
+            }
+
+            string? primaryImageUrl = uploadedImageUrls.FirstOrDefault();
+            string? imagesJson = uploadedImageUrls.Count > 0 ? JsonSerializer.Serialize(uploadedImageUrls) : null;
 
             var productType = !string.IsNullOrWhiteSpace(dto.ProductType) 
                 ? dto.ProductType.Trim() 
@@ -98,8 +131,9 @@ namespace FurniMatch.Api.Controllers
                 CustomerId = customerId,
                 CategoryId = category?.CategoryId ?? 1,
                 ProductType = productType,
-                Pattern = uploadedImageUrl != null && uploadedImageUrl.Length > 100 ? uploadedImageUrl.Substring(0, 100) : uploadedImageUrl,
-                ImageUrl = uploadedImageUrl,
+                Pattern = primaryImageUrl != null && primaryImageUrl.Length > 100 ? primaryImageUrl.Substring(0, 100) : primaryImageUrl,
+                ImageUrl = primaryImageUrl,
+                ImagesJson = imagesJson,
                 Length = dto.Length > 0 ? dto.Length : 120,
                 Width = dto.Width > 0 ? dto.Width : 60,
                 Height = dto.Height > 0 ? dto.Height : 75,
@@ -146,8 +180,10 @@ namespace FurniMatch.Api.Controllers
                 var dimensions = $"{request.Length} × {request.Width} × {request.Height} cm";
                 var quantity = request.Quantity;
                 var desc = request.Description ?? "Không có mô tả thêm";
-                var imgHtml = !string.IsNullOrEmpty(uploadedImageUrl) 
-                    ? $"<div style='text-align: center; margin: 15px 0;'><img src='{uploadedImageUrl}' style='max-width: 100%; max-height: 250px; border-radius: 8px; border: 1px solid #e5e7eb;' alt='Ảnh mẫu' /></div>" 
+                var imgHtml = uploadedImageUrls.Count > 0
+                    ? $"<div style='text-align: center; margin: 15px 0;'><p style='font-size: 13px; color: #6b7280; margin-bottom: 8px;'>Khách đã đính kèm {uploadedImageUrls.Count} ảnh mẫu:</p><div style='display: flex; flex-wrap: wrap; justify-content: center; gap: 8px;'>" + 
+                      string.Join("", uploadedImageUrls.Select(u => $"<img src='{u}' style='width: 140px; height: 110px; object-fit: cover; border-radius: 8px; border: 1px solid #e5e7eb;' alt='Ảnh mẫu' />")) + 
+                      "</div></div>" 
                     : "";
                 var sellerEmails = targetSellers.Where(s => !string.IsNullOrEmpty(s.Email)).Select(s => s.Email).ToList();
 

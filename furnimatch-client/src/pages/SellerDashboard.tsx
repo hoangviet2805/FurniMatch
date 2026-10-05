@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import api, { getImageUrl } from '../utils/api';
-import { Package, User, MapPin, Phone, CheckCircle, Clock, Truck, Hammer, XCircle, ClipboardList, Wallet, ArrowDownToLine, History, FileText, AlertTriangle, CheckCircle2, Eye, ShieldAlert, ZoomIn, ZoomOut, RotateCcw, X, ExternalLink, Sparkles } from 'lucide-react';
+import { Package, User, MapPin, Phone, CheckCircle, Clock, Truck, Hammer, XCircle, ClipboardList, Wallet, ArrowDownToLine, History, FileText, AlertTriangle, CheckCircle2, Eye, ShieldAlert, ZoomIn, ZoomOut, RotateCcw, X, ExternalLink, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
@@ -1027,29 +1027,78 @@ export default function SellerDashboard() {
   });
   const [quoteToast, setQuoteToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
+  // Helper to extract request images
+  const getRequestImages = (req: any): string[] => {
+    if (!req) return [];
+    if (req.imagesJson) {
+      try {
+        const parsed = JSON.parse(req.imagesJson);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch {}
+    }
+    const single = req.imageUrl || req.pattern;
+    return single ? [single] : [];
+  };
+
   // Root image preview modal with zoom
-  const [previewImageModal, setPreviewImageModal] = useState<{ isOpen: boolean; url: string; title: string }>({
+  const [previewImageModal, setPreviewImageModal] = useState<{ 
+    isOpen: boolean; 
+    url: string; 
+    title: string;
+    images?: string[];
+    currentIndex?: number;
+  }>({
     isOpen: false,
     url: '',
-    title: ''
+    title: '',
+    images: [],
+    currentIndex: 0
   });
   const [previewZoom, setPreviewZoom] = useState<number>(1);
 
-  const handlePreviewImage = (url: string, title: string) => {
+  const handlePreviewImage = (url: string, title: string, images?: string[], currentIndex?: number) => {
     setPreviewZoom(1);
-    setPreviewImageModal({ isOpen: true, url, title });
+    setPreviewImageModal({ 
+      isOpen: true, 
+      url, 
+      title,
+      images: images || [url],
+      currentIndex: currentIndex ?? 0
+    });
+  };
+
+  const handleSelectPreviewImage = (newIdx: number) => {
+    if (!previewImageModal.images || !previewImageModal.images[newIdx]) return;
+    setPreviewZoom(1);
+    setPreviewImageModal(prev => ({
+      ...prev,
+      url: prev.images![newIdx],
+      currentIndex: newIdx,
+      title: prev.title.replace(/\(Ảnh \d+\/\d+\)/, `(Ảnh ${newIdx + 1}/${prev.images!.length})`)
+    }));
   };
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && previewImageModal.isOpen) {
+      if (!previewImageModal.isOpen) return;
+      if (e.key === 'Escape') {
         setPreviewImageModal({ isOpen: false, url: '', title: '' });
         setPreviewZoom(1);
+      } else if (previewImageModal.images && previewImageModal.images.length > 1) {
+        if (e.key === 'ArrowLeft') {
+          const current = previewImageModal.currentIndex ?? 0;
+          const prevIdx = (current - 1 + previewImageModal.images.length) % previewImageModal.images.length;
+          handleSelectPreviewImage(prevIdx);
+        } else if (e.key === 'ArrowRight') {
+          const current = previewImageModal.currentIndex ?? 0;
+          const nextIdx = (current + 1) % previewImageModal.images.length;
+          handleSelectPreviewImage(nextIdx);
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [previewImageModal.isOpen]);
+  }, [previewImageModal]);
 
   useEffect(() => {
     const urlTab = searchParams.get('tab');
@@ -1922,7 +1971,8 @@ export default function SellerDashboard() {
                       ) : (
                         <div className="grid gap-5">
                           {quotesData.availableRequests.map((req: any) => {
-                            const reqImage = req.imageUrl || req.pattern;
+                            const reqImages = getRequestImages(req);
+                            const reqImage = reqImages[0];
                             return (
                               <div 
                                 key={req.quotationRequestId} 
@@ -1932,7 +1982,7 @@ export default function SellerDashboard() {
                                   <div className="flex items-start gap-4">
                                     {reqImage && (
                                       <div 
-                                        onClick={() => handlePreviewImage(reqImage, req.productType || 'Ảnh mẫu khách gửi')}
+                                        onClick={() => handlePreviewImage(reqImage, req.productType || 'Ảnh mẫu khách gửi', reqImages, 0)}
                                         className="w-20 h-20 rounded-xl overflow-hidden border border-emerald-200 shrink-0 bg-gray-50 cursor-pointer group relative shadow-xs hover:border-emerald-500"
                                         title="Nhấn để xem ảnh phóng to"
                                       >
@@ -1944,6 +1994,11 @@ export default function SellerDashboard() {
                                         <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold">
                                           🔍 Xem
                                         </div>
+                                        {reqImages.length > 1 && (
+                                          <span className="absolute bottom-1 right-1 bg-black/75 text-white text-[9px] font-extrabold px-1.5 py-0.2 rounded shadow-2xs">
+                                            📷 {reqImages.length}
+                                          </span>
+                                        )}
                                       </div>
                                     )}
                                     <div>
@@ -1956,10 +2011,27 @@ export default function SellerDashboard() {
                                         </span>
                                       </div>
                                       <h3 className="text-xl font-bold text-gray-900">{req.productType}</h3>
-                                      {reqImage && (
+                                      {reqImages.length > 0 && (
                                         <p className="text-xs text-emerald-600 font-medium mt-0.5">
-                                          📸 Khách đã đính kèm ảnh mẫu cần làm
+                                          📸 Khách đã đính kèm {reqImages.length} ảnh mẫu cần làm
                                         </p>
+                                      )}
+                                      {reqImages.length > 1 && (
+                                        <div className="flex items-center gap-1.5 mt-2 overflow-x-auto max-w-md pb-1 [scrollbar-width:thin]">
+                                          {reqImages.map((img: string, idx: number) => (
+                                            <img
+                                              key={idx}
+                                              src={img}
+                                              alt=""
+                                              onClick={(e) => { 
+                                                e.stopPropagation(); 
+                                                handlePreviewImage(img, `${req.productType} (Ảnh ${idx + 1}/${reqImages.length})`, reqImages, idx); 
+                                              }}
+                                              className="w-8 h-8 rounded-lg object-cover border border-gray-200 cursor-pointer hover:border-emerald-500 hover:scale-105 transition-all shadow-2xs shrink-0"
+                                              title={`Bấm xem ảnh ${idx + 1}`}
+                                            />
+                                          ))}
+                                        </div>
                                       )}
                                     </div>
                                   </div>
@@ -2040,7 +2112,8 @@ export default function SellerDashboard() {
                         <div className="grid gap-5">
                           {quotesData.myClaimedRequests.map((req: any) => {
                             const myQuote = req.quotations?.[0];
-                            const reqImage = req.imageUrl || req.pattern;
+                            const reqImages = getRequestImages(req);
+                            const reqImage = reqImages[0];
                             const isChosen = req.status === 'SELLER_SELECTED' || myQuote?.status === 'ACCEPTED';
                             const isWaitingPayment = req.status === 'WAITING_PAYMENT' && myQuote?.status === 'WAITING_PAYMENT';
                             const isRejected = myQuote?.status === 'REJECTED';
@@ -2056,7 +2129,7 @@ export default function SellerDashboard() {
                                   <div className="flex items-start gap-4">
                                     {reqImage && (
                                       <div 
-                                        onClick={() => handlePreviewImage(reqImage, req.productType || 'Ảnh mẫu khách gửi')}
+                                        onClick={() => handlePreviewImage(reqImage, req.productType || 'Ảnh mẫu khách gửi', reqImages, 0)}
                                         className="w-20 h-20 rounded-xl overflow-hidden border border-emerald-200 shrink-0 bg-gray-50 cursor-pointer group relative shadow-xs hover:border-emerald-500"
                                         title="Nhấn để xem ảnh phóng to"
                                       >
@@ -2068,6 +2141,11 @@ export default function SellerDashboard() {
                                         <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold">
                                           🔍 Xem
                                         </div>
+                                        {reqImages.length > 1 && (
+                                          <span className="absolute bottom-1 right-1 bg-black/75 text-white text-[9px] font-extrabold px-1.5 py-0.2 rounded shadow-2xs">
+                                            📷 {reqImages.length}
+                                          </span>
+                                        )}
                                       </div>
                                     )}
                                     <div>
@@ -2080,6 +2158,28 @@ export default function SellerDashboard() {
                                         </span>
                                       </div>
                                       <h3 className="text-xl font-bold text-gray-900">{req.productType}</h3>
+                                      {reqImages.length > 0 && (
+                                        <p className="text-xs text-emerald-600 font-medium mt-0.5">
+                                          📸 Khách đã đính kèm {reqImages.length} ảnh mẫu cần làm
+                                        </p>
+                                      )}
+                                      {reqImages.length > 1 && (
+                                        <div className="flex items-center gap-1.5 mt-2 overflow-x-auto max-w-md pb-1 [scrollbar-width:thin]">
+                                          {reqImages.map((img: string, idx: number) => (
+                                            <img
+                                              key={idx}
+                                              src={img}
+                                              alt=""
+                                              onClick={(e) => { 
+                                                e.stopPropagation(); 
+                                                handlePreviewImage(img, `${req.productType} (Ảnh ${idx + 1}/${reqImages.length})`, reqImages, idx); 
+                                              }}
+                                              className="w-8 h-8 rounded-lg object-cover border border-gray-200 cursor-pointer hover:border-emerald-500 hover:scale-105 transition-all shadow-2xs shrink-0"
+                                              title={`Bấm xem ảnh ${idx + 1}`}
+                                            />
+                                          ))}
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
 
@@ -2367,7 +2467,14 @@ export default function SellerDashboard() {
           >
             {/* Header */}
             <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/80">
-              <h4 className="font-bold text-sm text-gray-900 truncate mr-4">{previewImageModal.title}</h4>
+              <div className="flex items-center gap-2 truncate mr-4">
+                <h4 className="font-bold text-sm text-gray-900 truncate">{previewImageModal.title}</h4>
+                {previewImageModal.images && previewImageModal.images.length > 1 && (
+                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold shrink-0">
+                    Ảnh {(previewImageModal.currentIndex ?? 0) + 1}/{previewImageModal.images.length}
+                  </span>
+                )}
+              </div>
               <div className="flex items-center gap-2 shrink-0">
                 {/* Zoom Controls */}
                 <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg p-1 shadow-2xs">
@@ -2415,8 +2522,39 @@ export default function SellerDashboard() {
               </div>
             </div>
 
-            {/* Image Body */}
-            <div className="p-4 bg-gray-950/95 flex-1 min-h-[300px] overflow-auto flex items-center justify-center select-none">
+            {/* Image Body with Navigation Arrows */}
+            <div className="p-4 bg-gray-950/95 flex-1 min-h-[320px] overflow-auto flex items-center justify-center select-none relative group/modal">
+              {previewImageModal.images && previewImageModal.images.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    title="Ảnh trước (Phím mũi tên trái)"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const current = previewImageModal.currentIndex ?? 0;
+                      const prevIdx = (current - 1 + previewImageModal.images!.length) % previewImageModal.images!.length;
+                      handleSelectPreviewImage(prevIdx);
+                    }}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-black/60 hover:bg-black/85 text-white flex items-center justify-center transition-all shadow-lg hover:scale-110 cursor-pointer border border-white/20"
+                  >
+                    <ChevronLeft className="w-6 h-6" />
+                  </button>
+                  <button
+                    type="button"
+                    title="Ảnh tiếp theo (Phím mũi tên phải)"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const current = previewImageModal.currentIndex ?? 0;
+                      const nextIdx = (current + 1) % previewImageModal.images!.length;
+                      handleSelectPreviewImage(nextIdx);
+                    }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-black/60 hover:bg-black/85 text-white flex items-center justify-center transition-all shadow-lg hover:scale-110 cursor-pointer border border-white/20"
+                  >
+                    <ChevronRight className="w-6 h-6" />
+                  </button>
+                </>
+              )}
+
               <img 
                 src={previewImageModal.url} 
                 alt="Evidence Preview" 
@@ -2425,11 +2563,34 @@ export default function SellerDashboard() {
                   transformOrigin: 'center center',
                   transition: 'transform 0.15s ease-out' 
                 }}
-                className={`max-w-full max-h-[70vh] object-contain rounded-lg shadow-2xl transition-transform ${previewZoom > 1 ? 'cursor-zoom-out' : 'cursor-zoom-in'}`}
+                className={`max-w-full max-h-[65vh] object-contain rounded-lg shadow-2xl transition-transform ${previewZoom > 1 ? 'cursor-zoom-out' : 'cursor-zoom-in'}`}
                 onClick={() => setPreviewZoom(z => z === 1 ? 1.75 : 1)}
                 title="Nhấp vào ảnh để phóng to / thu nhỏ nhanh"
               />
             </div>
+
+            {/* Thumbnail selector when multiple images */}
+            {previewImageModal.images && previewImageModal.images.length > 1 && (
+              <div className="bg-gray-900 px-4 py-2.5 flex items-center justify-center gap-2 overflow-x-auto border-t border-gray-800">
+                {previewImageModal.images.map((img, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => handleSelectPreviewImage(idx)}
+                    className={`relative w-12 h-12 rounded-lg overflow-hidden border-2 transition-all cursor-pointer shrink-0 ${
+                      idx === (previewImageModal.currentIndex ?? 0)
+                        ? 'border-emerald-500 scale-105 shadow-md shadow-emerald-500/30'
+                        : 'border-transparent opacity-60 hover:opacity-100'
+                    }`}
+                  >
+                    <img src={img} alt="" className="w-full h-full object-cover" />
+                    <span className="absolute bottom-0 right-0 bg-black/75 text-[9px] text-white font-extrabold px-1 rounded-tl">
+                      {idx + 1}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* Footer */}
             <div className="p-3 border-t border-gray-100 flex justify-between items-center bg-gray-50 text-xs text-gray-500">

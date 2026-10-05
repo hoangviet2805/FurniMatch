@@ -27,8 +27,8 @@ const RequestQuotation = ({ onSuccess, onCancel }: Props) => {
     budgetMax: 5000000,
   });
 
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string>('');
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [sourceProduct, setSourceProduct] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -64,33 +64,60 @@ const RequestQuotation = ({ onSuccess, onCancel }: Props) => {
       }));
       setSourceProduct(product.name);
       if (product.imageUrl) {
-        setImagePreview(product.imageUrl.startsWith('http') ? product.imageUrl : `https://furnimatch-2.onrender.com${product.imageUrl.startsWith('/') ? '' : '/'}${product.imageUrl}`);
+        const fullUrl = product.imageUrl.startsWith('http') ? product.imageUrl : `https://furnimatch-2.onrender.com${product.imageUrl.startsWith('/') ? '' : '/'}${product.imageUrl}`;
+        setImagePreviews([fullUrl]);
       }
     }).catch(() => setSourceProduct('Không thể tải thông tin mẫu đã chọn.'));
   }, [searchParams]);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
 
-    if (!file.type.startsWith('image/')) {
-      setErrorMessage('Vui lòng chọn tệp hình ảnh hợp lệ (PNG, JPG, WEBP).');
-      return;
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      setErrorMessage('Dung lượng ảnh tối đa là 10MB.');
-      return;
+    const validFiles: File[] = [];
+    const newPreviews: string[] = [];
+
+    for (const file of files) {
+      if (!file.type.startsWith('image/')) {
+        setErrorMessage('Vui lòng chọn tệp hình ảnh hợp lệ (PNG, JPG, WEBP).');
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        setErrorMessage(`Tệp "${file.name}" vượt quá dung lượng tối đa 10MB.`);
+        return;
+      }
+      validFiles.push(file);
+      newPreviews.push(URL.createObjectURL(file));
     }
 
-    setErrorMessage('');
-    setImageFile(file);
-    const objectUrl = URL.createObjectURL(file);
-    setImagePreview(objectUrl);
+    if (imageFiles.length + validFiles.length > 8) {
+      setErrorMessage('Hệ thống hỗ trợ tải lên tối đa 8 hình ảnh mẫu.');
+    } else {
+      setErrorMessage('');
+    }
+
+    const combinedFiles = [...imageFiles, ...validFiles].slice(0, 8);
+    const combinedPreviews = [...imagePreviews, ...newPreviews].slice(0, 8);
+
+    setImageFiles(combinedFiles);
+    setImagePreviews(combinedPreviews);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
-  const handleRemoveImage = () => {
-    setImageFile(null);
-    setImagePreview('');
+  const handleRemoveImage = (indexToRemove: number) => {
+    setImageFiles(prev => prev.filter((_, idx) => idx !== indexToRemove));
+    setImagePreviews(prev => prev.filter((_, idx) => idx !== indexToRemove));
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleClearAllImages = () => {
+    setImageFiles([]);
+    setImagePreviews([]);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -105,8 +132,8 @@ const RequestQuotation = ({ onSuccess, onCancel }: Props) => {
       return;
     }
 
-    if (!imageFile && !imagePreview) {
-      setErrorMessage('Vui lòng tải lên hình ảnh sản phẩm mẫu bạn cần xưởng làm.');
+    if (imageFiles.length === 0 && imagePreviews.length === 0) {
+      setErrorMessage('Vui lòng tải lên ít nhất một hình ảnh sản phẩm mẫu bạn cần xưởng làm.');
       return;
     }
 
@@ -123,10 +150,17 @@ const RequestQuotation = ({ onSuccess, onCancel }: Props) => {
       if (formData.budgetMin) body.append('budgetMin', String(formData.budgetMin));
       if (formData.budgetMax) body.append('budgetMax', String(formData.budgetMax));
       if (formData.description) body.append('description', formData.description.trim());
-      if (imageFile) {
-        body.append('imageFile', imageFile);
-      } else if (imagePreview) {
-        body.append('imageUrl', imagePreview);
+      
+      if (imageFiles.length > 0) {
+        imageFiles.forEach(file => {
+          body.append('imageFiles', file);
+        });
+        body.append('imageFile', imageFiles[0]); // Đảm bảo tương thích ngược
+      } else if (imagePreviews.length > 0) {
+        imagePreviews.forEach(url => {
+          body.append('imageUrls', url);
+        });
+        body.append('imageUrl', imagePreviews[0]);
       }
 
       // Dùng native fetch gửi FormData trực tiếp để trình duyệt tự sinh boundary multipart/form-data
@@ -274,59 +308,102 @@ const RequestQuotation = ({ onSuccess, onCancel }: Props) => {
             </div>
           </div>
 
-          {/* Phần tải ảnh sản phẩm mẫu (Thay thế tên món đồ, chất liệu) */}
+          {/* Phần tải ảnh sản phẩm mẫu (Hỗ trợ nhiều ảnh) */}
           <div className="rounded-2xl border-2 border-dashed border-emerald-300 bg-emerald-50/30 p-5 transition-all hover:bg-emerald-50/50">
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
               <label className="text-xs font-bold uppercase tracking-wider text-emerald-950 flex items-center gap-1.5">
                 <span>📸</span>
                 <span>Tải ảnh sản phẩm cần làm <span className="text-rose-500">*</span></span>
+                {imagePreviews.length > 0 && (
+                  <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full ml-1">
+                    Đã chọn {imagePreviews.length}/8 ảnh
+                  </span>
+                )}
               </label>
-              <span className="text-[11px] text-gray-500">Định dạng JPG, PNG, WEBP (Tối đa 10MB)</span>
+              <span className="text-[11px] text-gray-500">Định dạng JPG, PNG, WEBP (Tối đa 8 ảnh, mỗi ảnh ≤ 10MB)</span>
             </div>
 
             <input 
               ref={fileInputRef}
               type="file" 
+              multiple
               accept="image/*" 
               className="hidden" 
               onChange={handleImageChange}
             />
 
-            {imagePreview ? (
-              <div className="mt-3 flex flex-col sm:flex-row items-center gap-4 bg-white p-3.5 rounded-xl border border-emerald-200">
-                <div className="relative group w-32 h-32 rounded-lg overflow-hidden border border-gray-200 shrink-0 bg-gray-50">
-                  <img 
-                    src={imagePreview} 
-                    alt="Ảnh mẫu đã chọn" 
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <div className="flex-1 text-center sm:text-left min-w-0">
-                  <p className="text-sm font-semibold text-gray-900 truncate">
-                    {imageFile ? imageFile.name : 'Ảnh mẫu tham khảo'}
-                  </p>
-                  {imageFile && (
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {(imageFile.size / (1024 * 1024)).toFixed(2)} MB
-                    </p>
-                  )}
-                  <p className="text-xs text-emerald-700 font-medium mt-1">
-                    ✓ Đã sẵn sàng gửi kèm yêu cầu cho các xưởng
-                  </p>
-                  <div className="mt-3 flex gap-2 justify-center sm:justify-start">
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+            {imagePreviews.length > 0 ? (
+              <div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {imagePreviews.map((url, idx) => (
+                    <div 
+                      key={idx} 
+                      className="relative group rounded-xl overflow-hidden border-2 border-emerald-200 bg-white aspect-square shadow-2xs"
                     >
-                      Chọn ảnh khác
-                    </button>
+                      <img 
+                        src={url} 
+                        alt={`Ảnh mẫu ${idx + 1}`} 
+                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      />
+                      {/* Badge ảnh chính */}
+                      {idx === 0 && (
+                        <span className="absolute top-1.5 left-1.5 bg-emerald-600/90 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-md shadow-xs">
+                          ⭐ Ảnh chính
+                        </span>
+                      )}
+                      {/* Nút xóa ảnh */}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveImage(idx)}
+                        className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-rose-600/90 hover:bg-rose-700 text-white flex items-center justify-center text-xs font-bold shadow-sm transition-all opacity-80 hover:opacity-100 cursor-pointer"
+                        title="Xóa ảnh này"
+                      >
+                        ✕
+                      </button>
+                      <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/75 to-transparent p-1.5 text-center">
+                        <span className="text-[10px] text-white font-medium truncate block">
+                          {imageFiles[idx] ? imageFiles[idx].name : `Ảnh ${idx + 1}`}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Nút thêm ảnh nếu chưa đủ 8 */}
+                  {imagePreviews.length < 8 && (
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      className="rounded-xl border-2 border-dashed border-emerald-300 bg-white/70 hover:bg-emerald-50 hover:border-emerald-500 transition-all flex flex-col items-center justify-center p-3 text-center cursor-pointer aspect-square group shadow-2xs"
+                    >
+                      <div className="w-9 h-9 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xl font-bold group-hover:scale-110 transition-transform mb-1">
+                        +
+                      </div>
+                      <p className="text-xs font-bold text-emerald-800">Thêm ảnh khác</p>
+                      <p className="text-[10px] text-gray-500 mt-0.5">Tối đa {8 - imagePreviews.length} ảnh nữa</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-emerald-100 flex flex-wrap items-center justify-between gap-2 text-xs text-emerald-800 font-medium">
+                  <p className="flex items-center gap-1.5">
+                    <span>💡</span>
+                    <span>Bạn có thể tải thêm ảnh các góc chụp khác, chi tiết mộng gỗ, bản vẽ kích thước hoặc mẫu sơn.</span>
+                  </p>
+                  <div className="flex gap-2">
+                    {imagePreviews.length < 8 && (
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer shadow-2xs"
+                      >
+                        + Chọn thêm ảnh
+                      </button>
+                    )}
                     <button
                       type="button"
-                      onClick={handleRemoveImage}
+                      onClick={handleClearAllImages}
                       className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
                     >
-                      Xóa ảnh
+                      Xóa tất cả
                     </button>
                   </div>
                 </div>
@@ -340,16 +417,16 @@ const RequestQuotation = ({ onSuccess, onCancel }: Props) => {
                   📷
                 </div>
                 <p className="text-sm font-bold text-gray-800">
-                  Nhấn vào đây để tải ảnh mẫu bạn muốn đóng
+                  Nhấn vào đây để tải ảnh mẫu bạn muốn xưởng đóng
                 </p>
                 <p className="text-xs text-gray-500 mt-1 max-w-sm">
-                  Hình ảnh bản vẽ, ảnh chụp từ Pinterest, thực tế hoặc sản phẩm bạn thích để các xưởng ước lượng vật liệu và báo giá chuẩn xác nhất.
+                  Có thể chọn <strong>nhiều ảnh cùng lúc</strong> (ảnh các góc, ảnh chụp Pinterest, bản vẽ tay...) để các xưởng dễ hình dung và báo giá chuẩn xác nhất.
                 </p>
                 <button
                   type="button"
-                  className="mt-3 px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition-colors shadow-xs"
+                  className="mt-3 px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition-colors shadow-xs cursor-pointer"
                 >
-                  + Tải Ảnh Sản Phẩm
+                  + Chọn Ảnh (Tối đa 8 ảnh)
                 </button>
               </div>
             )}
