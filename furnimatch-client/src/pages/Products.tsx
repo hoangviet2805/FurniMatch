@@ -19,6 +19,7 @@ const Products = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 16;
   const [minutesToNextHour, setMinutesToNextHour] = useState<number>(60 - new Date().getMinutes());
+  const [user, setUser] = useState<any>(null);
 
   // Reviews summary cho sản phẩm trong danh mục
   const [productReviews, setProductReviews] = useState<Record<number, { total: number; avgRating: number }>>({});
@@ -49,6 +50,11 @@ const Products = () => {
 
   useEffect(() => {
     setFavorites(JSON.parse(localStorage.getItem('favoriteProductIds') ?? '[]'));
+    const savedUser = localStorage.getItem('user');
+    if (savedUser) {
+      try { setUser(JSON.parse(savedUser)); } catch (e) {}
+    }
+    
     const updateMinutes = () => {
       const now = new Date();
       setMinutesToNextHour(60 - now.getMinutes());
@@ -370,19 +376,21 @@ const Products = () => {
                               : 'Liên hệ'}
                           </div>
                         </div>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            handleQuickBuy(product);
-                          }}
-                          className="bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-xs shadow-emerald-700/20 transition-all flex items-center gap-1 cursor-pointer whitespace-nowrap"
-                          title="Mua ngay sản phẩm này"
-                        >
-                          <span>⚡</span>
-                          <span>Mua ngay</span>
-                        </button>
+                        {user?.role !== 'SELLER' && user?.role !== 'ADMIN' && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleQuickBuy(product);
+                            }}
+                            className="bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-xs shadow-emerald-700/20 transition-all flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                            title="Mua ngay sản phẩm này"
+                          >
+                            <span>⚡</span>
+                            <span>Mua ngay</span>
+                          </button>
+                        )}
                       </div>
                     </div></Link>
                   </div>
