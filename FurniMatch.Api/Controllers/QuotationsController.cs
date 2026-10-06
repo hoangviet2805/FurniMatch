@@ -38,9 +38,9 @@ namespace FurniMatch.Api.Controllers
                 return BadRequest(new { message = "Chỉ xưởng có đăng ký 'Nhận đặt hàng theo yêu cầu' mới có thể tiếp nhận và báo giá yêu cầu này." });
             }
 
-            if (dto.Price <= 0)
+            if (dto.Price < 0)
             {
-                return BadRequest(new { message = "Vui lòng nhập báo giá hợp lệ (lớn hơn 0)." });
+                return BadRequest(new { message = "Vui lòng nhập báo giá hợp lệ (lớn hơn hoặc bằng 0)." });
             }
 
             if (dto.ProductionDays <= 0)

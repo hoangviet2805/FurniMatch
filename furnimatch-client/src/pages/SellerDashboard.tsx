@@ -1213,8 +1213,8 @@ export default function SellerDashboard() {
     if (!quotingModal.request) return;
 
     const priceNum = parseFloat(quotingModal.price.replace(/,/g, ''));
-    if (isNaN(priceNum) || priceNum <= 0) {
-      setQuotingModal(m => ({ ...m, error: 'Vui lòng nhập báo giá hợp lệ (lớn hơn 0).' }));
+    if (isNaN(priceNum) || priceNum < 0) {
+      setQuotingModal(m => ({ ...m, error: 'Vui lòng nhập báo giá hợp lệ (lớn hơn hoặc bằng 0).' }));
       return;
     }
     
@@ -2379,8 +2379,8 @@ export default function SellerDashboard() {
                         </label>
                         <input
                           type="number"
-                          min="1000"
-                          step="10000"
+                          min="0"
+                          step="1"
                           max={quotingModal.request.budgetMax || quotingModal.request.budgetMin || undefined}
                           required
                           placeholder="Ví dụ: 1500000"
