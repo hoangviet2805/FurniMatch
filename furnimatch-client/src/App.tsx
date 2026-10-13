@@ -37,6 +37,7 @@ function App() {
             <Route path="/favorites" element={<Favorites />} />
             <Route path="/compare" element={<CompareProducts />} />
             <Route path="/space-planner" element={<SpacePlanner />} />
+            <Route path="/room-visualizer" element={<SpacePlanner />} />
             <Route path="/checkout" element={<Checkout />} />
             <Route path="/orders" element={<Orders />} />
             <Route path="/wallet" element={<Wallet />} />

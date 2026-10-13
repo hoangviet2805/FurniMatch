@@ -66,7 +66,7 @@ const Header = () => {
       { to: '/products', label: 'Danh mục' }, 
       { to: '/request-quotation', label: 'Đặt theo yêu cầu' },
       { to: '/compare', label: `So sánh${comparisonCount ? ` (${comparisonCount})` : ''}` }, 
-      { to: '/space-planner', label: 'Tính không gian' }
+      { to: '/space-planner', label: 'Phòng mẫu 3D' }
     ];
     if (user?.role === 'CUSTOMER') return [
       ...common, 

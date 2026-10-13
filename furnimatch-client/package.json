@@ -12,6 +12,7 @@
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
     "@types/leaflet": "^1.9.22",
+    "@types/three": "^0.186.0",
     "axios": "^1.20.0",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.47.0",
@@ -19,7 +20,8 @@
     "react-dom": "^19.2.8",
     "react-leaflet": "^5.0.0",
     "react-router-dom": "^7.18.4",
-    "recharts": "^3.10.1"
+    "recharts": "^3.10.1",
+    "three": "^0.186.1"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",

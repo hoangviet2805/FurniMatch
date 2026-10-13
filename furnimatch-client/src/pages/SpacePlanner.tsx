@@ -1,203 +1,517 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import api from '../utils/api';
-import { demoProducts, productImageUrl } from '../utils/demoProducts';
+import {
+  Sparkles,
+  MessageCircle,
+  ArrowRight,
+  Truck,
+  RefreshCw,
+  Scissors,
+  Award,
+  Home,
+  ShoppingCart,
+  ExternalLink,
+  AlertTriangle,
+} from 'lucide-react';
+import { Room3DViewer } from '../components/room3d/Room3DViewer';
+import { TileSelector } from '../components/room3d/TileSelector';
+import { INITIAL_TILE_PRODUCTS } from '../data/tileProducts';
+import { DEFAULT_LIVING_ROOM_LAYOUT } from '../data/furnitureCatalog';
+import type { TileProduct, TileLayoutOptions } from '../types/tile';
+import type { RoomType, FurnitureModelDef, PlacedFurnitureItem, RoomDesignConfig } from '../types/furniture';
+import type { RoomScene } from '../components/room3d/RoomScene';
+import { fetchRealCatalogTiles } from '../services/catalogService';
+import { addToCart } from '../utils/cart';
+
+const STORAGE_KEY = 'furnimatch_3d_room_design';
 
 const SpacePlanner = () => {
-  const [dimensions, setDimensions] = useState<{
-    length: number | '';
-    width: number | '';
-    height: number | '';
-  }>({
-    length: 400,
-    width: 300,
-    height: 280,
+  const roomSceneRef = useRef<RoomScene | null>(null);
+
+  const [tiles, setTiles] = useState<TileProduct[]>(INITIAL_TILE_PRODUCTS);
+  const [selectedTile, setSelectedTile] = useState<TileProduct>(INITIAL_TILE_PRODUCTS[0]);
+  const [isLoadingTiles, setIsLoadingTiles] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const [layoutOptions, setLayoutOptions] = useState<TileLayoutOptions>({
+    pattern: 'grid',
+    direction: 'horizontal',
+    orientation: 0,
+    groutColor: '#cfcfcf',
+    groutWidthMm: 2.0,
+    finishEnhancement: 'normal',
   });
 
-  const [results, setResults] = useState<any[]>([]);
-  const [submitted, setSubmitted] = useState(false);
-  const [loading, setLoading] = useState(false);
+  // Furniture & Room Type State
+  const [roomType, setRoomType] = useState<RoomType>('living_room');
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [selectedFurnitureId, setSelectedFurnitureId] = useState<string | null>(null);
+  const [placedItems, setPlacedItems] = useState<PlacedFurnitureItem[]>(DEFAULT_LIVING_ROOM_LAYOUT);
+  const [isSaved, setIsSaved] = useState(false);
+  const [cartToast, setCartToast] = useState<string | null>(null);
 
-  const update = (key: 'length' | 'width' | 'height', value: string) => {
-    if (value.trim() === '') {
-      setDimensions(current => ({ ...current, [key]: '' }));
-      return;
+  // Fetch real tile products from backend API
+  const loadCatalog = useCallback(async () => {
+    setIsLoadingTiles(true);
+    setLoadError(null);
+    try {
+      const res = await fetchRealCatalogTiles();
+      if (res.tiles.length > 0) {
+        setTiles(res.tiles);
+        // Find if user previously had a saved tile in localStorage
+        const savedStr = localStorage.getItem(STORAGE_KEY);
+        let restoredTile: TileProduct | undefined;
+        if (savedStr) {
+          try {
+            const saved: RoomDesignConfig = JSON.parse(savedStr);
+            if (saved.selectedTileId) {
+              restoredTile = res.tiles.find((t) => t.id === saved.selectedTileId);
+            }
+          } catch {
+            // Ignore parse errors
+          }
+        }
+
+        // If restored tile found, use it; otherwise pick first tile with 3D texture ready, or first tile
+        const nextTile = restoredTile || res.tiles.find((t) => t.has3DTexture) || res.tiles[0];
+        setSelectedTile(nextTile);
+      } else {
+        // Fallback to initial tiles if backend category has no items
+        setTiles(INITIAL_TILE_PRODUCTS);
+      }
+    } catch (err: any) {
+      console.warn('Could not fetch live tile products from backend:', err);
+      setLoadError('Không thể kết nối đến máy chủ để tải danh mục sản phẩm thời gian thực. Đang dùng danh mục đệm.');
+      setTiles(INITIAL_TILE_PRODUCTS);
+    } finally {
+      setIsLoadingTiles(false);
     }
-    const num = Number(value);
-    if (!isNaN(num)) {
-      setDimensions(current => ({ ...current, [key]: Math.max(0, num) }));
+  }, []);
+
+  useEffect(() => {
+    loadCatalog();
+  }, [loadCatalog]);
+
+  // Restore saved design (room type, layout, furniture) from localStorage
+  useEffect(() => {
+    try {
+      const savedStr = localStorage.getItem(STORAGE_KEY);
+      if (savedStr) {
+        const saved: RoomDesignConfig = JSON.parse(savedStr);
+        if (saved.roomType) setRoomType(saved.roomType);
+        if (saved.layoutOptions) setLayoutOptions(saved.layoutOptions);
+        if (saved.furnitureItems && Array.isArray(saved.furnitureItems)) {
+          setPlacedItems(saved.furnitureItems);
+        }
+      }
+    } catch (e) {
+      console.warn('Could not restore design from localStorage', e);
+    }
+  }, []);
+
+  const handleSelectTile = (tile: TileProduct) => {
+    setSelectedTile(tile);
+    setLayoutOptions((prev) => ({
+      ...prev,
+      groutColor: tile.groutColor || prev.groutColor,
+      pattern: tile.defaultPattern || prev.pattern,
+    }));
+  };
+
+  const handleSelectVariant = (variant: any) => {
+    setSelectedTile((prev) => {
+      const w = variant.width || prev.width;
+      const h = variant.length || prev.height;
+      return {
+        ...prev,
+        width: w,
+        height: h,
+        widthCm: w,
+        heightCm: h,
+        sizeLabel: variant.sizeName || `${w} × ${h} cm`,
+        price: variant.price || prev.price,
+        selectedVariant: variant,
+      };
+    });
+  };
+
+  const handleRoomTypeChange = (newType: RoomType) => {
+    setRoomType(newType);
+    setSelectedFurnitureId(null);
+    if (roomSceneRef.current) {
+      roomSceneRef.current.setRoomType(newType);
     }
   };
 
-  const numLength = typeof dimensions.length === 'number' ? dimensions.length : 0;
-  const numWidth = typeof dimensions.width === 'number' ? dimensions.width : 0;
-  const numHeight = typeof dimensions.height === 'number' ? dimensions.height : 0;
-
-  const area = ((numLength * numWidth) / 10000).toFixed(1);
-  const volume = ((numLength * numWidth * numHeight) / 1000000).toFixed(1);
-
-  const findProducts = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setLoading(true);
-    try {
-      const response = await api.get('/products', {
-        params: {
-          maxLength: numLength > 0 ? numLength : undefined,
-          maxWidth: numWidth > 0 ? numWidth : undefined,
-          maxHeight: numHeight > 0 ? numHeight : undefined,
-        },
-      });
-      setResults(response.data.slice(0, 8));
-      setSubmitted(true);
-    } finally {
-      setLoading(false);
+  const handleAddFurniture = (modelDef: FurnitureModelDef) => {
+    setIsEditMode(true); // Switch to edit mode automatically
+    if (roomSceneRef.current) {
+      const newId = roomSceneRef.current.addFurniture(modelDef);
+      setSelectedFurnitureId(newId);
     }
+  };
+
+  const handleSelectInstance = (instanceId: string | null) => {
+    setSelectedFurnitureId(instanceId);
+    if (roomSceneRef.current) {
+      roomSceneRef.current.selectFurniture(instanceId);
+    }
+  };
+
+  const handleRotateInstance = () => {
+    if (roomSceneRef.current) {
+      roomSceneRef.current.rotateSelectedFurniture(Math.PI / 4); // 45 degrees
+    }
+  };
+
+  const handleDuplicateInstance = () => {
+    if (roomSceneRef.current) {
+      const newId = roomSceneRef.current.duplicateSelectedFurniture();
+      if (newId) setSelectedFurnitureId(newId);
+    }
+  };
+
+  const handleDeleteInstance = (instanceId: string) => {
+    if (roomSceneRef.current) {
+      roomSceneRef.current.removeFurniture(instanceId);
+    }
+  };
+
+  const handleDeleteSelected = () => {
+    if (selectedFurnitureId && roomSceneRef.current) {
+      roomSceneRef.current.removeFurniture(selectedFurnitureId);
+      setSelectedFurnitureId(null);
+    }
+  };
+
+  const handleResetLayout = () => {
+    setSelectedFurnitureId(null);
+    if (roomSceneRef.current) {
+      roomSceneRef.current.resetFurnitureLayout(roomType);
+    }
+  };
+
+  const handleSaveDesign = () => {
+    try {
+      const config: RoomDesignConfig = {
+        roomType,
+        selectedTileId: selectedTile.id,
+        layoutOptions,
+        furnitureItems: placedItems,
+        savedAt: new Date().toISOString(),
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 3000);
+    } catch (e) {
+      console.error('Failed to save design:', e);
+    }
+  };
+
+  const handleAddToCart = (tile: TileProduct, quantity = 1) => {
+    const pId = tile.productId || parseInt(tile.id) || 1;
+    const res = addToCart({
+      productId: pId,
+      variantId: tile.selectedVariant?.variantId,
+      name: tile.name,
+      sizeLabel: tile.sizeLabel,
+      price: tile.price,
+      quantity,
+      imageUrl: tile.thumbnailUrl,
+      sellerName: tile.origin,
+      sellerId: tile.rawProduct?.sellerId,
+    });
+    setCartToast(res.message);
+    setTimeout(() => setCartToast(null), 3500);
+  };
+
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price);
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-      <div className="max-w-3xl">
-        <p className="uppercase text-sm tracking-wider font-semibold text-emerald-600">Công cụ thông minh</p>
-        <h1 className="text-3xl font-bold text-gray-900 mt-2">Tính không gian nội thất</h1>
-        <p className="mt-3 text-gray-600">
-          Nhập kích thước khu vực dự kiến đặt đồ. FurniMatch sẽ gợi ý các mẫu có kích thước phù hợp.
-        </p>
-      </div>
+    <div className="min-h-screen bg-slate-50/60 pb-16">
+      {/* Toast Notification */}
+      {cartToast && (
+        <div className="fixed top-20 right-6 z-50 bg-emerald-700 text-white px-5 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 text-sm font-semibold animate-bounce">
+          <ShoppingCart size={18} />
+          <span>{cartToast}</span>
+          <Link to="/cart" className="ml-2 underline font-bold text-emerald-200 hover:text-white">
+            Xem giỏ
+          </Link>
+        </div>
+      )}
 
-      <div className="mt-8 grid lg:grid-cols-[400px_1fr] gap-8">
-        <form onSubmit={findProducts} className="rounded-2xl bg-white border border-gray-100 shadow-sm p-6 h-fit">
-          <h2 className="font-bold text-gray-900 text-lg">Kích thước khu vực (cm)</h2>
-          <div className="mt-5 space-y-4">
-            {([
-              ['length', 'Chiều dài'],
-              ['width', 'Chiều rộng'],
-              ['height', 'Chiều cao'],
-            ] as const).map(([key, label]) => (
-              <label key={key} className="block">
-                <span className="text-sm font-medium text-gray-700">{label}</span>
-                <div className="mt-1 relative">
-                  <input
-                    value={dimensions[key]}
-                    type="number"
-                    min="0"
-                    placeholder="Nhập kích thước..."
-                    onChange={event => update(key, event.target.value)}
-                    className="w-full rounded-xl border border-gray-300 px-4 py-3 pr-12 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all text-gray-900"
-                  />
-                  <span className="absolute right-4 top-3 text-gray-400 text-sm font-medium">cm</span>
-                </div>
-              </label>
-            ))}
+      {/* Hero Header */}
+      <section className="bg-gradient-to-b from-emerald-950 via-slate-900 to-slate-900 text-white pt-10 pb-16 px-4 sm:px-6 lg:px-8 border-b border-emerald-900/30">
+        <div className="max-w-7xl mx-auto">
+          {/* Breadcrumb */}
+          <div className="flex items-center gap-2 text-xs text-emerald-400/80 mb-3 font-medium">
+            <Link to="/" className="hover:text-emerald-300 flex items-center gap-1">
+              <Home size={13} /> Trang chủ
+            </Link>
+            <span>/</span>
+            <span className="text-white">Phòng mẫu 3D Visualizer & Nội thất</span>
           </div>
 
-          <div className="mt-5 grid grid-cols-2 gap-3">
-            <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-3.5">
-              <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">Diện tích sàn</p>
-              <p className="font-extrabold text-emerald-900 text-lg mt-1">{area} m²</p>
+          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6">
+            <div className="max-w-3xl">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-bold uppercase tracking-wider mb-3">
+                <Sparkles size={13} />
+                <span>3D Room Visualizer & Customizer</span>
+              </div>
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-white">
+                Trải nghiệm gạch & nội thất trong không gian thực
+              </h1>
+              <p className="mt-3 text-slate-300 text-sm sm:text-base leading-relaxed max-w-2xl">
+                Tự do thay đổi mẫu gạch lát nền từ danh mục sản phẩm thực tế, di chuyển xoay đồ nội thất (giường, tủ, sofa, bàn) và quan sát phản chiếu ánh sáng 360° trước khi đặt mua.
+              </p>
             </div>
-            <div className="rounded-xl bg-sky-50 border border-sky-100 p-3.5">
-              <p className="text-xs font-semibold text-sky-700 uppercase tracking-wide">Thể tích</p>
-              <p className="font-extrabold text-sky-900 text-lg mt-1">{volume} m³</p>
+
+            {/* Quick stats / highlights */}
+            <div className="flex items-center gap-3 sm:gap-6 bg-slate-800/80 backdrop-blur-sm p-4 rounded-2xl border border-white/10 shrink-0">
+              <div className="text-center px-2">
+                <p className="text-xl sm:text-2xl font-black text-emerald-400">1:1</p>
+                <p className="text-[11px] text-slate-400 font-medium">Tỷ lệ thực tế</p>
+              </div>
+              <div className="h-8 w-[1px] bg-white/10" />
+              <div className="text-center px-2">
+                <p className="text-xl sm:text-2xl font-black text-emerald-400">360°</p>
+                <p className="text-[11px] text-slate-400 font-medium">Góc quan sát</p>
+              </div>
+              <div className="h-8 w-[1px] bg-white/10" />
+              <div className="text-center px-2">
+                <p className="text-xl sm:text-2xl font-black text-emerald-400">{tiles.length}</p>
+                <p className="text-[11px] text-slate-400 font-medium">Mẫu gạch DB</p>
+              </div>
             </div>
           </div>
+        </div>
+      </section>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full mt-6 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 py-3.5 font-bold text-white shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
-          >
-            {loading ? 'Đang tìm mẫu...' : 'Tìm sản phẩm phù hợp'}
-          </button>
-          <p className="mt-3 text-xs text-gray-400 text-center">Gợi ý dựa trên kích thước sản phẩm do xưởng cung cấp.</p>
-        </form>
+      {/* Main 3D Studio & Tile / Furniture Selector Section */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-8">
+        {loadError && (
+          <div className="mb-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-amber-900 text-xs flex items-center justify-between gap-2">
+            <span>{loadError}</span>
+            <button
+              onClick={loadCatalog}
+              className="px-2.5 py-1 bg-amber-600 text-white rounded-lg font-bold hover:bg-amber-700 transition"
+            >
+              Thử lại
+            </button>
+          </div>
+        )}
 
-        <section>
-          {!submitted ? (
-            <div className="rounded-2xl bg-gradient-to-br from-sky-50 to-emerald-50 p-6 border border-emerald-100/50">
-              <div className="flex gap-4 items-center">
-                <div className="text-5xl">📐</div>
-                <div>
-                  <h2 className="font-bold text-gray-800 text-lg">Thử với phòng khách mẫu</h2>
-                  <p className="mt-1 text-sm text-gray-600">
-                    Kích thước mặc định 4 × 3 × 2.8 m — phù hợp cho một góc tiếp khách nhỏ gọn.
-                  </p>
-                </div>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* 3D Room Viewer (Left on desktop: 7-8 columns) */}
+          <div className="lg:col-span-7 xl:col-span-8 flex flex-col gap-4">
+            <Room3DViewer
+              selectedTile={selectedTile}
+              options={layoutOptions}
+              roomType={roomType}
+              isEditMode={isEditMode}
+              onToggleEditMode={setIsEditMode}
+              selectedFurnitureId={selectedFurnitureId}
+              onRotateFurniture={handleRotateInstance}
+              onDuplicateFurniture={handleDuplicateInstance}
+              onDeleteFurniture={handleDeleteSelected}
+              onDeselectFurniture={() => handleSelectInstance(null)}
+              onSceneReady={(scene) => {
+                roomSceneRef.current = scene;
+              }}
+              onSelectionChange={(id) => setSelectedFurnitureId(id)}
+              onFurnitureChange={(items) => setPlacedItems(items)}
+              className="w-full shadow-2xl"
+            />
+
+            {/* Guidance bar below 3D canvas */}
+            <div className="p-4 rounded-2xl bg-white border border-gray-100 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-600">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                <span>
+                  <strong>Hướng dẫn:</strong> Bật <strong>"Chỉnh nội thất"</strong> để nhấp chuột và kéo thả giường, tủ, sofa trên sàn phòng. Bật <strong>"Xem 360°"</strong> để tự do xoay góc nhìn.
+                </span>
               </div>
-              <h3 className="mt-7 text-sm font-bold text-gray-700">Một vài mẫu kích thước phổ biến</h3>
-              <div className="mt-3 grid sm:grid-cols-3 gap-3">
-                {demoProducts.slice(0, 3).map(product => (
-                  <div key={product.productId} className="rounded-xl overflow-hidden bg-white shadow-sm border border-gray-100">
-                    <img
-                      src={productImageUrl(product.productImages[0].imageUrl)}
-                      alt={product.name}
-                      className="h-24 w-full object-cover"
-                    />
-                    <div className="p-3">
-                      <p className="text-sm font-semibold text-gray-900 truncate">{product.name}</p>
-                      <p className="mt-1 text-xs text-gray-500">
-                        {product.productVariants[0].length} × {product.productVariants[0].width} cm
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <p className="mt-5 text-xs text-gray-400">Nhấn “Tìm sản phẩm phù hợp” để dùng kích thước thực tế từ hệ thống.</p>
-            </div>
-          ) : (
-            <>
-              <div className="flex justify-between items-end mb-5">
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900">Mẫu có thể phù hợp</h2>
-                  <p className="text-sm text-gray-500 mt-1">Tìm thấy {results.length} gợi ý đầu tiên</p>
-                </div>
-                <Link to="/products" className="text-sm font-semibold text-emerald-600 hover:underline">
-                  Xem toàn bộ
+              <div className="flex items-center gap-2 shrink-0">
+                <Link
+                  to="/products"
+                  className="inline-flex items-center gap-1 font-bold text-emerald-700 hover:text-emerald-800 hover:underline"
+                >
+                  <span>Xem tất cả sản phẩm</span>
+                  <ArrowRight size={14} />
                 </Link>
               </div>
-              {results.length ? (
-                <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {results.map(product => {
-                    const image = product.productImages?.[0]?.imageUrl;
-                    return (
-                      <Link
-                        to={`/products/${product.productId}`}
-                        key={product.productId}
-                        className="rounded-xl overflow-hidden bg-white border border-gray-100 hover:shadow-md transition-shadow group"
-                      >
-                        <div className="h-32 bg-gray-100">
-                          {image ? (
-                            <img
-                              src={productImageUrl(image)}
-                              alt={product.name}
-                              className="h-full w-full object-cover group-hover:scale-105 transition-transform"
-                            />
-                          ) : (
-                            <div className="h-full flex items-center justify-center text-gray-400">Không có ảnh</div>
-                          )}
-                        </div>
-                        <div className="p-3">
-                          <h3 className="font-semibold text-sm text-gray-900 truncate">{product.name}</h3>
-                          <p className="mt-1 text-xs text-gray-500">
-                            {product.length && product.width
-                              ? `${product.length} × ${product.width} × ${product.height ?? '-'} cm`
-                              : product.customSizeSupported
-                              ? 'Hỗ trợ may đo'
-                              : 'Xem kích thước chi tiết'}
-                          </p>
-                        </div>
-                      </Link>
-                    );
-                  })}
+            </div>
+          </div>
+
+          {/* Tile & Furniture Customizer Panel (Right on desktop: 4-5 columns) */}
+          <div className="lg:col-span-5 xl:col-span-4 h-full">
+            <TileSelector
+              tiles={tiles}
+              selectedTile={selectedTile}
+              onSelectTile={handleSelectTile}
+              options={layoutOptions}
+              onOptionsChange={setLayoutOptions}
+              roomType={roomType}
+              onRoomTypeChange={handleRoomTypeChange}
+              onAddFurniture={handleAddFurniture}
+              placedItems={placedItems}
+              selectedInstanceId={selectedFurnitureId}
+              onSelectInstance={handleSelectInstance}
+              onRotateInstance={handleRotateInstance}
+              onDuplicateInstance={handleDuplicateInstance}
+              onDeleteInstance={handleDeleteInstance}
+              onResetLayout={handleResetLayout}
+              onSaveDesign={handleSaveDesign}
+              isSaved={isSaved}
+              isLoading={isLoadingTiles}
+              onRefreshCatalog={loadCatalog}
+              onSelectVariant={handleSelectVariant}
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* Selected Tile Showcase & Purchasing Benefits */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-12">
+        <div className="rounded-3xl bg-white border border-gray-200/80 shadow-md p-6 sm:p-8">
+          <div className="grid md:grid-cols-2 gap-8 items-center">
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold">
+                  <span>Mẫu gạch đang xem thử</span>
                 </div>
-              ) : (
-                <div className="rounded-2xl bg-white border border-gray-100 p-10 text-center text-gray-500">
-                  Chưa có mẫu nào có thông tin kích thước phù hợp. Hãy thử tăng kích thước khu vực hoặc xem các sản phẩm may đo.
+                {selectedTile.has3DTexture ? (
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold">
+                    ✓ Hỗ trợ 3D Preview
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-semibold">
+                    Chưa có texture 3D
+                  </span>
+                )}
+              </div>
+
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900">
+                {selectedTile.name}
+              </h2>
+              <p className="mt-2 text-sm text-gray-600 leading-relaxed">
+                {selectedTile.description}
+              </p>
+
+              {/* Notice if tile lacks 3D texture */}
+              {!selectedTile.has3DTexture && (
+                <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-2xl text-xs text-amber-900 flex items-start gap-2.5">
+                  <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <strong>Thông báo xem trước 3D:</strong> {selectedTile.textureNote || 'Mẫu gạch này chưa có dữ liệu texture 3D bề mặt phẳng từ nhà sản xuất. Bạn vẫn có thể xem thông số kỹ thuật, hình ảnh thực tế và đặt mua trực tiếp.'}
+                  </div>
                 </div>
               )}
-            </>
-          )}
-        </section>
-      </div>
+
+              {/* Specs table */}
+              <div className="mt-5 grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+                <div className="p-3 bg-gray-50 rounded-xl">
+                  <span className="text-gray-400 block font-medium">Mã sản phẩm</span>
+                  <span className="font-mono font-bold text-gray-800 text-sm mt-0.5 block">{selectedTile.sku}</span>
+                </div>
+                <div className="p-3 bg-gray-50 rounded-xl">
+                  <span className="text-gray-400 block font-medium">Kích thước</span>
+                  <span className="font-bold text-gray-800 text-sm mt-0.5 block">{selectedTile.sizeLabel}</span>
+                </div>
+                <div className="p-3 bg-gray-50 rounded-xl">
+                  <span className="text-gray-400 block font-medium">Bề mặt</span>
+                  <span className="font-bold text-gray-800 text-sm mt-0.5 block truncate">{selectedTile.finishLabel}</span>
+                </div>
+                <div className="p-3 bg-gray-50 rounded-xl">
+                  <span className="text-gray-400 block font-medium">Độ dày viên</span>
+                  <span className="font-bold text-gray-800 text-sm mt-0.5 block">{selectedTile.thicknessMm} mm</span>
+                </div>
+                <div className="p-3 bg-gray-50 rounded-xl">
+                  <span className="text-gray-400 block font-medium">Đơn giá</span>
+                  <span className="font-bold text-emerald-700 text-sm mt-0.5 block">{formatPrice(selectedTile.price)}/{selectedTile.unit}</span>
+                </div>
+                <div className="p-3 bg-gray-50 rounded-xl">
+                  <span className="text-gray-400 block font-medium">Xuất xứ / Shop</span>
+                  <span className="font-bold text-gray-800 text-xs mt-0.5 block truncate" title={selectedTile.origin}>
+                    {selectedTile.origin}
+                  </span>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="mt-6 flex flex-wrap gap-3">
+                {selectedTile.productId && (
+                  <Link
+                    to={`/products/${selectedTile.productId}`}
+                    className="px-6 py-3.5 rounded-xl bg-gray-900 hover:bg-black text-white font-bold text-sm shadow-md transition flex items-center gap-2"
+                  >
+                    <ExternalLink size={17} />
+                    <span>Xem chi tiết sản phẩm</span>
+                  </Link>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => handleAddToCart(selectedTile, 1)}
+                  className="px-6 py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-md shadow-emerald-600/20 transition flex items-center gap-2 cursor-pointer"
+                >
+                  <ShoppingCart size={17} />
+                  <span>Thêm vào giỏ hàng</span>
+                </button>
+
+                <Link
+                  to="/request-quotation"
+                  className="px-6 py-3.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold text-sm transition flex items-center gap-2"
+                >
+                  <MessageCircle size={17} />
+                  <span>Yêu cầu báo giá</span>
+                </Link>
+              </div>
+            </div>
+
+            {/* Commitments & Services Grid */}
+            <div className="bg-slate-50 p-6 rounded-2xl border border-gray-100">
+              <h3 className="font-bold text-gray-900 text-sm uppercase tracking-wider mb-4 flex items-center gap-2">
+                <Award size={18} className="text-emerald-600" />
+                Dịch vụ đặc quyền tại FurniMatch
+              </h3>
+              <div className="space-y-4 text-xs">
+                <div className="flex gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
+                    <Truck size={16} />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-gray-900">Giao hàng tận chân công trình</h4>
+                    <p className="text-gray-500 mt-0.5">Xe tải chuyên dụng vận chuyển đảm bảo gạch không sứt mẻ góc, đúng tiến độ thi công.</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-sky-100 text-sky-800 flex items-center justify-center shrink-0">
+                    <Scissors size={16} />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-gray-900">Hỗ trợ gia công cắt gạch vi tính</h4>
+                    <p className="text-gray-500 mt-0.5">Cắt len chân tường, bo cạnh mũi bậc cầu thang, líp cạnh 45 độ theo yêu cầu bản vẽ.</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
+                    <RefreshCw size={16} />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-gray-900">Đổi trả gạch nguyên hộp dư thừa</h4>
+                    <p className="text-gray-500 mt-0.5">Thu hồi hoàn tiền các hộp gạch còn nguyên đai nguyên kiện sau khi hoàn thiện công trình.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
   );
 };
