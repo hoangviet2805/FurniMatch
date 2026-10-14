@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace FurniMatch.Api.Models
 {
@@ -21,6 +22,7 @@ namespace FurniMatch.Api.Models
         public string? Phone { get; set; }
 
         [Required]
+        [JsonIgnore]
         public string PasswordHash { get; set; } = string.Empty;
 
         public int RoleId { get; set; }
@@ -46,12 +48,22 @@ namespace FurniMatch.Api.Models
         public string? Ward { get; set; }
         public string? AddressDetail { get; set; }
 
+        [JsonIgnore]
         public string? ResetPasswordToken { get; set; }
+
+        [JsonIgnore]
         public DateTime? ResetPasswordTokenExpiry { get; set; }
 
+        [JsonIgnore]
         public ICollection<Product> Products { get; set; } = new List<Product>();
+
+        [JsonIgnore]
         public ICollection<QuotationRequest> QuotationRequests { get; set; } = new List<QuotationRequest>();
+
+        [JsonIgnore]
         public ICollection<Quotation> Quotations { get; set; } = new List<Quotation>();
+
+        [JsonIgnore]
         public ICollection<SellerDocument> SellerDocuments { get; set; } = new List<SellerDocument>();
     }
 }

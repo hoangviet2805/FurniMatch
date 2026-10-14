@@ -43,6 +43,7 @@ namespace FurniMatch.Api.Controllers
             [FromQuery] string? sort)
         {
             IQueryable<Product> query = _context.Products
+                .AsNoTracking()
                 .Include(p => p.Category)
                 .Include(p => p.Seller)
                 .Include(p => p.ProductVariants)
@@ -139,6 +140,7 @@ namespace FurniMatch.Api.Controllers
         public async Task<IActionResult> GetProduct(int id)
         {
             var product = await _context.Products
+                .AsNoTracking()
                 .Include(p => p.Category)
                 .Include(p => p.Seller)
                 .Include(p => p.ProductVariants)
@@ -156,6 +158,7 @@ namespace FurniMatch.Api.Controllers
         {
             var sellerId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
             var query = _context.Products
+                .AsNoTracking()
                 .Include(p => p.Category)
                 .Include(p => p.ProductVariants)
                 .Include(p => p.ProductImages)

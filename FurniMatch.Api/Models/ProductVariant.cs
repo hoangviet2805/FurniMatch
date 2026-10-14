@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace FurniMatch.Api.Models
 {
@@ -8,6 +9,8 @@ namespace FurniMatch.Api.Models
         public int VariantId { get; set; }
 
         public int ProductId { get; set; }
+
+        [JsonIgnore]
         public Product? Product { get; set; }
 
         public int? SizeId { get; set; }

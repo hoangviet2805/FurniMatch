@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace FurniMatch.Api.Models
 {
@@ -13,6 +14,7 @@ namespace FurniMatch.Api.Models
 
         public string? Description { get; set; }
 
+        [JsonIgnore]
         public ICollection<Product> Products { get; set; } = new List<Product>();
     }
 }

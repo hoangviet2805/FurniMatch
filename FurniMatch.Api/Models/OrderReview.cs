@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace FurniMatch.Api.Models
 {
@@ -10,6 +11,8 @@ namespace FurniMatch.Api.Models
 
         // FK → Orders
         public int OrderId { get; set; }
+
+        [JsonIgnore]
         public Order? Order { get; set; }
 
         // FK → Users (customer who wrote the review)
@@ -21,6 +24,8 @@ namespace FurniMatch.Api.Models
         /// Dùng để hiển thị reviews theo sản phẩm trên trang Shop/ProductDetail.
         /// </summary>
         public int ProductId { get; set; }
+
+        [JsonIgnore]
         public Product? Product { get; set; }
 
         /// <summary>Tên sản phẩm snapshot tại thời điểm đánh giá (để hiển thị dù sản phẩm bị xóa)</summary>

@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import api, { getImageUrl } from '../utils/api';
 import { isFavorite, toggleFavorite } from '../utils/favorites';
 import { addToCart, type CartItem } from '../utils/cart';
+import { getCache, setCache } from '../utils/cache';
 import { Star } from 'lucide-react';
 
 const Products = () => {
@@ -10,26 +11,48 @@ const Products = () => {
   const categoryIdParam = searchParams.get('categoryId');
   
   const navigate = useNavigate();
-  const [products, setProducts] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [keyword, setKeyword] = useState(searchParams.get('search') ?? '');
-  const [sort, setSort] = useState(searchParams.get('sort') ?? 'diverse');
+  const keyword = searchParams.get('search') ?? '';
+  const sort = searchParams.get('sort') ?? 'diverse';
+  const [searchTerm, setSearchTerm] = useState(keyword);
+
+  const currentCacheKey = useMemo(
+    () => `products_${categoryIdParam || 'all'}_${keyword.trim()}_${sort}`,
+    [categoryIdParam, keyword, sort]
+  );
+
+  const [products, setProducts] = useState<any[]>(() => getCache<any[]>(currentCacheKey) || []);
+  const [categories, setCategories] = useState<any[]>(() => getCache<any[]>('categories') || []);
+  const [loading, setLoading] = useState<boolean>(() => !getCache<any[]>(currentCacheKey));
+  const [isRevalidating, setIsRevalidating] = useState<boolean>(false);
   const [favorites, setFavorites] = useState<number[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 16;
   const [minutesToNextHour, setMinutesToNextHour] = useState<number>(60 - new Date().getMinutes());
   const [user, setUser] = useState<any>(null);
 
+  // Keep search input synced with url param
+  useEffect(() => {
+    setSearchTerm(keyword);
+  }, [keyword]);
+
   // Reviews summary cho sản phẩm trong danh mục
   const [productReviews, setProductReviews] = useState<Record<number, { total: number; avgRating: number }>>({});
 
   useEffect(() => {
     if (products.length === 0) return;
-    const ids = products.map((p: any) => p.productId).join(',');
+    const ids = products.map((p: any) => p.productId).sort().join(',');
+    const cacheKey = `reviews_summary_${ids}`;
+    const cached = getCache<Record<number, { total: number; avgRating: number }>>(cacheKey);
+    if (cached) {
+      setProductReviews(cached);
+      return;
+    }
     api.get(`/reviews/summary?productIds=${ids}`)
       .then(res => {
-        setProductReviews(res.data || {});
+        if (res.data) {
+          setCache(cacheKey, res.data);
+          setProductReviews(res.data);
+        }
       })
       .catch(() => {});
   }, [products]);
@@ -65,9 +88,16 @@ const Products = () => {
   }, []);
 
   useEffect(() => {
-    // Fetch categories for sidebar
+    // Fetch categories for sidebar with cache
+    const cachedCats = getCache<any[]>('categories');
+    if (cachedCats) {
+      setCategories(cachedCats);
+    }
     api.get('/categories')
-      .then(res => setCategories(res.data))
+      .then(res => {
+        setCache('categories', res.data);
+        setCategories(res.data);
+      })
       .catch(err => console.error('Error fetching categories:', err));
   }, []);
 
@@ -76,7 +106,16 @@ const Products = () => {
   }, [categoryIdParam, keyword, sort]);
 
   const fetchProducts = useCallback(async () => {
-    setLoading(true);
+    const key = `products_${categoryIdParam || 'all'}_${keyword.trim()}_${sort}`;
+    const cached = getCache<any[]>(key);
+    if (cached) {
+      setProducts(cached);
+      setLoading(false);
+      setIsRevalidating(true);
+    } else {
+      setLoading(true);
+    }
+
     try {
       const params = new URLSearchParams();
       if (categoryIdParam) params.set('categoryId', categoryIdParam);
@@ -86,11 +125,13 @@ const Products = () => {
       params.set('_h', Math.floor(Date.now() / 3600000).toString());
       const url = `/products?${params.toString()}`;
       const response = await api.get(url);
+      setCache(key, response.data);
       setProducts(response.data);
     } catch (err) {
       console.error('Error fetching products:', err);
     } finally {
       setLoading(false);
+      setIsRevalidating(false);
     }
   }, [categoryIdParam, keyword, sort]);
 
@@ -199,18 +240,23 @@ const Products = () => {
   const handleCategoryClick = (id: number | null) => {
     const next = new URLSearchParams(searchParams);
     if (id === null) next.delete('categoryId'); else next.set('categoryId', id.toString());
+    const targetKey = `products_${id || 'all'}_${keyword.trim()}_${sort}`;
+    const cached = getCache<any[]>(targetKey);
+    if (cached) {
+      setProducts(cached);
+      setLoading(false);
+    }
     setSearchParams(next);
   };
 
   const updateSearch = (value: string) => {
-    setKeyword(value);
+    setSearchTerm(value);
     const next = new URLSearchParams(searchParams);
-    if (value.trim()) next.set('search', value); else next.delete('search');
+    if (value.trim()) next.set('search', value.trim()); else next.delete('search');
     setSearchParams(next, { replace: true });
   };
 
   const updateSort = (value: string) => {
-    setSort(value);
     const next = new URLSearchParams(searchParams);
     if (value !== 'diverse') next.set('sort', value); else next.delete('sort');
     setSearchParams(next, { replace: true });
@@ -233,7 +279,7 @@ const Products = () => {
               <li>
                 <button 
                   onClick={() => handleCategoryClick(null)}
-                  className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${!categoryIdParam ? 'bg-emerald-50 text-emerald-700 font-semibold' : 'text-gray-600 hover:bg-gray-50 hover:text-emerald-600'}`}
+                  className={`w-full text-left px-3 py-2 rounded-lg transition-colors cursor-pointer ${!categoryIdParam ? 'bg-emerald-50 text-emerald-700 font-semibold' : 'text-gray-600 hover:bg-gray-50 hover:text-emerald-600'}`}
                 >
                   Tất cả sản phẩm
                 </button>
@@ -242,7 +288,7 @@ const Products = () => {
                 <li key={cat.categoryId}>
                   <button 
                     onClick={() => handleCategoryClick(cat.categoryId)}
-                    className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${categoryIdParam === cat.categoryId.toString() ? 'bg-emerald-50 text-emerald-700 font-semibold' : 'text-gray-600 hover:bg-gray-50 hover:text-emerald-600'}`}
+                    className={`w-full text-left px-3 py-2 rounded-lg transition-colors cursor-pointer ${categoryIdParam === cat.categoryId.toString() ? 'bg-emerald-50 text-emerald-700 font-semibold' : 'text-gray-600 hover:bg-gray-50 hover:text-emerald-600'}`}
                   >
                     {cat.name}
                   </button>
@@ -269,6 +315,12 @@ const Products = () => {
                     Đa dạng xưởng (đổi mới sau {minutesToNextHour}p)
                   </span>
                 )}
+                {isRevalidating && (
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 bg-emerald-50/80 border border-emerald-200/60 px-2.5 py-0.5 rounded-full">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                    Đang đồng bộ...
+                  </span>
+                )}
               </div>
             </div>
             <select 
@@ -283,10 +335,29 @@ const Products = () => {
               <option value="oldest">Cũ nhất</option>
             </select>
           </div>
-          <div className="mb-6 relative"><input value={keyword} onChange={event => updateSearch(event.target.value)} placeholder="Tìm theo tên sản phẩm, mô tả hoặc xưởng..." className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-4 pr-10 focus:outline-none focus:ring-2 focus:ring-emerald-500" />{keyword && <button onClick={() => updateSearch('')} className="absolute right-3 top-3 text-gray-400 hover:text-gray-700" aria-label="Xóa tìm kiếm">×</button>}</div>
+          <div className="mb-6 relative">
+            <input 
+              value={searchTerm} 
+              onChange={event => updateSearch(event.target.value)} 
+              placeholder="Tìm theo tên sản phẩm, mô tả hoặc xưởng..." 
+              className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-4 pr-10 focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-sm" 
+            />
+            {searchTerm && (
+              <button onClick={() => updateSearch('')} className="absolute right-3 top-3 text-gray-400 hover:text-gray-700 text-lg" aria-label="Xóa tìm kiếm">×</button>
+            )}
+          </div>
           
           {loading ? (
-            <div className="text-center py-20 text-gray-500">Đang tải sản phẩm...</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-pulse">
+              {[...Array(8)].map((_, i) => (
+                <div key={i} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col p-4 space-y-3">
+                  <div className="h-44 bg-gray-100 rounded-lg w-full" />
+                  <div className="h-4 bg-gray-100 rounded w-3/4" />
+                  <div className="h-3 bg-gray-100 rounded w-1/2" />
+                  <div className="h-5 bg-gray-100 rounded w-1/3 mt-2" />
+                </div>
+              ))}
+            </div>
           ) : products.length === 0 ? (
             <div className="text-center text-gray-500 py-16 bg-white rounded-xl shadow-sm border border-gray-100">
               <div className="text-4xl mb-4">🪑</div>

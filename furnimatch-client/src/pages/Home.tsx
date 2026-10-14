@@ -3,12 +3,13 @@ import { useState, useEffect } from 'react';
 import { Sparkles, Camera, ArrowRight } from 'lucide-react';
 import api, { API_BASE_URL } from '../utils/api';
 import { getRecentlyViewedIds } from '../utils/comparison';
+import { getCache, setCache } from '../utils/cache';
 
 const Home = () => {
   const [user, setUser] = useState<any>(null);
   const [banners, setBanners] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
-  const [allProducts, setAllProducts] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>(() => getCache<any[]>('categories') || []);
+  const [allProducts, setAllProducts] = useState<any[]>(() => getCache<any[]>('home_products') || []);
   const [latestProducts, setLatestProducts] = useState<any[]>([]);
   const [recentProducts, setRecentProducts] = useState<any[]>([]);
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -38,13 +39,25 @@ const Home = () => {
       }
     }).catch(err => console.error('Error fetching settings:', err));
 
-    // Fetch categories
+    // Fetch categories with cache
+    const cachedCats = getCache<any[]>('categories');
+    if (cachedCats) setCategories(cachedCats);
     api.get('/categories').then(res => {
+      setCache('categories', res.data);
       setCategories(res.data);
     }).catch(err => console.error('Error fetching categories:', err));
 
-    // Fetch latest products
+    // Fetch latest products with cache
+    const cachedProds = getCache<any[]>('home_products');
+    if (cachedProds) {
+      setAllProducts(cachedProds);
+      updateRandomLatest(cachedProds);
+      const viewedIds = getRecentlyViewedIds();
+      setRecentProducts(viewedIds.map(id => cachedProds.find((product: any) => product.productId === id)).filter(Boolean).slice(0, 4));
+    }
+
     api.get('/products').then(res => {
+      setCache('home_products', res.data);
       setAllProducts(res.data);
       updateRandomLatest(res.data);
       const viewedIds = getRecentlyViewedIds();
