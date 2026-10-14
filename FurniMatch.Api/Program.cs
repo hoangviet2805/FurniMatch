@@ -21,6 +21,8 @@ if (!string.IsNullOrEmpty(port))
 builder.Services.AddControllers().AddJsonOptions(options => 
 {
     options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+    options.JsonSerializerOptions.Converters.Add(new UtcDateTimeConverter());
+    options.JsonSerializerOptions.Converters.Add(new NullableUtcDateTimeConverter());
 });
 
 // Add DbContext (PostgreSQL / Supabase)
@@ -266,3 +268,37 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+public class UtcDateTimeConverter : System.Text.Json.Serialization.JsonConverter<DateTime>
+{
+    public override DateTime Read(ref System.Text.Json.Utf8JsonReader reader, Type typeToConvert, System.Text.Json.JsonSerializerOptions options)
+    {
+        return DateTime.SpecifyKind(reader.GetDateTime(), DateTimeKind.Utc);
+    }
+
+    public override void Write(System.Text.Json.Utf8JsonWriter writer, DateTime value, System.Text.Json.JsonSerializerOptions options)
+    {
+        writer.WriteStringValue(DateTime.SpecifyKind(value, DateTimeKind.Utc).ToString("yyyy-MM-ddTHH:mm:ss.fffZ"));
+    }
+}
+
+public class NullableUtcDateTimeConverter : System.Text.Json.Serialization.JsonConverter<DateTime?>
+{
+    public override DateTime? Read(ref System.Text.Json.Utf8JsonReader reader, Type typeToConvert, System.Text.Json.JsonSerializerOptions options)
+    {
+        if (reader.TokenType == System.Text.Json.JsonTokenType.Null) return null;
+        return DateTime.SpecifyKind(reader.GetDateTime(), DateTimeKind.Utc);
+    }
+
+    public override void Write(System.Text.Json.Utf8JsonWriter writer, DateTime? value, System.Text.Json.JsonSerializerOptions options)
+    {
+        if (!value.HasValue)
+        {
+            writer.WriteNullValue();
+        }
+        else
+        {
+            writer.WriteStringValue(DateTime.SpecifyKind(value.Value, DateTimeKind.Utc).ToString("yyyy-MM-ddTHH:mm:ss.fffZ"));
+        }
+    }
+}

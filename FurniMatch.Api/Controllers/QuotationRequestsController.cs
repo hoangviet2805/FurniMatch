@@ -130,18 +130,21 @@ namespace FurniMatch.Api.Controllers
             DateTime? expiredAt = null;
             if (dto.HasExpiry)
             {
-                if (dto.ExpiredAt.HasValue && dto.ExpiredAt.Value > DateTime.UtcNow)
+                int days = Math.Max(0, dto.DurationDays ?? 0);
+                int hours = Math.Max(0, dto.DurationHours ?? 0);
+                int minutes = Math.Max(0, dto.DurationMinutes ?? 0);
+                if (days > 0 || hours > 0 || minutes > 0)
                 {
-                    expiredAt = dto.ExpiredAt.Value;
+                    expiredAt = DateTime.UtcNow.AddDays(days).AddHours(hours).AddMinutes(minutes);
                 }
-                else
+                else if (dto.ExpiredAt.HasValue)
                 {
-                    int days = Math.Max(0, dto.DurationDays ?? 0);
-                    int hours = Math.Max(0, dto.DurationHours ?? 0);
-                    int minutes = Math.Max(0, dto.DurationMinutes ?? 0);
-                    if (days > 0 || hours > 0 || minutes > 0)
+                    var expUtc = dto.ExpiredAt.Value.Kind == DateTimeKind.Utc 
+                        ? dto.ExpiredAt.Value 
+                        : dto.ExpiredAt.Value.ToUniversalTime();
+                    if (expUtc > DateTime.UtcNow)
                     {
-                        expiredAt = DateTime.UtcNow.AddDays(days).AddHours(hours).AddMinutes(minutes);
+                        expiredAt = expUtc;
                     }
                 }
             }

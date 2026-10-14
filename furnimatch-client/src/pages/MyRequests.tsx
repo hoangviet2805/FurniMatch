@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
+import { parseUtcDate } from '../utils/date';
 import RequestQuotation from './RequestQuotation';
 
 const money = (value?: number) => value ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value) : 'Chưa có';
@@ -39,7 +40,7 @@ const getRequestImages = (req: any): string[] => {
   return single ? [single] : [];
 };
 
-export const getExpiryStatus = (req: any) => {
+export const getExpiryStatus = (req: any, currentTime = Date.now()) => {
   if (req.status === 'EXPIRED') {
     return {
       label: 'Đã hết hạn nhận báo giá',
@@ -57,9 +58,8 @@ export const getExpiryStatus = (req: any) => {
     };
   }
 
-  const expireDate = new Date(req.expiredAt).getTime();
-  const now = Date.now();
-  const diffMs = expireDate - now;
+  const expireDate = parseUtcDate(req.expiredAt).getTime();
+  const diffMs = expireDate - currentTime;
 
   if (diffMs <= 0) {
     return {
@@ -80,8 +80,10 @@ export const getExpiryStatus = (req: any) => {
     text = `Còn ${days} ngày ${hours}h`;
   } else if (hours > 0) {
     text = `Còn ${hours}h ${minutes}p`;
-  } else {
+  } else if (minutes > 0) {
     text = `Còn ${minutes} phút`;
+  } else {
+    text = `Còn dưới 1 phút`;
   }
 
   const isUrgent = days === 0 && hours < 12;
@@ -108,6 +110,13 @@ const MyRequests = () => {
 
   // Modern Toast State
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Realtime clock for live countdown updates
+  const [currentTime, setCurrentTime] = useState<number>(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(Date.now()), 5000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Confirmation Modal State
   const [confirmModal, setConfirmModal] = useState<{
@@ -183,9 +192,9 @@ const MyRequests = () => {
     if (filter === 'ALL') return requests;
     if (filter === 'OPEN') return requests.filter(r => r.status === 'OPEN' || r.status === 'RECEIVING_QUOTES');
     if (filter === 'SELLER_SELECTED') return requests.filter(r => r.status === 'SELLER_SELECTED' || r.status === 'CLAIMED');
-    if (filter === 'EXPIRED') return requests.filter(r => r.status === 'EXPIRED' || (r.expiredAt && new Date(r.expiredAt).getTime() <= Date.now()));
+    if (filter === 'EXPIRED') return requests.filter(r => r.status === 'EXPIRED' || (r.expiredAt && parseUtcDate(r.expiredAt).getTime() <= currentTime));
     return requests.filter(item => item.status === filter);
-  }, [requests, filter]);
+  }, [requests, filter, currentTime]);
 
   const quoteCount = requests.reduce((sum, item) => sum + (item.quotations?.length || 0), 0);
   const bestQuote = requests.flatMap(item => item.quotations || []).reduce((best: number | undefined, quote: any) => best === undefined || quote.price < best ? quote.price : best, undefined);
@@ -274,7 +283,7 @@ const MyRequests = () => {
                 const reqImages = getRequestImages(request);
                 const reqImage = reqImages[0];
                 const isSelected = selected?.quotationRequestId === request.quotationRequestId;
-                const expiryInfo = getExpiryStatus(request);
+                const expiryInfo = getExpiryStatus(request, currentTime);
 
                 return (
                   <div 
@@ -416,18 +425,18 @@ const MyRequests = () => {
                 <div className="pt-2 border-t border-emerald-100/70 text-xs">
                   <span className="text-gray-500">Thời hạn nhận báo giá: </span>
                   {(() => {
-                    const expiry = getExpiryStatus(selected);
+                    const expiry = getExpiryStatus(selected, currentTime);
                     if (selected.status === 'EXPIRED' || expiry.isExpired) {
                       return (
                         <span className="font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200">
-                          ⏱️ Đã hết hạn {selected.expiredAt ? `(${new Date(selected.expiredAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} ${new Date(selected.expiredAt).toLocaleDateString('vi-VN')})` : ''}
+                          ⏱️ Đã hết hạn {selected.expiredAt ? `(${parseUtcDate(selected.expiredAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} ${parseUtcDate(selected.expiredAt).toLocaleDateString('vi-VN')})` : ''}
                         </span>
                       );
                     }
                     if (selected.expiredAt) {
                       return (
                         <span className={`font-semibold px-2 py-0.5 rounded-md border ${expiry.badgeClass}`}>
-                          ⏳ Đến {new Date(selected.expiredAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} {new Date(selected.expiredAt).toLocaleDateString('vi-VN')} ({expiry.label})
+                          ⏳ Đến {parseUtcDate(selected.expiredAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} {parseUtcDate(selected.expiredAt).toLocaleDateString('vi-VN')} ({expiry.label})
                         </span>
                       );
                     }
@@ -441,7 +450,7 @@ const MyRequests = () => {
               </div>
 
               {/* Cảnh báo khi đơn đã hết hạn */}
-              {(selected.status === 'EXPIRED' || getExpiryStatus(selected).isExpired) && (
+              {(selected.status === 'EXPIRED' || getExpiryStatus(selected, currentTime).isExpired) && (
                 <div className="mt-4 p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 flex items-start gap-2.5">
                   <span className="text-lg leading-none">⚠️</span>
                   <div className="flex-1">

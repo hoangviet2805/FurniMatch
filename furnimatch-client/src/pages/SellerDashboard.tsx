@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import api, { getImageUrl } from '../utils/api';
+import { parseUtcDate } from '../utils/date';
 import { Package, User, MapPin, Phone, CheckCircle, Clock, Truck, Hammer, XCircle, ClipboardList, Wallet, ArrowDownToLine, History, FileText, AlertTriangle, CheckCircle2, Eye, ShieldAlert, ZoomIn, ZoomOut, RotateCcw, X, ExternalLink, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
@@ -1119,6 +1120,13 @@ export default function SellerDashboard() {
   const completedCount = orders.filter(o => o.orderStatus === 'COMPLETED').length;
   const cancelledCount = orders.filter(o => o.orderStatus === 'CANCELLED').length;
 
+  // Realtime clock for live countdown updates
+  const [currentTime, setCurrentTime] = useState<number>(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(Date.now()), 5000);
+    return () => clearInterval(timer);
+  }, []);
+
   // ========== REVENUE STATE ==========
   const [revSummary, setRevSummary] = useState<any>(null);
   const [revChart, setRevChart] = useState<any[]>([]);
@@ -1196,7 +1204,8 @@ export default function SellerDashboard() {
   };
 
   const handleOpenQuoteModal = (req: any) => {
-    if (req.expiredAt && new Date(req.expiredAt).getTime() <= Date.now()) {
+    const isExpired = req.status === 'EXPIRED' || (req.expiredAt && parseUtcDate(req.expiredAt).getTime() <= Date.now());
+    if (isExpired) {
       setQuoteToast({
         type: 'error',
         message: '⚠️ Yêu cầu đặt hàng này đã hết thời hạn nhận báo giá và đã được đóng.'
@@ -1222,7 +1231,8 @@ export default function SellerDashboard() {
     e.preventDefault();
     if (!quotingModal.request) return;
 
-    if (quotingModal.request.expiredAt && new Date(quotingModal.request.expiredAt).getTime() <= Date.now()) {
+    const isExpired = quotingModal.request.status === 'EXPIRED' || (quotingModal.request.expiredAt && parseUtcDate(quotingModal.request.expiredAt).getTime() <= Date.now());
+    if (isExpired) {
       setQuotingModal(m => ({ ...m, error: 'Yêu cầu này đã hết hạn nhận báo giá và đã đóng. Bạn không thể gửi báo giá nữa.' }));
       loadQuotes();
       return;
@@ -2060,8 +2070,8 @@ export default function SellerDashboard() {
                                         </span>
                                       );
                                     }
-                                    const diffMs = new Date(req.expiredAt).getTime() - Date.now();
-                                    if (diffMs <= 0) {
+                                    const diffMs = parseUtcDate(req.expiredAt).getTime() - currentTime;
+                                    if (diffMs <= 0 || req.status === 'EXPIRED') {
                                       return (
                                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-200 self-start">
                                           <Clock className="w-3.5 h-3.5" />
@@ -2078,7 +2088,8 @@ export default function SellerDashboard() {
                                     let timeText = '';
                                     if (days > 0) timeText = `${days} ngày ${hours}h`;
                                     else if (hours > 0) timeText = `${hours}h ${minutes}p`;
-                                    else timeText = `${minutes} phút`;
+                                    else if (minutes > 0) timeText = `${minutes} phút`;
+                                    else timeText = `dưới 1 phút`;
 
                                     return (
                                       <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold self-start border ${
@@ -2130,14 +2141,25 @@ export default function SellerDashboard() {
                                     )}
                                   </div>
 
-                                  <button
-                                    type="button"
-                                    onClick={() => handleOpenQuoteModal(req)}
-                                    className="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold shadow-md shadow-emerald-700/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer"
-                                  >
-                                    <span>🪵 Báo Giá Yêu Cầu Này</span>
-                                    <span>→</span>
-                                  </button>
+                                  {(() => {
+                                    const isReqExpired = req.status === 'EXPIRED' || (req.expiredAt && parseUtcDate(req.expiredAt).getTime() <= currentTime);
+                                    return (
+                                      <button
+                                        type="button"
+                                        disabled={isReqExpired}
+                                        onClick={() => !isReqExpired && handleOpenQuoteModal(req)}
+                                        className={`w-full sm:w-auto px-5 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${
+                                          isReqExpired
+                                            ? 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed shadow-none'
+                                            : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-700/20 active:scale-[0.98] cursor-pointer'
+                                        }`}
+                                        title={isReqExpired ? 'Yêu cầu này đã hết hạn nhận báo giá, không thể gửi báo giá nữa' : 'Nhấn để gửi báo giá cho khách'}
+                                      >
+                                        <span>{isReqExpired ? '⏱️ Đã Hết Hạn Báo Giá' : '🪵 Báo Giá Yêu Cầu Này'}</span>
+                                        {!isReqExpired && <span>→</span>}
+                                      </button>
+                                    );
+                                  })()}
                                 </div>
                               </div>
                             );
@@ -2429,7 +2451,7 @@ export default function SellerDashboard() {
                           <span className="text-gray-500 font-medium">Thời hạn nhận báo giá:</span>
                           {quotingModal.request.expiredAt ? (
                             <span className="font-bold text-amber-800 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">
-                              ⏳ Đến {new Date(quotingModal.request.expiredAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} ngày {new Date(quotingModal.request.expiredAt).toLocaleDateString('vi-VN')}
+                              ⏳ Đến {parseUtcDate(quotingModal.request.expiredAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} ngày {parseUtcDate(quotingModal.request.expiredAt).toLocaleDateString('vi-VN')}
                             </span>
                           ) : (
                             <span className="font-bold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
