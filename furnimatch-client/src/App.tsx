@@ -17,6 +17,7 @@ import ProductDetail from './pages/ProductDetail';
 import Favorites from './pages/Favorites';
 import CompareProducts from './pages/CompareProducts';
 import SpacePlanner from './pages/SpacePlanner';
+import CustomRoomDesigner from './pages/CustomRoomDesigner';
 import Checkout from './pages/Checkout';
 import Orders from './pages/Orders';
 import Wallet from './pages/Wallet';
@@ -38,6 +39,9 @@ function App() {
             <Route path="/compare" element={<CompareProducts />} />
             <Route path="/space-planner" element={<SpacePlanner />} />
             <Route path="/room-visualizer" element={<SpacePlanner />} />
+            <Route path="/custom-room-designer" element={<CustomRoomDesigner />} />
+            <Route path="/room-reconstruct" element={<CustomRoomDesigner />} />
+            <Route path="/design-your-room" element={<CustomRoomDesigner />} />
             <Route path="/checkout" element={<Checkout />} />
             <Route path="/orders" element={<Orders />} />
             <Route path="/wallet" element={<Wallet />} />

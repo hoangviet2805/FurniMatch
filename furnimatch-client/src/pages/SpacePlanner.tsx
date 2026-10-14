@@ -12,6 +12,7 @@ import {
   ShoppingCart,
   ExternalLink,
   AlertTriangle,
+  Camera,
 } from 'lucide-react';
 import { Room3DViewer } from '../components/room3d/Room3DViewer';
 import { TileSelector } from '../components/room3d/TileSelector';
@@ -266,6 +267,16 @@ const SpacePlanner = () => {
               <p className="mt-3 text-slate-300 text-sm sm:text-base leading-relaxed max-w-2xl">
                 Tự do thay đổi mẫu gạch lát nền từ danh mục sản phẩm thực tế, di chuyển xoay đồ nội thất (giường, tủ, sofa, bàn) và quan sát phản chiếu ánh sáng 360° trước khi đặt mua.
               </p>
+
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <Link
+                  to="/custom-room-designer"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs shadow-lg shadow-emerald-500/25 transition"
+                >
+                  <Camera size={15} />
+                  <span>Tải ảnh căn phòng thực tế của bạn ➔ Tái tạo 3D</span>
+                </Link>
+              </div>
             </div>
 
             {/* Quick stats / highlights */}

@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
+import { Sparkles, Camera, ArrowRight } from 'lucide-react';
 import api, { API_BASE_URL } from '../utils/api';
 import { getRecentlyViewedIds } from '../utils/comparison';
 
@@ -172,6 +173,72 @@ const Home = () => {
                 <h3 className="font-semibold text-gray-900">{category.name}</h3>
               </Link>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 3D Room Reconstruction Feature Spotlight */}
+      <section className="py-12 bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 text-white relative overflow-hidden">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+          <div className="flex flex-col lg:flex-row items-center justify-between gap-8">
+            <div className="max-w-2xl">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs font-bold uppercase tracking-wider mb-3">
+                <Sparkles size={14} />
+                <span>Tính Năng Mới • 3D Room Reconstruction</span>
+              </div>
+              <h2 className="text-3xl sm:text-4xl font-black tracking-tight text-white">
+                Tải ảnh căn phòng thực tế ➔ Tái tạo 3D tức thì
+              </h2>
+              <p className="mt-3 text-slate-300 text-sm sm:text-base leading-relaxed">
+                Biến bức ảnh phòng khách, phòng ngủ hoặc căn hộ của bạn thành không gian 3D tương tác. Thử hàng chục mẫu gạch lát nền thực tế từ Furni Match và tự do sắp đặt, xoay nội thất (giường, tủ, sofa, bàn làm việc) trước khi mua sắm.
+              </p>
+              <div className="mt-6 flex flex-wrap items-center gap-3">
+                <Link
+                  to="/custom-room-designer"
+                  className="px-6 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm shadow-xl shadow-emerald-500/30 transition flex items-center gap-2"
+                >
+                  <Camera size={16} />
+                  <span>Trải nghiệm Tái tạo phòng từ ảnh</span>
+                  <ArrowRight size={16} />
+                </Link>
+                <Link
+                  to="/space-planner"
+                  className="px-6 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-sm border border-white/20 transition"
+                >
+                  Xem phòng mẫu 3D dựng sẵn
+                </Link>
+              </div>
+            </div>
+
+            <div className="bg-slate-800/80 backdrop-blur-md p-6 rounded-3xl border border-white/10 flex flex-col gap-4 text-xs text-slate-300 max-w-sm shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-base">
+                  1
+                </div>
+                <div>
+                  <h4 className="font-bold text-white text-sm">Tải ảnh chụp phòng</h4>
+                  <p className="text-slate-400">JPG, PNG, WebP với góc chụp rõ mặt sàn</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-base">
+                  2
+                </div>
+                <div>
+                  <h4 className="font-bold text-white text-sm">Ước lượng ranh giới</h4>
+                  <p className="text-slate-400">Tự động nhận diện diện tích & góc chân tường</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-base">
+                  3
+                </div>
+                <div>
+                  <h4 className="font-bold text-white text-sm">Lát gạch & Thử nội thất</h4>
+                  <p className="text-slate-400">Quan sát 360°, tính số hộp gạch & thêm giỏ hàng</p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
