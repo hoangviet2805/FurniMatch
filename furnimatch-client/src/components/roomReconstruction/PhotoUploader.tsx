@@ -165,43 +165,55 @@ export const PhotoUploader = ({
   return (
     <div className="w-full max-w-5xl mx-auto space-y-8 animate-fadeIn">
       {/* SECTION 1: HEADER & GUIDELINES BANNER */}
-      <div className="rounded-3xl bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 text-white p-6 sm:p-8 border border-emerald-500/30 shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="rounded-3xl bg-gradient-to-br from-emerald-600 via-emerald-700 to-teal-800 text-white p-6 sm:p-8 border border-emerald-500/30 shadow-2xl relative overflow-hidden">
+        {/* Subtle architectural 3D grid background pattern */}
+        <svg className="absolute inset-0 w-full h-full opacity-10 pointer-events-none text-white" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <pattern id="upload-room-grid" width="36" height="36" patternUnits="userSpaceOnUse">
+              <path d="M 36 0 L 0 0 0 36" fill="none" stroke="currentColor" strokeWidth="1" />
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#upload-room-grid)" />
+        </svg>
+
+        {/* Ambient decorative glowing orbs */}
+        <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-emerald-400/20 blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-24 -left-24 w-96 h-96 rounded-full bg-teal-300/20 blur-3xl pointer-events-none" />
 
         <div className="relative z-10 max-w-3xl">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs font-bold uppercase tracking-wider mb-3">
-            <Camera size={13} />
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/15 text-emerald-100 border border-white/25 backdrop-blur-sm text-xs font-bold uppercase tracking-wider mb-3 shadow-sm">
+            <Camera size={13} className="text-emerald-200" />
             <span>Upload Room Photo → 3D Room Reconstruction</span>
           </div>
-          <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white">
+          <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white leading-tight">
             Thiết kế phòng của bạn từ ảnh thực tế
           </h1>
-          <p className="mt-3 text-slate-300 text-sm sm:text-base leading-relaxed">
+          <p className="mt-3 text-emerald-50/90 text-sm sm:text-base leading-relaxed font-normal">
             Chụp hoặc tải ảnh căn phòng của bạn (phòng khách, phòng ngủ, studio). Hệ thống sẽ phân tích phối cảnh, tự động dựng lại không gian 3D theo kích thước thực, cho phép bạn lát gạch Furni Match và sắp đặt nội thất ngay lập tức.
           </p>
         </div>
 
         {/* Photography Tips Pills */}
-        <div className="mt-6 pt-6 border-t border-white/10 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs text-slate-300">
-          <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm">
-            <CheckCircle2 size={16} className="text-emerald-400 shrink-0 mt-0.5" />
+        <div className="mt-6 pt-6 border-t border-white/15 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs relative z-10">
+          <div className="flex items-start gap-3 p-3.5 rounded-2xl bg-emerald-950/35 border border-white/20 backdrop-blur-md shadow-sm">
+            <CheckCircle2 size={18} className="text-emerald-300 shrink-0 mt-0.5" />
             <div>
-              <strong className="text-white block font-semibold">Thấy rõ mặt sàn</strong>
-              <span>Góc chụp bao quát, thấy rõ ít nhất 60% diện tích sàn và chân tường.</span>
+              <strong className="text-white block font-bold text-sm">Thấy rõ mặt sàn</strong>
+              <span className="text-emerald-100/85 mt-0.5 block leading-snug">Góc chụp bao quát, thấy rõ ít nhất 60% diện tích sàn và chân tường.</span>
             </div>
           </div>
-          <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm">
-            <CheckCircle2 size={16} className="text-emerald-400 shrink-0 mt-0.5" />
+          <div className="flex items-start gap-3 p-3.5 rounded-2xl bg-emerald-950/35 border border-white/20 backdrop-blur-md shadow-sm">
+            <CheckCircle2 size={18} className="text-emerald-300 shrink-0 mt-0.5" />
             <div>
-              <strong className="text-white block font-semibold">Chụp ngang tầm mắt</strong>
-              <span>Giữ điện thoại thẳng ở độ cao 1.2m - 1.5m, tránh góc chụp quá nghiêng.</span>
+              <strong className="text-white block font-bold text-sm">Chụp ngang tầm mắt</strong>
+              <span className="text-emerald-100/85 mt-0.5 block leading-snug">Giữ điện thoại thẳng ở độ cao 1.2m - 1.5m, tránh góc chụp quá nghiêng.</span>
             </div>
           </div>
-          <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm">
-            <CheckCircle2 size={16} className="text-emerald-400 shrink-0 mt-0.5" />
+          <div className="flex items-start gap-3 p-3.5 rounded-2xl bg-emerald-950/35 border border-white/20 backdrop-blur-md shadow-sm">
+            <CheckCircle2 size={18} className="text-emerald-300 shrink-0 mt-0.5" />
             <div>
-              <strong className="text-white block font-semibold">Đủ ánh sáng phòng</strong>
-              <span>Bật đèn phòng hoặc tận dụng ánh sáng cửa sổ để hệ thống nhận diện màu chuẩn.</span>
+              <strong className="text-white block font-bold text-sm">Đủ ánh sáng phòng</strong>
+              <span className="text-emerald-100/85 mt-0.5 block leading-snug">Bật đèn phòng hoặc tận dụng ánh sáng cửa sổ để hệ thống nhận diện màu chuẩn.</span>
             </div>
           </div>
         </div>

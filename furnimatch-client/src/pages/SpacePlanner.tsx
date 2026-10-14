@@ -244,56 +244,70 @@ const SpacePlanner = () => {
       )}
 
       {/* Hero Header */}
-      <section className="bg-gradient-to-b from-emerald-950 via-slate-900 to-slate-900 text-white pt-10 pb-16 px-4 sm:px-6 lg:px-8 border-b border-emerald-900/30">
-        <div className="max-w-7xl mx-auto">
+      <section className="bg-gradient-to-br from-emerald-600 via-emerald-700 to-teal-800 text-white pt-10 pb-16 px-4 sm:px-6 lg:px-8 border-b border-emerald-500/30 relative overflow-hidden shadow-md">
+        {/* Subtle architectural 3D grid background pattern */}
+        <svg className="absolute inset-0 w-full h-full opacity-10 pointer-events-none text-white" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <pattern id="space-planner-grid" width="36" height="36" patternUnits="userSpaceOnUse">
+              <path d="M 36 0 L 0 0 0 36" fill="none" stroke="currentColor" strokeWidth="1" />
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#space-planner-grid)" />
+        </svg>
+
+        {/* Ambient decorative glowing orbs */}
+        <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-emerald-400/20 blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-24 -left-24 w-96 h-96 rounded-full bg-teal-300/20 blur-3xl pointer-events-none" />
+
+        <div className="max-w-7xl mx-auto relative z-10">
           {/* Breadcrumb */}
-          <div className="flex items-center gap-2 text-xs text-emerald-400/80 mb-3 font-medium">
-            <Link to="/" className="hover:text-emerald-300 flex items-center gap-1">
+          <div className="flex items-center gap-2 text-xs text-emerald-100 mb-3 font-medium">
+            <Link to="/" className="hover:text-white flex items-center gap-1 transition">
               <Home size={13} /> Trang chủ
             </Link>
             <span>/</span>
-            <span className="text-white">Phòng mẫu 3D Visualizer & Nội thất</span>
+            <span className="text-white font-semibold">Phòng mẫu 3D Visualizer & Nội thất</span>
           </div>
 
           <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6">
             <div className="max-w-3xl">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-bold uppercase tracking-wider mb-3">
-                <Sparkles size={13} />
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/15 text-emerald-100 border border-white/25 backdrop-blur-sm text-xs font-bold uppercase tracking-wider mb-4 shadow-sm">
+                <Sparkles size={13} className="text-amber-300 animate-pulse" />
                 <span>3D Room Visualizer & Customizer</span>
               </div>
-              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-white">
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-white leading-tight">
                 Trải nghiệm gạch & nội thất trong không gian thực
               </h1>
-              <p className="mt-3 text-slate-300 text-sm sm:text-base leading-relaxed max-w-2xl">
+              <p className="mt-3 text-emerald-50/90 text-sm sm:text-base leading-relaxed max-w-2xl font-normal">
                 Tự do thay đổi mẫu gạch lát nền từ danh mục sản phẩm thực tế, di chuyển xoay đồ nội thất (giường, tủ, sofa, bàn) và quan sát phản chiếu ánh sáng 360° trước khi đặt mua.
               </p>
 
-              <div className="mt-4 flex flex-wrap items-center gap-3">
+              <div className="mt-5 flex flex-wrap items-center gap-3">
                 <Link
                   to="/custom-room-designer"
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs shadow-lg shadow-emerald-500/25 transition"
+                  className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-white hover:bg-emerald-50 text-emerald-800 font-bold text-xs sm:text-sm shadow-xl shadow-black/10 transition transform hover:-translate-y-0.5"
                 >
-                  <Camera size={15} />
+                  <Camera size={16} className="text-emerald-700" />
                   <span>Tải ảnh căn phòng thực tế của bạn ➔ Tái tạo 3D</span>
                 </Link>
               </div>
             </div>
 
             {/* Quick stats / highlights */}
-            <div className="flex items-center gap-3 sm:gap-6 bg-slate-800/80 backdrop-blur-sm p-4 rounded-2xl border border-white/10 shrink-0">
+            <div className="flex items-center gap-3 sm:gap-6 bg-emerald-950/40 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-white/20 shadow-xl shrink-0">
               <div className="text-center px-2">
-                <p className="text-xl sm:text-2xl font-black text-emerald-400">1:1</p>
-                <p className="text-[11px] text-slate-400 font-medium">Tỷ lệ thực tế</p>
+                <p className="text-xl sm:text-2xl font-black text-white">1:1</p>
+                <p className="text-[11px] text-emerald-100/80 font-medium">Tỷ lệ thực tế</p>
               </div>
-              <div className="h-8 w-[1px] bg-white/10" />
+              <div className="h-8 w-[1px] bg-white/20" />
               <div className="text-center px-2">
-                <p className="text-xl sm:text-2xl font-black text-emerald-400">360°</p>
-                <p className="text-[11px] text-slate-400 font-medium">Góc quan sát</p>
+                <p className="text-xl sm:text-2xl font-black text-white">360°</p>
+                <p className="text-[11px] text-emerald-100/80 font-medium">Góc quan sát</p>
               </div>
-              <div className="h-8 w-[1px] bg-white/10" />
+              <div className="h-8 w-[1px] bg-white/20" />
               <div className="text-center px-2">
-                <p className="text-xl sm:text-2xl font-black text-emerald-400">{tiles.length}</p>
-                <p className="text-[11px] text-slate-400 font-medium">Mẫu gạch DB</p>
+                <p className="text-xl sm:text-2xl font-black text-white">{tiles.length}</p>
+                <p className="text-[11px] text-emerald-100/80 font-medium">Mẫu gạch DB</p>
               </div>
             </div>
           </div>

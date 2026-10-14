@@ -329,25 +329,29 @@ export default function CustomRoomDesigner() {
       )}
 
       {/* STEPPER HEADER */}
-      <section className="bg-slate-900 border-b border-slate-800 text-white pt-6 pb-6 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
+      <section className="bg-gradient-to-r from-emerald-700 via-emerald-600 to-teal-700 border-b border-emerald-500/30 text-white pt-6 pb-6 px-4 sm:px-6 lg:px-8 shadow-sm relative overflow-hidden">
+        {/* Ambient subtle glow */}
+        <div className="absolute -top-16 -right-16 w-64 h-64 rounded-full bg-emerald-400/20 blur-2xl pointer-events-none" />
+        <div className="absolute -bottom-16 -left-16 w-64 h-64 rounded-full bg-teal-300/20 blur-2xl pointer-events-none" />
+
+        <div className="max-w-7xl mx-auto relative z-10">
           {/* Breadcrumb & Navigation */}
           <div className="flex items-center justify-between gap-4 mb-4">
-            <div className="flex items-center gap-2 text-xs text-emerald-400 font-medium">
-              <Link to="/" className="hover:text-emerald-300 flex items-center gap-1">
+            <div className="flex items-center gap-2 text-xs text-emerald-100 font-medium">
+              <Link to="/" className="hover:text-white flex items-center gap-1 transition">
                 <Home size={13} /> Trang chủ
               </Link>
               <span>/</span>
-              <Link to="/space-planner" className="hover:text-emerald-300">
+              <Link to="/space-planner" className="hover:text-white transition">
                 Phòng mẫu 3D
               </Link>
               <span>/</span>
-              <span className="text-white">Tái tạo phòng từ ảnh</span>
+              <span className="text-white font-semibold">Tái tạo phòng từ ảnh</span>
             </div>
 
             <Link
               to="/space-planner"
-              className="text-xs text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-xl border border-white/10 transition"
+              className="text-xs text-white hover:bg-white/25 bg-white/15 px-3.5 py-1.5 rounded-xl border border-white/25 backdrop-blur-sm transition font-medium shadow-sm"
             >
               Chuyển sang Phòng mẫu dựng sẵn ➔
             </Link>
@@ -361,19 +365,19 @@ export default function CustomRoomDesigner() {
                 onClick={() => setCurrentStep(1)}
                 className={`flex items-center gap-2 cursor-pointer ${
                   currentStep === 1
-                    ? 'text-emerald-400 font-bold'
+                    ? 'text-white font-bold'
                     : currentStep > 1
-                    ? 'text-white'
-                    : 'text-slate-500'
+                    ? 'text-emerald-100'
+                    : 'text-emerald-200/60'
                 }`}
               >
                 <div
                   className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition ${
                     currentStep === 1
-                      ? 'bg-emerald-500 text-slate-950 ring-4 ring-emerald-500/30'
+                      ? 'bg-white text-emerald-800 ring-4 ring-white/30 shadow-md font-black'
                       : currentStep > 1
-                      ? 'bg-emerald-700 text-white'
-                      : 'bg-slate-800 text-slate-400'
+                      ? 'bg-emerald-900/60 text-white border border-white/30'
+                      : 'bg-white/10 text-emerald-100/60 border border-white/15'
                   }`}
                 >
                   1
@@ -383,7 +387,7 @@ export default function CustomRoomDesigner() {
 
               <div
                 className={`flex-1 h-0.5 mx-3 transition-colors ${
-                  currentStep > 1 ? 'bg-emerald-500' : 'bg-slate-700'
+                  currentStep > 1 ? 'bg-white/70' : 'bg-white/20'
                 }`}
               />
 
@@ -394,19 +398,19 @@ export default function CustomRoomDesigner() {
                   analysisResult ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'
                 } ${
                   currentStep === 2
-                    ? 'text-emerald-400 font-bold'
+                    ? 'text-white font-bold'
                     : currentStep > 2
-                    ? 'text-white'
-                    : 'text-slate-500'
+                    ? 'text-emerald-100'
+                    : 'text-emerald-200/60'
                 }`}
               >
                 <div
                   className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition ${
                     currentStep === 2
-                      ? 'bg-emerald-500 text-slate-950 ring-4 ring-emerald-500/30'
+                      ? 'bg-white text-emerald-800 ring-4 ring-white/30 shadow-md font-black'
                       : currentStep > 2
-                      ? 'bg-emerald-700 text-white'
-                      : 'bg-slate-800 text-slate-400'
+                      ? 'bg-emerald-900/60 text-white border border-white/30'
+                      : 'bg-white/10 text-emerald-100/60 border border-white/15'
                   }`}
                 >
                   2
@@ -416,7 +420,7 @@ export default function CustomRoomDesigner() {
 
               <div
                 className={`flex-1 h-0.5 mx-3 transition-colors ${
-                  currentStep > 2 ? 'bg-emerald-500' : 'bg-slate-700'
+                  currentStep > 2 ? 'bg-white/70' : 'bg-white/20'
                 }`}
               />
 
@@ -425,13 +429,13 @@ export default function CustomRoomDesigner() {
                 onClick={() => calibrationConfig.photoUrl && setCurrentStep(3)}
                 className={`flex items-center gap-2 ${
                   calibrationConfig.photoUrl ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'
-                } ${currentStep === 3 ? 'text-emerald-400 font-bold' : 'text-slate-500'}`}
+                } ${currentStep === 3 ? 'text-white font-bold' : 'text-emerald-200/60'}`}
               >
                 <div
                   className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition ${
                     currentStep === 3
-                      ? 'bg-emerald-500 text-slate-950 ring-4 ring-emerald-500/30'
-                      : 'bg-slate-800 text-slate-400'
+                      ? 'bg-white text-emerald-800 ring-4 ring-white/30 shadow-md font-black'
+                      : 'bg-white/10 text-emerald-100/60 border border-white/15'
                   }`}
                 >
                   3
