@@ -22,6 +22,18 @@ const ManageProducts = () => {
   const [additionalImages, setAdditionalImages] = useState<{file: File, preview: string}[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
+  const resetForm = () => {
+    setFormData({
+      name: '',
+      categoryId: categories.length > 0 ? categories[0].categoryId : 1,
+      description: ''
+    });
+    setMaterials(['']);
+    setVariants([{ id: Date.now(), sizeName: '', materialName: '', width: '', height: '', length: '', price: '', productionDays: '', stock: '' }]);
+    setThumbnailImage(null);
+    setAdditionalImages([]);
+  };
+
   // Custom Alert Modal State
   const [alertInfo, setAlertInfo] = useState<{isOpen: boolean, message: string, type: 'success' | 'error' | 'info'}>({isOpen: false, message: '', type: 'info'});
 
@@ -249,9 +261,8 @@ const ManageProducts = () => {
 
       setAlertInfo({isOpen: true, message: 'Thêm sản phẩm thành công!', type: 'success'});
 
+      resetForm();
       setShowForm(false);
-      setThumbnailImage(null);
-      setAdditionalImages([]);
       fetchProducts();
     } catch (err: any) {
       console.error(err.response || err);
@@ -481,7 +492,12 @@ const ManageProducts = () => {
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Quản Lý Sản Phẩm</h1>
         <button
-          onClick={() => setShowForm(!showForm)}
+          onClick={() => {
+            if (!showForm) {
+              resetForm();
+            }
+            setShowForm(!showForm);
+          }}
           className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-semibold transition-all shadow-md shadow-emerald-600/20 flex items-center gap-2 cursor-pointer"
         >
           {showForm ? (
@@ -809,7 +825,10 @@ const ManageProducts = () => {
               <div className="pt-6 flex justify-end items-center gap-3 border-t border-gray-100">
                 <button
                   type="button"
-                  onClick={() => setShowForm(false)}
+                  onClick={() => {
+                    resetForm();
+                    setShowForm(false);
+                  }}
                   className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-xl text-sm font-semibold hover:bg-gray-50 transition-colors cursor-pointer"
                 >
                   Hủy bỏ
