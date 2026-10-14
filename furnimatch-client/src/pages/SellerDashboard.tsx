@@ -1196,6 +1196,16 @@ export default function SellerDashboard() {
   };
 
   const handleOpenQuoteModal = (req: any) => {
+    if (req.expiredAt && new Date(req.expiredAt).getTime() <= Date.now()) {
+      setQuoteToast({
+        type: 'error',
+        message: '⚠️ Yêu cầu đặt hàng này đã hết thời hạn nhận báo giá và đã được đóng.'
+      });
+      setTimeout(() => setQuoteToast(null), 5000);
+      loadQuotes();
+      return;
+    }
+
     const defaultPrice = req.budgetMin ? String(req.budgetMin) : '';
     setQuotingModal({
       isOpen: true,
@@ -1211,6 +1221,12 @@ export default function SellerDashboard() {
   const handleSubmitQuote = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!quotingModal.request) return;
+
+    if (quotingModal.request.expiredAt && new Date(quotingModal.request.expiredAt).getTime() <= Date.now()) {
+      setQuotingModal(m => ({ ...m, error: 'Yêu cầu này đã hết hạn nhận báo giá và đã đóng. Bạn không thể gửi báo giá nữa.' }));
+      loadQuotes();
+      return;
+    }
 
     const priceNum = parseFloat(quotingModal.price.replace(/,/g, ''));
     if (isNaN(priceNum) || priceNum < 0) {
@@ -2035,10 +2051,46 @@ export default function SellerDashboard() {
                                       )}
                                     </div>
                                   </div>
-                                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 self-start">
-                                    <Clock className="w-3.5 h-3.5" />
-                                    Đang nhận báo giá
-                                  </span>
+                                  {(() => {
+                                    if (!req.expiredAt) {
+                                      return (
+                                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 self-start">
+                                          <span>♾️</span>
+                                          <span>Không giới hạn thời gian</span>
+                                        </span>
+                                      );
+                                    }
+                                    const diffMs = new Date(req.expiredAt).getTime() - Date.now();
+                                    if (diffMs <= 0) {
+                                      return (
+                                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-200 self-start">
+                                          <Clock className="w-3.5 h-3.5" />
+                                          Đã hết hạn
+                                        </span>
+                                      );
+                                    }
+                                    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+                                    const days = Math.floor(diffMinutes / (24 * 60));
+                                    const hours = Math.floor((diffMinutes % (24 * 60)) / 60);
+                                    const minutes = diffMinutes % 60;
+                                    const isUrgent = days === 0 && hours < 12;
+
+                                    let timeText = '';
+                                    if (days > 0) timeText = `${days} ngày ${hours}h`;
+                                    else if (hours > 0) timeText = `${hours}h ${minutes}p`;
+                                    else timeText = `${minutes} phút`;
+
+                                    return (
+                                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold self-start border ${
+                                        isUrgent 
+                                          ? 'bg-amber-100 text-amber-900 border-amber-300' 
+                                          : 'bg-amber-50 text-amber-800 border-amber-200'
+                                      }`}>
+                                        <Clock className="w-3.5 h-3.5" />
+                                        <span>{isUrgent ? '🔥 Sắp hết hạn: ' : '⏳ Còn lại: '}{timeText}</span>
+                                      </span>
+                                    );
+                                  })()}
                                 </div>
 
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 py-4 border-b border-gray-100 text-sm">
@@ -2371,6 +2423,20 @@ export default function SellerDashboard() {
                             "{quotingModal.request.description}"
                           </p>
                         )}
+
+                        {/* Thời hạn nhận báo giá */}
+                        <div className="pt-2 border-t border-gray-200 flex items-center justify-between text-xs">
+                          <span className="text-gray-500 font-medium">Thời hạn nhận báo giá:</span>
+                          {quotingModal.request.expiredAt ? (
+                            <span className="font-bold text-amber-800 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">
+                              ⏳ Đến {new Date(quotingModal.request.expiredAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} ngày {new Date(quotingModal.request.expiredAt).toLocaleDateString('vi-VN')}
+                            </span>
+                          ) : (
+                            <span className="font-bold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                              ♾️ Không giới hạn thời gian
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       <div>

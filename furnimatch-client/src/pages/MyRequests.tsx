@@ -23,8 +23,8 @@ const statusStyle: Record<string, string> = {
   WAITING_PAYMENT: 'bg-amber-100 text-amber-700 font-bold shadow-xs',
   SELLER_SELECTED: 'bg-emerald-600 text-white font-bold shadow-xs', 
   COMPLETED: 'bg-emerald-100 text-emerald-700', 
-  EXPIRED: 'bg-gray-100 text-gray-600', 
-  CANCELLED: 'bg-rose-100 text-rose-700' 
+  EXPIRED: 'bg-rose-100 text-rose-800 border border-rose-200 font-semibold', 
+  CANCELLED: 'bg-gray-100 text-gray-700' 
 };
 
 const getRequestImages = (req: any): string[] => {
@@ -37,6 +37,64 @@ const getRequestImages = (req: any): string[] => {
   }
   const single = req.imageUrl || req.pattern;
   return single ? [single] : [];
+};
+
+export const getExpiryStatus = (req: any) => {
+  if (req.status === 'EXPIRED') {
+    return {
+      label: 'Đã hết hạn nhận báo giá',
+      isExpired: true,
+      hasExpiry: true,
+      badgeClass: 'bg-rose-50 text-rose-700 border-rose-200'
+    };
+  }
+  if (!req.expiredAt) {
+    return {
+      label: 'Không giới hạn thời gian',
+      isExpired: false,
+      hasExpiry: false,
+      badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200'
+    };
+  }
+
+  const expireDate = new Date(req.expiredAt).getTime();
+  const now = Date.now();
+  const diffMs = expireDate - now;
+
+  if (diffMs <= 0) {
+    return {
+      label: 'Đã hết hạn nhận báo giá',
+      isExpired: true,
+      hasExpiry: true,
+      badgeClass: 'bg-rose-50 text-rose-700 border-rose-200'
+    };
+  }
+
+  const diffMinutes = Math.floor(diffMs / (1000 * 60));
+  const days = Math.floor(diffMinutes / (24 * 60));
+  const hours = Math.floor((diffMinutes % (24 * 60)) / 60);
+  const minutes = diffMinutes % 60;
+
+  let text = '';
+  if (days > 0) {
+    text = `Còn ${days} ngày ${hours}h`;
+  } else if (hours > 0) {
+    text = `Còn ${hours}h ${minutes}p`;
+  } else {
+    text = `Còn ${minutes} phút`;
+  }
+
+  const isUrgent = days === 0 && hours < 12;
+
+  return {
+    label: text,
+    isExpired: false,
+    hasExpiry: true,
+    isUrgent,
+    badgeClass: isUrgent 
+      ? 'bg-amber-100 text-amber-800 border-amber-300 font-bold' 
+      : 'bg-amber-50 text-amber-700 border-amber-200'
+  };
 };
 
 const MyRequests = () => {
@@ -125,6 +183,7 @@ const MyRequests = () => {
     if (filter === 'ALL') return requests;
     if (filter === 'OPEN') return requests.filter(r => r.status === 'OPEN' || r.status === 'RECEIVING_QUOTES');
     if (filter === 'SELLER_SELECTED') return requests.filter(r => r.status === 'SELLER_SELECTED' || r.status === 'CLAIMED');
+    if (filter === 'EXPIRED') return requests.filter(r => r.status === 'EXPIRED' || (r.expiredAt && new Date(r.expiredAt).getTime() <= Date.now()));
     return requests.filter(item => item.status === filter);
   }, [requests, filter]);
 
@@ -181,6 +240,7 @@ const MyRequests = () => {
               ['ALL', 'Tất cả'], 
               ['OPEN', 'Đang nhận báo giá'], 
               ['SELLER_SELECTED', 'Đã chốt xưởng'], 
+              ['EXPIRED', 'Đã hết hạn'],
               ['COMPLETED', 'Hoàn tất']
             ].map(([value, label]) => (
               <button 
@@ -214,6 +274,7 @@ const MyRequests = () => {
                 const reqImages = getRequestImages(request);
                 const reqImage = reqImages[0];
                 const isSelected = selected?.quotationRequestId === request.quotationRequestId;
+                const expiryInfo = getExpiryStatus(request);
 
                 return (
                   <div 
@@ -250,7 +311,13 @@ const MyRequests = () => {
                         )}
                         <div>
                           <h2 className="font-bold text-gray-900 text-lg">{request.productType || 'Yêu cầu nội thất'}</h2>
-                          <p className="mt-0.5 text-xs text-gray-500">{request.category?.name || 'Nội thất'} · {new Date(request.createdAt).toLocaleDateString('vi-VN')}</p>
+                          <div className="flex items-center gap-2 flex-wrap mt-1">
+                            <p className="text-xs text-gray-500">{request.category?.name || 'Nội thất'} · {new Date(request.createdAt).toLocaleDateString('vi-VN')}</p>
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] border font-semibold ${expiryInfo.badgeClass}`}>
+                              <span>{expiryInfo.isExpired ? '⏱️' : expiryInfo.hasExpiry ? '⏳' : '♾️'}</span>
+                              <span>{expiryInfo.label}</span>
+                            </span>
+                          </div>
                         </div>
                       </div>
                       <span className={`h-fit rounded-full px-3 py-1 text-xs font-semibold ${statusStyle[request.status] || 'bg-gray-100 text-gray-600'}`}>
@@ -346,7 +413,45 @@ const MyRequests = () => {
                 <p><span className="text-gray-500">Kích thước:</span> <strong>{selected.length} × {selected.width} × {selected.height} cm</strong></p>
                 <p><span className="text-gray-500">Số lượng:</span> <strong>{selected.quantity || 1} cái/bộ</strong></p>
                 <p><span className="text-gray-500">Ngân sách dự kiến:</span> <strong className="text-emerald-700">{money(selected.budgetMin)} – {money(selected.budgetMax)}</strong></p>
+                <div className="pt-2 border-t border-emerald-100/70 text-xs">
+                  <span className="text-gray-500">Thời hạn nhận báo giá: </span>
+                  {(() => {
+                    const expiry = getExpiryStatus(selected);
+                    if (selected.status === 'EXPIRED' || expiry.isExpired) {
+                      return (
+                        <span className="font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200">
+                          ⏱️ Đã hết hạn {selected.expiredAt ? `(${new Date(selected.expiredAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} ${new Date(selected.expiredAt).toLocaleDateString('vi-VN')})` : ''}
+                        </span>
+                      );
+                    }
+                    if (selected.expiredAt) {
+                      return (
+                        <span className={`font-semibold px-2 py-0.5 rounded-md border ${expiry.badgeClass}`}>
+                          ⏳ Đến {new Date(selected.expiredAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} {new Date(selected.expiredAt).toLocaleDateString('vi-VN')} ({expiry.label})
+                        </span>
+                      );
+                    }
+                    return (
+                      <span className="font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                        ♾️ Không giới hạn thời gian (Đến khi chọn xưởng)
+                      </span>
+                    );
+                  })()}
+                </div>
               </div>
+
+              {/* Cảnh báo khi đơn đã hết hạn */}
+              {(selected.status === 'EXPIRED' || getExpiryStatus(selected).isExpired) && (
+                <div className="mt-4 p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 flex items-start gap-2.5">
+                  <span className="text-lg leading-none">⚠️</span>
+                  <div className="flex-1">
+                    <p className="font-bold">Đơn đặt hàng này đã hết thời hạn nhận báo giá</p>
+                    <p className="mt-0.5 text-rose-700 leading-relaxed">
+                      Đơn đã đóng và xưởng không thể gửi thêm báo giá mới. Bạn vẫn có thể xem lại các báo giá đã nhận trước đó hoặc tạo yêu cầu mới.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {(() => {
                 const isChamberChosen = selected.status === 'SELLER_SELECTED' || selected.status === 'WAITING_PAYMENT' || selected.status === 'COMPLETED';

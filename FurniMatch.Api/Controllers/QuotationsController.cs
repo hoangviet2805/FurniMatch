@@ -57,6 +57,22 @@ namespace FurniMatch.Api.Controllers
                 return NotFound(new { message = "Không tìm thấy yêu cầu đặt hàng này." });
             }
 
+            var now = DateTime.UtcNow;
+            if (request.ExpiredAt.HasValue && request.ExpiredAt.Value <= now)
+            {
+                if (request.Status != "EXPIRED")
+                {
+                    request.Status = "EXPIRED";
+                    await _context.SaveChangesAsync();
+                }
+                return BadRequest(new { message = "Yêu cầu đặt hàng này đã hết thời hạn nhận báo giá và đã đóng. Bạn không thể gửi báo giá cho đơn này nữa." });
+            }
+
+            if (request.Status == "EXPIRED")
+            {
+                return BadRequest(new { message = "Yêu cầu đặt hàng này đã hết thời hạn nhận báo giá và đã đóng. Bạn không thể gửi báo giá cho đơn này nữa." });
+            }
+
             if (request.Status != "OPEN" && request.Status != "RECEIVING_QUOTES")
             {
                 return BadRequest(new { message = "Yêu cầu này đã được khách hàng chốt xưởng gia công hoặc đã đóng." });

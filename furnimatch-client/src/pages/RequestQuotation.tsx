@@ -34,6 +34,13 @@ const RequestQuotation = ({ onSuccess, onCancel }: Props) => {
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
 
+  // Cấu hình thời hạn hết hạn yêu cầu (setup thời gian vs không setup thời gian)
+  const [hasExpiry, setHasExpiry] = useState<boolean>(false);
+  const [expiryDays, setExpiryDays] = useState<number>(3);
+  const [expiryHours, setExpiryHours] = useState<number>(0);
+  const [expiryMinutes, setExpiryMinutes] = useState<number>(0);
+  const [activePreset, setActivePreset] = useState<string>('3d');
+
   useEffect(() => {
     // Load categories
     api.get('/categories')
@@ -137,6 +144,14 @@ const RequestQuotation = ({ onSuccess, onCancel }: Props) => {
       return;
     }
 
+    if (hasExpiry) {
+      const totalMinutes = (expiryDays * 24 * 60) + (expiryHours * 60) + expiryMinutes;
+      if (totalMinutes <= 0) {
+        setErrorMessage('Vui lòng chọn thời gian hết hạn lớn hơn 0 (tối thiểu 1 phút) hoặc chọn chế độ Không setup thời gian.');
+        return;
+      }
+    }
+
     setLoading(true);
     setErrorMessage('');
 
@@ -150,6 +165,17 @@ const RequestQuotation = ({ onSuccess, onCancel }: Props) => {
       if (formData.budgetMin) body.append('budgetMin', String(formData.budgetMin));
       if (formData.budgetMax) body.append('budgetMax', String(formData.budgetMax));
       if (formData.description) body.append('description', formData.description.trim());
+      
+      // Gửi cấu hình thời hạn hết hạn
+      body.append('hasExpiry', String(hasExpiry));
+      if (hasExpiry) {
+        body.append('durationDays', String(expiryDays));
+        body.append('durationHours', String(expiryHours));
+        body.append('durationMinutes', String(expiryMinutes));
+        const totalMinutes = (expiryDays * 24 * 60) + (expiryHours * 60) + expiryMinutes;
+        const expiryDate = new Date(Date.now() + totalMinutes * 60 * 1000);
+        body.append('expiredAt', expiryDate.toISOString());
+      }
       
       if (imageFiles.length > 0) {
         imageFiles.forEach(file => {
@@ -513,6 +539,225 @@ const RequestQuotation = ({ onSuccess, onCancel }: Props) => {
                 onChange={handleChange}
               />
             </div>
+          </div>
+
+          {/* Cấu hình thời hạn nhận báo giá: 2 option Setup thời gian vs Không setup thời gian */}
+          <div className="p-5 bg-gradient-to-br from-emerald-50/40 via-white to-teal-50/30 rounded-2xl border border-emerald-100 shadow-2xs">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <label className="text-xs font-bold uppercase tracking-wider text-emerald-950 flex items-center gap-1.5">
+                <span>⏱️</span>
+                <span>Thời Hạn Nhận Báo Giá Từ Xưởng <span className="text-rose-500">*</span></span>
+              </label>
+              <span className="text-[11px] text-gray-500 font-medium">Chọn chế độ đóng đơn</span>
+            </div>
+            <p className="text-xs text-gray-500 mb-4">
+              Bạn có thể đặt hạn chót nhận báo giá để nhanh chóng chốt xưởng hoặc để mở cho đến khi tìm được xưởng ưng ý.
+            </p>
+
+            {/* 2 Lựa chọn chính (Radio Cards) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+              {/* Option 1: Không setup thời gian */}
+              <div
+                onClick={() => setHasExpiry(false)}
+                className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
+                  !hasExpiry
+                    ? 'border-emerald-600 bg-emerald-50/60 ring-2 ring-emerald-200/60 shadow-xs'
+                    : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50/50'
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <div className={`w-5 h-5 rounded-full border-2 mt-0.5 flex items-center justify-center shrink-0 ${
+                    !hasExpiry ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-gray-300'
+                  }`}>
+                    {!hasExpiry && <span className="text-xs font-bold leading-none">✓</span>}
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-gray-900 flex items-center gap-1.5">
+                      <span>♾️</span>
+                      <span>Không setup thời gian</span>
+                    </h4>
+                    <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                      Đơn sẽ mở liên tục cho các xưởng gửi báo giá cho đến khi bạn chọn được xưởng ưng ý.
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-3 pt-2 border-t border-emerald-100/60 flex items-center gap-1 text-[11px] font-semibold text-emerald-700">
+                  <span>✨ Đơn mở liên tục không giới hạn</span>
+                </div>
+              </div>
+
+              {/* Option 2: Setup thời gian */}
+              <div
+                onClick={() => {
+                  setHasExpiry(true);
+                  if (expiryDays === 0 && expiryHours === 0 && expiryMinutes === 0) {
+                    setExpiryDays(3);
+                    setActivePreset('3d');
+                  }
+                }}
+                className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
+                  hasExpiry
+                    ? 'border-emerald-600 bg-emerald-50/60 ring-2 ring-emerald-200/60 shadow-xs'
+                    : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50/50'
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <div className={`w-5 h-5 rounded-full border-2 mt-0.5 flex items-center justify-center shrink-0 ${
+                    hasExpiry ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-gray-300'
+                  }`}>
+                    {hasExpiry && <span className="text-xs font-bold leading-none">✓</span>}
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-gray-900 flex items-center gap-1.5">
+                      <span>⏳</span>
+                      <span>Setup thời gian hết hạn</span>
+                    </h4>
+                    <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                      Chỉ định số ngày, số giờ, số phút. Hết giờ, đơn sẽ tự đóng và xưởng không thể gửi báo giá nữa.
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-3 pt-2 border-t border-emerald-100/60 flex items-center gap-1 text-[11px] font-semibold text-amber-700">
+                  <span>⏱️ Tự động đóng đơn khi hết thời gian</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Chi tiết cấu hình số ngày, số giờ, số phút khi chọn hasExpiry */}
+            {hasExpiry && (
+              <div className="mt-3 p-4 bg-white rounded-xl border border-emerald-200/80 shadow-2xs animate-in fade-in slide-in-from-top-2 duration-200 space-y-3.5">
+                {/* Nút chọn nhanh (Presets) */}
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2">
+                    Chọn nhanh thời hạn:
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { key: '12h', label: '12 Giờ', d: 0, h: 12, m: 0 },
+                      { key: '1d', label: '1 Ngày (24h)', d: 1, h: 0, m: 0 },
+                      { key: '3d', label: '3 Ngày', d: 3, h: 0, m: 0 },
+                      { key: '7d', label: '7 Ngày (1 tuần)', d: 7, h: 0, m: 0 },
+                      { key: '15d', label: '15 Ngày', d: 15, h: 0, m: 0 },
+                    ].map(preset => (
+                      <button
+                        key={preset.key}
+                        type="button"
+                        onClick={() => {
+                          setExpiryDays(preset.d);
+                          setExpiryHours(preset.h);
+                          setExpiryMinutes(preset.m);
+                          setActivePreset(preset.key);
+                        }}
+                        className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                          activePreset === preset.key && expiryDays === preset.d && expiryHours === preset.h && expiryMinutes === preset.m
+                            ? 'bg-emerald-600 text-white shadow-2xs scale-102'
+                            : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 3 ô nhập: Số ngày, Số giờ, Số phút */}
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1.5">
+                    Tùy chỉnh chi tiết (Số ngày, Số giờ, Số phút):
+                  </label>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <span className="text-xs text-gray-500 font-medium block mb-1">Số Ngày</span>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min="0"
+                          max="365"
+                          value={expiryDays}
+                          onChange={(e) => {
+                            setExpiryDays(Math.max(0, parseInt(e.target.value) || 0));
+                            setActivePreset('custom');
+                          }}
+                          className="w-full px-3 py-2 pr-12 text-sm font-semibold border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-gray-50/50"
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-medium pointer-events-none">
+                          ngày
+                        </span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <span className="text-xs text-gray-500 font-medium block mb-1">Số Giờ</span>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min="0"
+                          max="23"
+                          value={expiryHours}
+                          onChange={(e) => {
+                            setExpiryHours(Math.min(23, Math.max(0, parseInt(e.target.value) || 0)));
+                            setActivePreset('custom');
+                          }}
+                          className="w-full px-3 py-2 pr-10 text-sm font-semibold border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-gray-50/50"
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-medium pointer-events-none">
+                          giờ
+                        </span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <span className="text-xs text-gray-500 font-medium block mb-1">Số Phút</span>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min="0"
+                          max="59"
+                          value={expiryMinutes}
+                          onChange={(e) => {
+                            setExpiryMinutes(Math.min(59, Math.max(0, parseInt(e.target.value) || 0)));
+                            setActivePreset('custom');
+                          }}
+                          className="w-full px-3 py-2 pr-10 text-sm font-semibold border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-gray-50/50"
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-medium pointer-events-none">
+                          phút
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Banner xem trước thời gian hết hạn */}
+                {(() => {
+                  const totalMinutes = (expiryDays * 24 * 60) + (expiryHours * 60) + expiryMinutes;
+                  if (totalMinutes <= 0) {
+                    return (
+                      <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center gap-2">
+                        <span>⚠️</span>
+                        <span>Vui lòng chọn ít nhất 1 phút cho thời hạn nhận báo giá.</span>
+                      </div>
+                    );
+                  }
+                  const futureDate = new Date(Date.now() + totalMinutes * 60 * 1000);
+                  const timeStr = futureDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+                  const dateStr = futureDate.toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
+                  return (
+                    <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2.5">
+                      <span className="text-base shrink-0">⏳</span>
+                      <div>
+                        <p className="font-semibold">
+                          Đơn sẽ tự động đóng vào lúc: <strong className="text-amber-950 font-bold">{timeStr} — {dateStr}</strong>
+                        </p>
+                        <p className="text-[11px] text-amber-700 mt-0.5">
+                          (Sau {expiryDays > 0 ? `${expiryDays} ngày ` : ''}{expiryHours > 0 ? `${expiryHours} giờ ` : ''}{expiryMinutes > 0 ? `${expiryMinutes} phút` : ''} kể từ lúc tạo). Hết thời gian này xưởng sẽ không thể gửi báo giá.
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
           </div>
 
           <div>

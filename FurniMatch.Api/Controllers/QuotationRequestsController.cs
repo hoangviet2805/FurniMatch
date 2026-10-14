@@ -126,6 +126,26 @@ namespace FurniMatch.Api.Controllers
                 ? dto.Material.Trim()
                 : "Xưởng tư vấn chất liệu";
 
+            // Xử lý thiết lập thời hạn hết hạn (Option: setup thời gian vs không setup thời gian)
+            DateTime? expiredAt = null;
+            if (dto.HasExpiry)
+            {
+                if (dto.ExpiredAt.HasValue && dto.ExpiredAt.Value > DateTime.UtcNow)
+                {
+                    expiredAt = dto.ExpiredAt.Value;
+                }
+                else
+                {
+                    int days = Math.Max(0, dto.DurationDays ?? 0);
+                    int hours = Math.Max(0, dto.DurationHours ?? 0);
+                    int minutes = Math.Max(0, dto.DurationMinutes ?? 0);
+                    if (days > 0 || hours > 0 || minutes > 0)
+                    {
+                        expiredAt = DateTime.UtcNow.AddDays(days).AddHours(hours).AddMinutes(minutes);
+                    }
+                }
+            }
+
             var request = new QuotationRequest
             {
                 CustomerId = customerId,
@@ -145,7 +165,8 @@ namespace FurniMatch.Api.Controllers
                 BudgetMax = dto.BudgetMax,
                 Description = dto.Description?.Trim(),
                 Status = "OPEN",
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                ExpiredAt = expiredAt
             };
 
             _context.QuotationRequests.Add(request);
@@ -187,6 +208,10 @@ namespace FurniMatch.Api.Controllers
                     : "";
                 var sellerEmails = targetSellers.Where(s => !string.IsNullOrEmpty(s.Email)).Select(s => s.Email).ToList();
 
+                var expiryNoticeHtml = request.ExpiredAt.HasValue
+                    ? $"<p style='margin: 0 0 6px 0; font-size: 14px; color: #b45309;'><strong>⏱️ Thời hạn nhận báo giá:</strong> Đến {request.ExpiredAt.Value.ToLocalTime():HH:mm dd/MM/yyyy} (Tự động đóng khi hết hạn)</p>"
+                    : "<p style='margin: 0 0 6px 0; font-size: 14px; color: #047857;'><strong>⏱️ Thời hạn nhận báo giá:</strong> Không giới hạn thời gian (Mở đến khi khách chốt xưởng)</p>";
+
                 _ = Task.Run(async () =>
                 {
                     foreach (var email in sellerEmails)
@@ -209,6 +234,7 @@ namespace FurniMatch.Api.Controllers
                                         <p style='margin: 0 0 6px 0; font-size: 14px; color: #111827;'><strong>Loại món đồ:</strong> {productType}</p>
                                         <p style='margin: 0 0 6px 0; font-size: 14px; color: #374151;'><strong>Kích thước:</strong> {dimensions}</p>
                                         <p style='margin: 0 0 6px 0; font-size: 14px; color: #374151;'><strong>Số lượng:</strong> {quantity}</p>
+                                        {expiryNoticeHtml}
                                         <p style='margin: 0; font-size: 14px; color: #374151;'><strong>Ghi chú từ khách:</strong> {desc}</p>
                                     </div>
                                     <div style='text-align: center; margin: 25px 0 10px 0;'>
@@ -244,6 +270,30 @@ namespace FurniMatch.Api.Controllers
                 return Unauthorized(new { message = "Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại." });
             }
 
+            // Tự động kiểm tra và đóng các yêu cầu đã hết hạn thời gian nhận báo giá
+            var now = DateTime.UtcNow;
+            var overdueRequests = await _context.QuotationRequests
+                .Where(qr => (qr.Status == "OPEN" || qr.Status == "RECEIVING_QUOTES") 
+                             && qr.ExpiredAt.HasValue && qr.ExpiredAt.Value <= now)
+                .ToListAsync();
+
+            if (overdueRequests.Any())
+            {
+                foreach (var exp in overdueRequests)
+                {
+                    exp.Status = "EXPIRED";
+                    _context.Notifications.Add(new Notification
+                    {
+                        UserId = exp.CustomerId,
+                        Title = "Đơn đặt theo yêu cầu đã hết hạn ⏱️",
+                        Message = $"Yêu cầu '{exp.ProductType}' của bạn đã hết thời hạn nhận báo giá và đã được đóng lại.",
+                        IsRead = false,
+                        CreatedAt = now
+                    });
+                }
+                await _context.SaveChangesAsync();
+            }
+
             var role = User.FindFirstValue(ClaimTypes.Role) ?? "";
 
             if (!role.Equals("SELLER", StringComparison.OrdinalIgnoreCase))
@@ -271,10 +321,12 @@ namespace FurniMatch.Api.Controllers
                     });
                 }
 
-                // 1. Các yêu cầu đang OPEN hoặc RECEIVING_QUOTES mà xưởng này CHƯA gửi báo giá
-                // (Tất cả seller đều có thể nhận & gửi báo giá cho đến khi khách hàng chốt chọn 1 xưởng)
+                // 1. Các yêu cầu đang OPEN hoặc RECEIVING_QUOTES mà xưởng này CHƯA gửi báo giá và CHƯA HẾT HẠN
+                // (Đơn hết hạn sẽ bị đóng và seller không thể thấy cũng như không thể gửi báo giá nữa)
                 var availableRequests = await _context.QuotationRequests
-                    .Where(qr => (qr.Status == "OPEN" || qr.Status == "RECEIVING_QUOTES") && !qr.Quotations.Any(q => q.SellerId == userId))
+                    .Where(qr => (qr.Status == "OPEN" || qr.Status == "RECEIVING_QUOTES") 
+                                 && (!qr.ExpiredAt.HasValue || qr.ExpiredAt.Value > now)
+                                 && !qr.Quotations.Any(q => q.SellerId == userId))
                     .Include(qr => qr.Category)
                     .Include(qr => qr.Customer)
                     .OrderByDescending(qr => qr.CreatedAt)

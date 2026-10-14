@@ -33,5 +33,12 @@ namespace FurniMatch.Api.DTOs
 
         // Bổ sung cho tính năng đấu giá ngược
         public double RadiusKm { get; set; } = 50.0; // Default 50km
+
+        // Cấu hình thời hạn hết hạn yêu cầu đặt hàng (Option setup thời gian vs không setup thời gian)
+        public bool HasExpiry { get; set; } = false;
+        public int? DurationDays { get; set; }
+        public int? DurationHours { get; set; }
+        public int? DurationMinutes { get; set; }
+        public System.DateTime? ExpiredAt { get; set; }
     }
 }

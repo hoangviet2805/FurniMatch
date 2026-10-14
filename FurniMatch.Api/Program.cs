@@ -97,11 +97,12 @@ using (var scope = app.Services.CreateScope())
         // Auto-create database schema on PostgreSQL / Supabase if not exists
         context.Database.EnsureCreated();
 
-        // Ensure ImageUrl and ImagesJson columns exist in QuotationRequests
+        // Ensure ImageUrl, ImagesJson and ExpiredAt columns exist in QuotationRequests
         try
         {
             context.Database.ExecuteSqlRaw(@"ALTER TABLE ""QuotationRequests"" ADD COLUMN IF NOT EXISTS ""ImageUrl"" text;");
             context.Database.ExecuteSqlRaw(@"ALTER TABLE ""QuotationRequests"" ADD COLUMN IF NOT EXISTS ""ImagesJson"" text;");
+            context.Database.ExecuteSqlRaw(@"ALTER TABLE ""QuotationRequests"" ADD COLUMN IF NOT EXISTS ""ExpiredAt"" timestamp with time zone NULL;");
         }
         catch { }
 
