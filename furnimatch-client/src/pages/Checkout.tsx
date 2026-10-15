@@ -4,7 +4,7 @@ import api, { getImageUrl } from '../utils/api';
 import { getCart, saveCart, updateCartQuantity, removeFromCart, type CartItem } from '../utils/cart';
 
 const money = (n: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n);
-type Pay = { orderId: number; orderCode: string; qrCodeUrl?: string; deeplink?: string; payUrl?: string; expiredAt: string };
+type Pay = { orderId: number; orderCode: string; totalAmount?: number; qrCodeUrl?: string; deeplink?: string; payUrl?: string; expiredAt: string };
 
 export default function Checkout() {
     const nav = useNavigate();
@@ -100,7 +100,8 @@ export default function Checkout() {
                                 orderId: pendingOrder.orderId,
                                 orderCode: pendingOrder.orderCode,
                                 qrCodeUrl: qrRes.data.qrCodeUrl,
-                                expiredAt: qrRes.data.expiredAt || pendingOrder.paymentExpiredAt
+                                expiredAt: qrRes.data.expiredAt || pendingOrder.paymentExpiredAt,
+                                totalAmount: qrRes.data.totalAmount ?? pendingOrder.totalAmount
                             });
                         }).catch(() => { /* Lỗi/hết hạn => kệ, vẫn hiện form checkout */ });
                     }
@@ -139,6 +140,7 @@ export default function Checkout() {
             return;
         }
         setError('');
+        const currentTotal = subtotal + shipping;
         try {
             let r;
             if (quoteId) {
@@ -163,7 +165,10 @@ export default function Checkout() {
                 });
                 saveCart([]);
             }
-            setPay(r.data);
+            setPay({
+                ...r.data,
+                totalAmount: r.data?.totalAmount ?? currentTotal
+            });
         } catch (e: any) {
             setError(e.response?.data?.message ?? 'Không thể tạo đơn hàng.');
         }
@@ -191,7 +196,7 @@ export default function Checkout() {
                     </div>
                     {pay.qrCodeUrl ? <img src={pay.qrCodeUrl} alt="Mã QR thanh toán SePay" className="mx-auto mt-7 h-60 w-60" /> : <p className="mt-8">Đang tạo mã QR…</p>}
                     <p className="mt-5">Mã đơn: <strong>{pay.orderCode}</strong></p>
-                    <p className="mt-2">Số tiền: <strong>{money(subtotal + shipping)}</strong></p>
+                    <p className="mt-2">Số tiền: <strong>{money(pay.totalAmount ?? (subtotal + shipping))}</strong></p>
                     <p className="mt-5 text-sm text-gray-500">Quét QR bằng ứng dụng ngân hàng. Hệ thống sẽ tự xác nhận khi nhận đúng số tiền và mã đơn.</p>
                     <button type="button" onClick={() => api.patch(`/orders/${pay.orderId}/cancel`).finally(() => nav(quoteId ? '/my-requests' : '/orders'))} className="mt-5 text-sm text-rose-600">Huỷ đơn hàng</button>
                 </div>

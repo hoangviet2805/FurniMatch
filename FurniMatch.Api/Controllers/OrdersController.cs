@@ -67,7 +67,7 @@ public class OrdersController : ControllerBase
         if (!string.Equals(request.PaymentMethod, "SEPAY", StringComparison.OrdinalIgnoreCase)) return BadRequest(new { message = "Chỉ hỗ trợ thanh toán qua SePay." });
         var order = new Order { OrderCode = $"FM{DateTime.UtcNow:yyyyMMdd}{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}", CustomerId = UserId, SellerId = sellerId, ItemsJson = JsonSerializer.Serialize(request.Items, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }), RecipientName = request.RecipientName.Trim(), RecipientPhone = request.Phone.Trim(), Address = request.Address.Trim(), LegacyShippingAddress = request.Address.Trim(), Note = request.Note?.Trim(), Subtotal = subtotal, ShippingFee = shipping, TotalAmount = subtotal + shipping, PaymentMethod = "SEPAY", PaymentStatus = "PENDING", OrderStatus = "WAITING_PAYMENT", LegacyStatus = "WAITING_PAYMENT", PaymentExpiredAt = DateTime.UtcNow.AddMinutes(_sepay.PaymentTimeoutMinutes) };
         _db.Orders.Add(order); await _db.SaveChangesAsync();
-        try { var qrCodeUrl = await _sepay.CreateQrUrlAsync(order); return Ok(new { orderId = order.OrderId, orderCode = order.OrderCode, qrCodeUrl, expiredAt = order.PaymentExpiredAt }); }
+        try { var qrCodeUrl = await _sepay.CreateQrUrlAsync(order); return Ok(new { orderId = order.OrderId, orderCode = order.OrderCode, totalAmount = order.TotalAmount, qrCodeUrl, expiredAt = order.PaymentExpiredAt }); }
         catch (Exception ex) { order.PaymentStatus = "FAILED"; await _db.SaveChangesAsync(); return BadRequest(new { message = ex.Message }); }
     }
     [HttpDelete("my/cancelled"), Authorize(Roles = "CUSTOMER")]
@@ -222,7 +222,7 @@ public class OrdersController : ControllerBase
 
         try { 
             var qrCodeUrl = await _sepay.CreateQrUrlAsync(order); 
-            return Ok(new { orderId = order.OrderId, orderCode = order.OrderCode, qrCodeUrl, expiredAt = order.PaymentExpiredAt }); 
+            return Ok(new { orderId = order.OrderId, orderCode = order.OrderCode, totalAmount = order.TotalAmount, qrCodeUrl, expiredAt = order.PaymentExpiredAt }); 
         }
         catch (Exception ex) { 
             order.PaymentStatus = "FAILED"; 
@@ -344,7 +344,7 @@ public class OrdersController : ControllerBase
         
         try { 
             var qrCodeUrl = await _sepay.CreateQrUrlAsync(order); 
-            return Ok(new { orderId = order.OrderId, orderCode = order.OrderCode, qrCodeUrl, expiredAt = order.PaymentExpiredAt }); 
+            return Ok(new { orderId = order.OrderId, orderCode = order.OrderCode, totalAmount = order.TotalAmount, qrCodeUrl, expiredAt = order.PaymentExpiredAt }); 
         }
         catch (Exception ex) { return BadRequest(new { message = ex.Message }); }
     }
