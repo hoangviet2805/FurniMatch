@@ -9,6 +9,11 @@ const AdminDashboard = () => {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterRole, setFilterRole] = useState('');
+  const [userStats, setUserStats] = useState<{ total: number; customers: number; sellers: number }>({
+    total: 0,
+    customers: 0,
+    sellers: 0
+  });
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const [deleteConfirmModal, setDeleteConfirmModal] = useState<{ isOpen: boolean; userId: number | null }>({ isOpen: false, userId: null });
@@ -127,11 +132,64 @@ const AdminDashboard = () => {
     }
   };
 
+  const fetchUserStats = async () => {
+    try {
+      try {
+        const res = await api.get('/admin/users/stats');
+        if (res.data && typeof res.data.total === 'number') {
+          setUserStats({
+            total: res.data.total ?? 0,
+            customers: res.data.customers ?? 0,
+            sellers: res.data.sellers ?? 0
+          });
+          return;
+        }
+      } catch {
+        // Fallback gracefully if backend endpoint is not yet available
+      }
+
+      const res = await api.get('/admin/users');
+      const nonAdmin = res.data.filter((u: any) => u.roleName !== 'ADMIN');
+      const cust = nonAdmin.filter((u: any) => u.roleName === 'CUSTOMER').length;
+      const sell = nonAdmin.filter((u: any) => u.roleName === 'SELLER').length;
+      setUserStats({
+        total: nonAdmin.length,
+        customers: cust,
+        sellers: sell
+      });
+    } catch (error) {
+      console.error('Error fetching user stats:', error);
+    }
+  };
+
   const fetchUsers = async () => {
     setLoading(true);
     try {
       const response = await api.get(`/admin/users?role=${filterRole}`);
-      setUsers(response.data.filter((u: any) => u.roleName !== 'ADMIN'));
+      const filtered = response.data.filter((u: any) => u.roleName !== 'ADMIN');
+      setUsers(filtered);
+
+      if (!filterRole) {
+        const cust = filtered.filter((u: any) => u.roleName === 'CUSTOMER').length;
+        const sell = filtered.filter((u: any) => u.roleName === 'SELLER').length;
+        setUserStats({
+          total: filtered.length,
+          customers: cust,
+          sellers: sell
+        });
+      } else if (filterRole === 'CUSTOMER') {
+        setUserStats(prev => ({
+          ...prev,
+          customers: filtered.length,
+          total: filtered.length + prev.sellers
+        }));
+      } else if (filterRole === 'SELLER') {
+        setUserStats(prev => ({
+          ...prev,
+          sellers: filtered.length,
+          total: prev.customers + filtered.length
+        }));
+      }
     } catch (error) {
       console.error('Error fetching users:', error);
     } finally {
@@ -201,6 +259,7 @@ const AdminDashboard = () => {
   useEffect(() => {
     if (activeTab === 'USERS') {
       fetchUsers();
+      fetchUserStats();
       setCurrentPage(1);
     } else if (activeTab === 'CATEGORIES') {
       fetchCategories();
@@ -226,6 +285,7 @@ const AdminDashboard = () => {
       await api.post(`/admin/approve-seller/${id}`);
       setAlertModal({ isOpen: true, message: 'Đã duyệt nhà sản xuất thành công!', type: 'success' });
       fetchPendingSellers();
+      fetchUserStats();
     } catch (error: any) {
       setAlertModal({ isOpen: true, message: error.response?.data?.message || 'Có lỗi xảy ra', type: 'error' });
     }
@@ -271,6 +331,7 @@ const AdminDashboard = () => {
       await api.delete(`/admin/users/${userId}`);
       setUsers(users.filter(u => u.userId !== userId));
       setAlertModal({ isOpen: true, message: 'Đã xóa tài khoản thành công!', type: 'success' });
+      fetchUserStats();
     } catch (error: any) {
       console.error('Error deleting user:', error);
       setAlertModal({
@@ -802,16 +863,66 @@ const AdminDashboard = () => {
 
       {activeTab === 'USERS' && (
         <>
-          <div className="flex justify-end mb-4">
-            <select
-              value={filterRole}
-              onChange={(e) => setFilterRole(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
-            >
-              <option value="">Tất cả tài khoản</option>
-              <option value="CUSTOMER">Khách Hàng</option>
-              <option value="SELLER">Nhà Sản Xuất</option>
-            </select>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+            <div className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span>Danh Sách Người Dùng</span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Thống kê số lượng người dùng theo lựa chọn */}
+              <div
+                className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs sm:text-sm font-medium shadow-xs transition-all duration-200 ${
+                  filterRole === 'CUSTOMER'
+                    ? 'bg-blue-50/90 border-blue-200 text-blue-900'
+                    : filterRole === 'SELLER'
+                    ? 'bg-purple-50/90 border-purple-200 text-purple-900'
+                    : 'bg-emerald-50/90 border-emerald-200 text-emerald-900'
+                }`}
+              >
+                {filterRole === '' && (
+                  <>
+                    <span className="text-base">👥</span>
+                    <span>Tổng số người dùng:</span>
+                    <span className="font-bold text-emerald-700 bg-white px-2.5 py-0.5 rounded-lg border border-emerald-200 shadow-xs">
+                      {userStats.total}
+                    </span>
+                    <span className="text-xs text-emerald-800/80 font-normal">
+                      ({userStats.customers} khách hàng + {userStats.sellers} nhà sản xuất)
+                    </span>
+                  </>
+                )}
+                {filterRole === 'CUSTOMER' && (
+                  <>
+                    <span className="text-base">👤</span>
+                    <span>Tổng số khách hàng:</span>
+                    <span className="font-bold text-blue-700 bg-white px-2.5 py-0.5 rounded-lg border border-blue-200 shadow-xs">
+                      {userStats.customers}
+                    </span>
+                  </>
+                )}
+                {filterRole === 'SELLER' && (
+                  <>
+                    <span className="text-base">🏭</span>
+                    <span>Tổng số nhà sản xuất:</span>
+                    <span className="font-bold text-purple-700 bg-white px-2.5 py-0.5 rounded-lg border border-purple-200 shadow-xs">
+                      {userStats.sellers}
+                    </span>
+                  </>
+                )}
+              </div>
+
+              {/* Dropdown bộ lọc vai trò người dùng */}
+              <select
+                value={filterRole}
+                onChange={(e) => setFilterRole(e.target.value)}
+                className="px-4 py-2 border border-gray-300 rounded-xl bg-white text-xs sm:text-sm font-semibold text-gray-700 shadow-xs hover:border-emerald-500 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all outline-none cursor-pointer"
+              >
+                <option value="">Tất cả người dùng</option>
+                <option value="CUSTOMER">Khách Hàng</option>
+                <option value="SELLER">Nhà Sản Xuất</option>
+              </select>
+            </div>
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">

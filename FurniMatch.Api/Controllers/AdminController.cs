@@ -57,6 +57,25 @@ namespace FurniMatch.Api.Controllers
             return Ok(users);
         }
 
+        [HttpGet("users/stats")]
+        public async Task<IActionResult> GetUserStats()
+        {
+            var customerCount = await _context.Users
+                .Include(u => u.Role)
+                .CountAsync(u => u.Role.RoleName.ToUpper() == "CUSTOMER");
+
+            var sellerCount = await _context.Users
+                .Include(u => u.Role)
+                .CountAsync(u => u.Role.RoleName.ToUpper() == "SELLER");
+
+            return Ok(new
+            {
+                total = customerCount + sellerCount,
+                customers = customerCount,
+                sellers = sellerCount
+            });
+        }
+
         [HttpPut("users/{id}/status")]
         public async Task<IActionResult> UpdateUserStatus(int id, [FromBody] UpdateStatusDto dto)
         {
