@@ -22,10 +22,17 @@ import Checkout from './pages/Checkout';
 import Orders from './pages/Orders';
 import Wallet from './pages/Wallet';
 import ChatWidget from './components/ChatWidget';
+import { useTrafficTracker } from './utils/trafficTracker';
+
+function TrafficTrackerWrapper() {
+  useTrafficTracker();
+  return null;
+}
 
 function App() {
   return (
     <Router>
+      <TrafficTrackerWrapper />
       <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
         <Header />
         <main className="flex-grow">

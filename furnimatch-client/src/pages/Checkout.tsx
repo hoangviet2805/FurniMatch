@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import api, { getImageUrl } from '../utils/api';
 import { getCart, saveCart, updateCartQuantity, removeFromCart, type CartItem } from '../utils/cart';
+import { recordTrafficConversion } from '../utils/trafficTracker';
 
 const money = (n: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n);
 type Pay = { orderId: number; orderCode: string; totalAmount?: number; qrCodeUrl?: string; deeplink?: string; payUrl?: string; expiredAt: string };
@@ -121,6 +122,7 @@ export default function Checkout() {
             try {
                 const r = await api.get(`/orders/${pay.orderId}`);
                 if (r.data.paymentStatus === 'PAID') {
+                    recordTrafficConversion('PAYMENT');
                     if (!quoteId) saveCart([]);
                     nav('/orders?paid=1');
                 }

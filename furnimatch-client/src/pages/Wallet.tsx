@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../utils/api';
+import { recordTrafficConversion } from '../utils/trafficTracker';
 import {
   Wallet as WalletIcon, ArrowDownToLine, ArrowUpRight, Clock, CheckCircle2,
   XCircle, RefreshCw, FileText, ChevronRight, ShieldCheck, Eye, X
@@ -621,6 +622,7 @@ function WithdrawalModal({
         bankAccountHolder: form.bankAccountHolder.trim(),
         note: form.note.trim() || null
       });
+      recordTrafficConversion('PAYMENT');
       onSuccess();
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Có lỗi xảy ra khi tạo yêu cầu rút tiền.');

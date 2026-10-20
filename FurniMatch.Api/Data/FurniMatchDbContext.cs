@@ -31,6 +31,7 @@ namespace FurniMatch.Api.Data
         public DbSet<WithdrawalRequest> WithdrawalRequests { get; set; }
         public DbSet<OrderReview> OrderReviews { get; set; }
         public DbSet<ChatMessage> ChatMessages { get; set; }
+        public DbSet<TrafficLog> TrafficLogs { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

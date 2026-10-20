@@ -3,7 +3,7 @@ import api, { API_BASE_URL } from '../utils/api';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
-import { ZoomIn, ZoomOut, RotateCcw, X, ExternalLink } from 'lucide-react';
+import { ZoomIn, ZoomOut, RotateCcw, X, ExternalLink, RefreshCw, TrendingUp, Users, Activity, Clock, CheckCircle2 } from 'lucide-react';
 
 const AdminDashboard = () => {
   const [users, setUsers] = useState<any[]>([]);
@@ -23,7 +23,7 @@ const AdminDashboard = () => {
   const [alertModal, setAlertModal] = useState<{ isOpen: boolean; message: string; type: 'success' | 'error' }>({ isOpen: false, message: '', type: 'success' });
 
   // Tabs and Category States
-  const [activeTab, setActiveTab] = useState<'USERS' | 'PENDING_SELLERS' | 'CATEGORIES' | 'BANNERS' | 'FOOTER' | 'HOME_SETTINGS' | 'REVENUE' | 'WITHDRAWALS' | 'DISPUTES' | 'PAYOUT_CONFIG' | 'REVIEW_CONFIG'>('USERS');
+  const [activeTab, setActiveTab] = useState<'USERS' | 'PENDING_SELLERS' | 'CATEGORIES' | 'BANNERS' | 'FOOTER' | 'HOME_SETTINGS' | 'REVENUE' | 'WITHDRAWALS' | 'DISPUTES' | 'PAYOUT_CONFIG' | 'REVIEW_CONFIG' | 'TRAFFIC_REPORT'>('USERS');
 
   // ========== WITHDRAWAL / DISPUTE STATE ==========
   const [withdrawals, setWithdrawals] = useState<any[]>([]);
@@ -694,6 +694,30 @@ const AdminDashboard = () => {
     }
   };
 
+  // ========== TRAFFIC REPORT STATE ==========
+  const [trafficYear, setTrafficYear] = useState<number>(new Date().getFullYear());
+  const [trafficMonth, setTrafficMonth] = useState<number>(new Date().getMonth() + 1);
+  const [trafficData, setTrafficData] = useState<any>(null);
+  const [loadingTraffic, setLoadingTraffic] = useState<boolean>(false);
+
+  const fetchTrafficStats = useCallback(async (year: number, month: number) => {
+    setLoadingTraffic(true);
+    try {
+      const res = await api.get(`/traffic/monthly-stats?year=${year}&month=${month}`);
+      setTrafficData(res.data);
+    } catch (err: any) {
+      console.error('Lỗi tải thống kê truy cập:', err);
+    } finally {
+      setLoadingTraffic(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'TRAFFIC_REPORT') {
+      fetchTrafficStats(trafficYear, trafficMonth);
+    }
+  }, [activeTab, trafficYear, trafficMonth, fetchTrafficStats]);
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* 1. Tiêu đề Quản Trị Hệ Thống ở trên */}
@@ -811,7 +835,7 @@ const AdminDashboard = () => {
               type="button"
               onClick={() => setIsSettingsDropdownOpen(!isSettingsDropdownOpen)}
               className={`w-full h-10 px-3 inline-flex items-center justify-center gap-1 text-xs sm:text-sm font-semibold rounded-xl whitespace-nowrap transition-all ${
-                (activeTab === 'FOOTER' || activeTab === 'HOME_SETTINGS' || activeTab === 'PAYOUT_CONFIG' || activeTab === 'REVIEW_CONFIG')
+                (activeTab === 'FOOTER' || activeTab === 'HOME_SETTINGS' || activeTab === 'PAYOUT_CONFIG' || activeTab === 'REVIEW_CONFIG' || activeTab === 'TRAFFIC_REPORT')
                   ? 'bg-white text-emerald-800 shadow-sm border border-emerald-200/70 font-bold'
                   : 'text-gray-600 hover:text-gray-900 hover:bg-white/60'
               }`}
@@ -851,6 +875,14 @@ const AdminDashboard = () => {
                     className={`block w-full text-left px-4 py-2.5 text-xs sm:text-sm transition-colors ${activeTab === 'REVIEW_CONFIG' ? 'bg-emerald-50 text-emerald-700 font-bold' : 'text-gray-700 hover:bg-gray-50'}`}
                   >
                     ⭐ Cấu Hình Đánh Giá Sản Phẩm
+                  </button>
+                </div>
+                <div className="py-1">
+                  <button
+                    onClick={() => { setActiveTab('TRAFFIC_REPORT'); setIsSettingsDropdownOpen(false); }}
+                    className={`block w-full text-left px-4 py-2.5 text-xs sm:text-sm transition-colors ${activeTab === 'TRAFFIC_REPORT' ? 'bg-emerald-50 text-emerald-700 font-bold' : 'text-gray-700 hover:bg-gray-50'}`}
+                  >
+                    📈 Báo Cáo Lượng Truy Cập
                   </button>
                 </div>
               </div>
@@ -1775,6 +1807,369 @@ const AdminDashboard = () => {
                   Sau {reviewDeadlineDays} ngày, nút chuyển thành màu xám <strong>Đã quá thời hạn</strong> và API từ chối gửi review.
                 </p>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===================== TRAFFIC STATS & REPORT TAB ===================== */}
+      {activeTab === 'TRAFFIC_REPORT' && (
+        <div className="space-y-8 max-w-7xl mx-auto animate-in fade-in duration-200">
+          {/* Header Card */}
+          <div className="bg-gradient-to-r from-emerald-800 via-teal-800 to-emerald-950 rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+            <div className="relative z-10 max-w-2xl">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1 bg-emerald-700/60 backdrop-blur-md rounded-full text-xs font-semibold text-emerald-100 mb-3 border border-emerald-600/40">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span>Báo Cáo & Thống Kê Truy Cập</span>
+                <span>•</span>
+                <span>0h00 - 24h00 (UTC+7)</span>
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+                Báo Cáo Số Lượng Truy Cập
+              </h2>
+              <p className="text-emerald-100 text-xs sm:text-sm mt-2 leading-relaxed">
+                Thống kê số lượng lượt truy cập hợp lệ theo ngày trong tháng. Lượt truy cập được tính từ 0h00 ngày hôm trước đến 0h00 ngày hôm sau theo múi giờ Việt Nam.
+              </p>
+              <div className="flex flex-wrap items-center gap-2 mt-4 text-[11px] text-emerald-200">
+                <span className="bg-white/10 px-2.5 py-1 rounded-lg backdrop-blur-xs border border-white/10">⏱️ Ở lại web &gt; 10s: 1 lượt</span>
+                <span className="bg-white/10 px-2.5 py-1 rounded-lg backdrop-blur-xs border border-white/10">📄 Xem từ 2 trang trở lên: 1 lượt</span>
+                <span className="bg-white/10 px-2.5 py-1 rounded-lg backdrop-blur-xs border border-white/10">🎯 Chuyển hóa (đăng nhập / chuyển tiền): 1 lượt</span>
+                <span className="bg-emerald-500/20 px-2.5 py-1 rounded-lg backdrop-blur-xs border border-emerald-400/30 text-emerald-100">⏳ Phiên mới tính sau 3 phút</span>
+              </div>
+            </div>
+
+            {/* Filter controls */}
+            <div className="relative z-10 flex flex-wrap items-center gap-3 bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20 shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-emerald-100">Tháng:</span>
+                <select
+                  value={trafficMonth}
+                  onChange={(e) => setTrafficMonth(Number(e.target.value))}
+                  className="bg-white text-gray-900 text-xs font-bold px-3 py-2 rounded-xl outline-none border border-emerald-300 shadow-sm cursor-pointer"
+                >
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                    <option key={m} value={m}>
+                      Tháng {m}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-emerald-100">Năm:</span>
+                <select
+                  value={trafficYear}
+                  onChange={(e) => setTrafficYear(Number(e.target.value))}
+                  className="bg-white text-gray-900 text-xs font-bold px-3 py-2 rounded-xl outline-none border border-emerald-300 shadow-sm cursor-pointer"
+                >
+                  {[2024, 2025, 2026, 2027].map((y) => (
+                    <option key={y} value={y}>
+                      {y}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => fetchTrafficStats(trafficYear, trafficMonth)}
+                disabled={loadingTraffic}
+                className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition active:scale-95 cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loadingTraffic ? 'animate-spin' : ''}`} />
+                <span>{loadingTraffic ? 'Đang tải...' : 'Làm mới'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* KPI Summary Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Tổng Lượt Truy Cập</p>
+                <h3 className="text-2xl sm:text-3xl font-black text-gray-900 mt-1">
+                  {loadingTraffic ? '...' : (trafficData?.totalVisits ?? 0)}
+                </h3>
+                <p className="text-[11px] text-emerald-600 font-semibold mt-1">Trong Tháng {trafficMonth}/{trafficYear}</p>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center border border-emerald-100">
+                <Users className="w-6 h-6" />
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Ngày Cao Điểm Nhất</p>
+                <h3 className="text-2xl sm:text-3xl font-black text-emerald-700 mt-1">
+                  {loadingTraffic ? '...' : trafficData?.peakDay ? `Ngày ${trafficData.peakDay}` : '-'}
+                </h3>
+                <p className="text-[11px] text-gray-500 mt-1">
+                  {trafficData?.peakDayVisits ? `${trafficData.peakDayVisits} lượt truy cập` : 'Chưa có dữ liệu'}
+                </p>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center border border-amber-100">
+                <TrendingUp className="w-6 h-6" />
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Trung Bình Mỗi Ngày</p>
+                <h3 className="text-2xl sm:text-3xl font-black text-gray-900 mt-1">
+                  {loadingTraffic ? '...' : (trafficData?.averageDailyVisits ?? 0)}
+                </h3>
+                <p className="text-[11px] text-gray-500 mt-1">Lượt truy cập / ngày</p>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-700 flex items-center justify-center border border-blue-100">
+                <Activity className="w-6 h-6" />
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Lượt Chuyển Hóa</p>
+                <h3 className="text-2xl sm:text-3xl font-black text-purple-700 mt-1">
+                  {loadingTraffic ? '...' : (trafficData?.totalConversions ?? 0)}
+                </h3>
+                <p className="text-[11px] text-gray-500 mt-1">Đăng nhập & giao dịch ví</p>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-700 flex items-center justify-center border border-purple-100">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+            </div>
+          </div>
+
+          {/* Bar Chart Section */}
+          <div className="bg-white rounded-3xl p-6 sm:p-7 border border-gray-100 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-gray-100 gap-2 mb-6">
+              <div>
+                <h3 className="text-lg font-extrabold text-gray-900 flex items-center gap-2">
+                  <span>📊 Biểu Đồ Lượng Truy Cập Theo Ngày - Tháng {trafficMonth}/{trafficYear}</span>
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Trục hoành hiển thị các ngày trong tháng (N1 đến N{trafficData?.dailyStats?.length || 31}), trục tung thể hiện tổng số lượt truy cập.
+                </p>
+              </div>
+
+              {/* Legend with Register button color note */}
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-semibold text-emerald-800 self-start sm:self-center">
+                <span className="w-3.5 h-3.5 rounded-sm bg-[#059669] shadow-xs" />
+                <span>Màu xanh nút đăng ký (#059669)</span>
+              </div>
+            </div>
+
+            {loadingTraffic ? (
+              <div className="h-80 flex items-center justify-center text-gray-400 text-sm">
+                Đang tổng hợp dữ liệu truy cập...
+              </div>
+            ) : (
+              <div className="w-full h-80 sm:h-96">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={trafficData?.dailyStats || []}
+                    margin={{ top: 20, right: 15, left: -10, bottom: 25 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                    <XAxis
+                      dataKey="day"
+                      tickLine={false}
+                      axisLine={{ stroke: '#e5e7eb' }}
+                      tick={{ fill: '#6b7280', fontSize: 11 }}
+                      tickFormatter={(d) => `N${d}`}
+                    />
+                    <YAxis
+                      allowDecimals={false}
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fill: '#6b7280', fontSize: 11 }}
+                    />
+                    <Tooltip
+                      cursor={{ fill: 'rgba(5, 150, 105, 0.08)' }}
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0].payload;
+                          return (
+                            <div className="bg-gray-900/95 backdrop-blur-md text-white p-3.5 rounded-2xl shadow-xl text-xs border border-gray-700 min-w-[210px] space-y-1.5">
+                              <div className="font-bold text-sm text-emerald-400 pb-1 border-b border-gray-700 flex justify-between items-center">
+                                <span>Ngày {data.day} ({data.date})</span>
+                                <span className="text-[10px] font-normal text-gray-400">{data.dayOfWeek}</span>
+                              </div>
+                              <p className="text-[11px] text-gray-300">
+                                Khung giờ: <strong className="text-white">00:00 - 24:00 (UTC+7)</strong>
+                              </p>
+                              <div className="pt-1 flex justify-between items-center text-xs font-bold">
+                                <span>Tổng lượt truy cập:</span>
+                                <span className="text-emerald-300 text-sm font-black bg-emerald-950/80 px-2 py-0.5 rounded-lg border border-emerald-500/40">
+                                  {data.visits} lượt
+                                </span>
+                              </div>
+                              <div className="pt-1.5 border-t border-gray-800 space-y-1 text-[11px] text-gray-300">
+                                <div className="flex justify-between">
+                                  <span>⏱️ Ở lại &gt; 10s:</span>
+                                  <strong className="text-white">{data.byTime}</strong>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>📄 Xem ≥ 2 trang:</span>
+                                  <strong className="text-white">{data.byPage}</strong>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>🎯 Chuyển hóa (đăng nhập/tiền):</span>
+                                  <strong className="text-emerald-400">{data.byConversion}</strong>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Bar
+                      dataKey="visits"
+                      name="Lượt truy cập"
+                      fill="#059669"
+                      radius={[5, 5, 0, 0]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+
+          {/* Detailed Days Table */}
+          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="p-6 sm:p-7 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50/50">
+              <div>
+                <h3 className="text-lg font-extrabold text-gray-900 flex items-center gap-2">
+                  <span>📅 Danh Sách Chi Tiết Các Ngày Trong Tháng {trafficMonth}/{trafficYear}</span>
+                </h3>
+                <p className="text-xs text-gray-500 mt-1">
+                  Tổng số lượng truy cập được tính từ 0h00 ngày hôm trước đến 0h00 ngày hôm sau (chu kỳ 24 giờ).
+                </p>
+              </div>
+
+              <div className="text-xs font-semibold text-gray-600 bg-white px-3 py-1.5 rounded-xl border border-gray-200 shadow-2xs self-start sm:self-auto">
+                Tổng số ngày: <strong className="text-emerald-700">{trafficData?.dailyStats?.length || 0} ngày</strong>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200 text-xs sm:text-sm">
+                <thead className="bg-gray-50/80">
+                  <tr>
+                    <th className="px-5 py-3.5 text-left font-bold text-gray-600 uppercase tracking-wider">
+                      Thời Gian (Ngày / Tháng / Năm)
+                    </th>
+                    <th className="px-5 py-3.5 text-left font-bold text-gray-600 uppercase tracking-wider">
+                      Khung Giờ Tính Toán
+                    </th>
+                    <th className="px-5 py-3.5 text-center font-bold text-gray-600 uppercase tracking-wider">
+                      Ở Lại &gt; 10s
+                    </th>
+                    <th className="px-5 py-3.5 text-center font-bold text-gray-600 uppercase tracking-wider">
+                      Xem ≥ 2 Trang
+                    </th>
+                    <th className="px-5 py-3.5 text-center font-bold text-gray-600 uppercase tracking-wider">
+                      Chuyển Hóa
+                    </th>
+                    <th className="px-5 py-3.5 text-center font-bold text-gray-600 uppercase tracking-wider">
+                      Tổng Lượt Truy Cập
+                    </th>
+                    <th className="px-5 py-3.5 text-right font-bold text-gray-600 uppercase tracking-wider">
+                      Tỷ Trọng Tháng
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-100">
+                  {loadingTraffic ? (
+                    <tr>
+                      <td colSpan={7} className="px-6 py-12 text-center text-gray-400">
+                        Đang tải danh sách ngày...
+                      </td>
+                    </tr>
+                  ) : (!trafficData?.dailyStats || trafficData.dailyStats.length === 0) ? (
+                    <tr>
+                      <td colSpan={7} className="px-6 py-12 text-center text-gray-400">
+                        Chưa có dữ liệu truy cập trong tháng này.
+                      </td>
+                    </tr>
+                  ) : (
+                    trafficData.dailyStats.map((item: any) => {
+                      const totalMonth = trafficData.totalVisits || 1;
+                      const percentage = totalMonth > 0 ? ((item.visits / totalMonth) * 100).toFixed(1) : '0';
+                      const isPeak = trafficData.peakDayVisits > 0 && item.visits === trafficData.peakDayVisits;
+
+                      return (
+                        <tr
+                          key={item.day}
+                          className={`hover:bg-gray-50/80 transition-colors ${isPeak ? 'bg-emerald-50/40 font-semibold' : ''}`}
+                        >
+                          <td className="px-5 py-4 whitespace-nowrap">
+                            <div className="flex items-center gap-2.5">
+                              <span className="w-7 h-7 rounded-lg bg-gray-100 text-gray-700 flex items-center justify-center font-bold text-xs shrink-0">
+                                {item.day}
+                              </span>
+                              <div>
+                                <div className="font-bold text-gray-900 flex items-center gap-1.5">
+                                  <span>{item.date}</span>
+                                  {isPeak && (
+                                    <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold">
+                                      ⭐ Cao nhất
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-xs text-gray-500">{item.dayOfWeek}</div>
+                              </div>
+                            </div>
+                          </td>
+
+                          <td className="px-5 py-4 whitespace-nowrap text-xs text-gray-600">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-gray-100 text-gray-700 font-mono text-[11px]">
+                              <Clock className="w-3 h-3 text-gray-400" />
+                              00:00:00 - 24:00:00
+                            </span>
+                          </td>
+
+                          <td className="px-5 py-4 whitespace-nowrap text-center text-gray-700">
+                            <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-semibold text-xs border border-blue-200">
+                              {item.byTime}
+                            </span>
+                          </td>
+
+                          <td className="px-5 py-4 whitespace-nowrap text-center text-gray-700">
+                            <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-semibold text-xs border border-indigo-200">
+                              {item.byPage}
+                            </span>
+                          </td>
+
+                          <td className="px-5 py-4 whitespace-nowrap text-center text-gray-700">
+                            <span className="px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 font-semibold text-xs border border-purple-200">
+                              {item.byConversion}
+                            </span>
+                          </td>
+
+                          <td className="px-5 py-4 whitespace-nowrap text-center">
+                            <span className="inline-flex items-center justify-center min-w-[50px] px-3 py-1 rounded-xl bg-emerald-50 text-[#059669] font-black text-sm border border-emerald-200 shadow-2xs">
+                              {item.visits}
+                            </span>
+                          </td>
+
+                          <td className="px-5 py-4 whitespace-nowrap text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <div className="w-16 bg-gray-100 rounded-full h-1.5 overflow-hidden hidden sm:block">
+                                <div
+                                  className="bg-[#059669] h-1.5 rounded-full"
+                                  style={{ width: `${Math.min(100, Number(percentage))}%` }}
+                                />
+                              </div>
+                              <span className="font-semibold text-xs text-gray-700">{percentage}%</span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>

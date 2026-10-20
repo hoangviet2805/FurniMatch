@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import api from '../utils/api';
+import { recordTrafficConversion } from '../utils/trafficTracker';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -23,6 +24,9 @@ const Login = () => {
       localStorage.setItem('token', response.data.token);
       localStorage.setItem('user', JSON.stringify(response.data));
       
+      // Ghi nhận chuyển hóa Đăng nhập thành công
+      recordTrafficConversion('LOGIN');
+
       setSuccess(true);
       setTimeout(() => {
         const redirect = new URLSearchParams(location.search).get('redirect');
