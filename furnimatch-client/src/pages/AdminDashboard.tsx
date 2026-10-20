@@ -3,7 +3,7 @@ import api, { API_BASE_URL } from '../utils/api';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
-import { ZoomIn, ZoomOut, RotateCcw, X, ExternalLink, RefreshCw, TrendingUp, Users, Activity, Clock, CheckCircle2 } from 'lucide-react';
+import { ZoomIn, ZoomOut, RotateCcw, X, ExternalLink, RefreshCw, TrendingUp, Users, Activity, Clock, CheckCircle2, Calendar } from 'lucide-react';
 
 const AdminDashboard = () => {
   const [users, setUsers] = useState<any[]>([]);
@@ -697,8 +697,24 @@ const AdminDashboard = () => {
   // ========== TRAFFIC REPORT STATE ==========
   const [trafficYear, setTrafficYear] = useState<number>(new Date().getFullYear());
   const [trafficMonth, setTrafficMonth] = useState<number>(new Date().getMonth() + 1);
+  const [trafficWeek, setTrafficWeek] = useState<number | 'all'>(() => {
+    const day = new Date().getDate();
+    if (day <= 7) return 1;
+    if (day <= 14) return 2;
+    if (day <= 21) return 3;
+    if (day <= 28) return 4;
+    return 5;
+  });
   const [trafficData, setTrafficData] = useState<any>(null);
   const [loadingTraffic, setLoadingTraffic] = useState<boolean>(false);
+
+  // Auto-adjust week if switching to month with fewer days (e.g. Feb)
+  useEffect(() => {
+    const daysInM = new Date(trafficYear, trafficMonth, 0).getDate();
+    if (trafficWeek === 5 && daysInM <= 28) {
+      setTrafficWeek(4);
+    }
+  }, [trafficYear, trafficMonth, trafficWeek]);
 
   const fetchTrafficStats = useCallback(async (year: number, month: number) => {
     setLoadingTraffic(true);
@@ -717,6 +733,46 @@ const AdminDashboard = () => {
       fetchTrafficStats(trafficYear, trafficMonth);
     }
   }, [activeTab, trafficYear, trafficMonth, fetchTrafficStats]);
+
+  // Derived weekly traffic data
+  const daysInTrafficMonth = new Date(trafficYear, trafficMonth, 0).getDate();
+  const trafficWeekOptions = [
+    { id: 1, label: 'Từ ngày 1 đến ngày 7 (Tuần 1)', shortLabel: 'Tuần 1 (01 - 07)', startDay: 1, endDay: 7 },
+    { id: 2, label: 'Từ ngày 8 đến ngày 14 (Tuần 2)', shortLabel: 'Tuần 2 (08 - 14)', startDay: 8, endDay: 14 },
+    { id: 3, label: 'Từ ngày 15 đến ngày 21 (Tuần 3)', shortLabel: 'Tuần 3 (15 - 21)', startDay: 15, endDay: 21 },
+    { id: 4, label: 'Từ ngày 22 đến ngày 28 (Tuần 4)', shortLabel: 'Tuần 4 (22 - 28)', startDay: 22, endDay: 28 },
+  ];
+  if (daysInTrafficMonth > 28) {
+    trafficWeekOptions.push({
+      id: 5,
+      label: `Từ ngày 29 đến ngày ${daysInTrafficMonth} (Tuần 5)`,
+      shortLabel: `Tuần 5 (29 - ${daysInTrafficMonth})`,
+      startDay: 29,
+      endDay: daysInTrafficMonth
+    });
+  }
+
+  const selectedWeekInfo = trafficWeek === 'all'
+    ? null
+    : trafficWeekOptions.find(w => w.id === trafficWeek) || trafficWeekOptions[0];
+
+  const displayedTrafficDays: any[] = (trafficData?.dailyStats || []).filter((item: any) => {
+    if (!selectedWeekInfo) return true;
+    return item.day >= selectedWeekInfo.startDay && item.day <= selectedWeekInfo.endDay;
+  });
+
+  const currentVisits = displayedTrafficDays.reduce((sum: number, d: any) => sum + (d.visits || 0), 0);
+  const currentConversions = displayedTrafficDays.reduce((sum: number, d: any) => sum + (d.byConversion || 0), 0);
+  const currentByTime = displayedTrafficDays.reduce((sum: number, d: any) => sum + (d.byTime || 0), 0);
+  const currentByPage = displayedTrafficDays.reduce((sum: number, d: any) => sum + (d.byPage || 0), 0);
+  const currentAvgDaily = displayedTrafficDays.length > 0 
+    ? (currentVisits / displayedTrafficDays.length).toFixed(1) 
+    : '0';
+
+  const currentPeakDayItem = displayedTrafficDays.reduce((max: any, d: any) => {
+    if (!max || (d.visits || 0) > (max.visits || 0)) return d;
+    return max;
+  }, null as any);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -1828,7 +1884,7 @@ const AdminDashboard = () => {
                 Báo Cáo Số Lượng Truy Cập
               </h2>
               <p className="text-emerald-100 text-xs sm:text-sm mt-2 leading-relaxed">
-                Thống kê số lượng lượt truy cập hợp lệ theo ngày trong tháng. Lượt truy cập được tính từ 0h00 ngày hôm trước đến 0h00 ngày hôm sau theo múi giờ Việt Nam.
+                Thống kê số lượng lượt truy cập hợp lệ theo tuần (7 ngày) hoặc theo tháng. Lượt truy cập được tính từ 0h00 ngày hôm trước đến 0h00 ngày hôm sau theo múi giờ Việt Nam.
               </p>
               <div className="flex flex-wrap items-center gap-2 mt-4 text-[11px] text-emerald-200">
                 <span className="bg-white/10 px-2.5 py-1 rounded-lg backdrop-blur-xs border border-white/10">⏱️ Ở lại web &gt; 10s: 1 lượt</span>
@@ -1870,6 +1926,26 @@ const AdminDashboard = () => {
                 </select>
               </div>
 
+              {/* Week dropdown filter */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-emerald-100 whitespace-nowrap flex items-center gap-1">
+                  <Calendar className="w-3.5 h-3.5" />
+                  <span>Khoảng tuần:</span>
+                </span>
+                <select
+                  value={trafficWeek}
+                  onChange={(e) => setTrafficWeek(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+                  className="bg-white text-gray-900 text-xs font-bold px-3 py-2 rounded-xl outline-none border border-emerald-300 shadow-sm cursor-pointer min-w-[210px]"
+                >
+                  {trafficWeekOptions.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.label}
+                    </option>
+                  ))}
+                  <option value="all">Toàn bộ tháng (Tất cả các tuần)</option>
+                </select>
+              </div>
+
               <button
                 type="button"
                 onClick={() => fetchTrafficStats(trafficYear, trafficMonth)}
@@ -1886,11 +1962,17 @@ const AdminDashboard = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex items-center justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Tổng Lượt Truy Cập</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  {selectedWeekInfo ? `Tổng Lượt Truy Cập (${selectedWeekInfo.shortLabel})` : 'Tổng Lượt Truy Cập (Cả Tháng)'}
+                </p>
                 <h3 className="text-2xl sm:text-3xl font-black text-gray-900 mt-1">
-                  {loadingTraffic ? '...' : (trafficData?.totalVisits ?? 0)}
+                  {loadingTraffic ? '...' : currentVisits}
                 </h3>
-                <p className="text-[11px] text-emerald-600 font-semibold mt-1">Trong Tháng {trafficMonth}/{trafficYear}</p>
+                <p className="text-[11px] text-emerald-600 font-semibold mt-1">
+                  {selectedWeekInfo 
+                    ? `Ngày ${selectedWeekInfo.startDay} - ${selectedWeekInfo.endDay}/${trafficMonth} • Tháng: ${trafficData?.totalVisits ?? 0}` 
+                    : `Trong Tháng ${trafficMonth}/${trafficYear}`}
+                </p>
               </div>
               <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center border border-emerald-100">
                 <Users className="w-6 h-6" />
@@ -1899,12 +1981,16 @@ const AdminDashboard = () => {
 
             <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex items-center justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Ngày Cao Điểm Nhất</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  {selectedWeekInfo ? 'Ngày Cao Điểm Trong Tuần' : 'Ngày Cao Điểm Nhất'}
+                </p>
                 <h3 className="text-2xl sm:text-3xl font-black text-emerald-700 mt-1">
-                  {loadingTraffic ? '...' : trafficData?.peakDay ? `Ngày ${trafficData.peakDay}` : '-'}
+                  {loadingTraffic ? '...' : (currentPeakDayItem && currentPeakDayItem.visits > 0 ? `Ngày ${currentPeakDayItem.day}` : '-')}
                 </h3>
                 <p className="text-[11px] text-gray-500 mt-1">
-                  {trafficData?.peakDayVisits ? `${trafficData.peakDayVisits} lượt truy cập` : 'Chưa có dữ liệu'}
+                  {currentPeakDayItem && currentPeakDayItem.visits > 0 
+                    ? `${currentPeakDayItem.visits} lượt (${currentPeakDayItem.dayOfWeek})` 
+                    : 'Chưa có dữ liệu'}
                 </p>
               </div>
               <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center border border-amber-100">
@@ -1914,11 +2000,15 @@ const AdminDashboard = () => {
 
             <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex items-center justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Trung Bình Mỗi Ngày</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  {selectedWeekInfo ? 'Trung Bình / Ngày (Tuần)' : 'Trung Bình Mỗi Ngày'}
+                </p>
                 <h3 className="text-2xl sm:text-3xl font-black text-gray-900 mt-1">
-                  {loadingTraffic ? '...' : (trafficData?.averageDailyVisits ?? 0)}
+                  {loadingTraffic ? '...' : currentAvgDaily}
                 </h3>
-                <p className="text-[11px] text-gray-500 mt-1">Lượt truy cập / ngày</p>
+                <p className="text-[11px] text-gray-500 mt-1">
+                  {selectedWeekInfo ? `${displayedTrafficDays.length} ngày trong tuần` : 'Lượt truy cập / ngày'}
+                </p>
               </div>
               <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-700 flex items-center justify-center border border-blue-100">
                 <Activity className="w-6 h-6" />
@@ -1927,11 +2017,17 @@ const AdminDashboard = () => {
 
             <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex items-center justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Lượt Chuyển Hóa</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  {selectedWeekInfo ? 'Chuyển Hóa Trong Tuần' : 'Lượt Chuyển Hóa'}
+                </p>
                 <h3 className="text-2xl sm:text-3xl font-black text-purple-700 mt-1">
-                  {loadingTraffic ? '...' : (trafficData?.totalConversions ?? 0)}
+                  {loadingTraffic ? '...' : currentConversions}
                 </h3>
-                <p className="text-[11px] text-gray-500 mt-1">Đăng nhập & giao dịch ví</p>
+                <p className="text-[11px] text-gray-500 mt-1">
+                  {selectedWeekInfo 
+                    ? `Đăng nhập & GD ví (Tháng: ${trafficData?.totalConversions ?? 0})` 
+                    : 'Đăng nhập & giao dịch ví'}
+                </p>
               </div>
               <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-700 flex items-center justify-center border border-purple-100">
                 <CheckCircle2 className="w-6 h-6" />
@@ -1941,20 +2037,54 @@ const AdminDashboard = () => {
 
           {/* Bar Chart Section */}
           <div className="bg-white rounded-3xl p-6 sm:p-7 border border-gray-100 shadow-sm">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-gray-100 gap-2 mb-6">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between pb-4 border-b border-gray-100 gap-4 mb-6">
               <div>
                 <h3 className="text-lg font-extrabold text-gray-900 flex items-center gap-2">
-                  <span>📊 Biểu Đồ Lượng Truy Cập Theo Ngày - Tháng {trafficMonth}/{trafficYear}</span>
+                  <span>
+                    📊 Biểu Đồ Lượng Truy Cập Theo Tuần: {selectedWeekInfo ? selectedWeekInfo.label : `Toàn Bộ Tháng ${trafficMonth}/${trafficYear}`}
+                  </span>
                 </h3>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Trục hoành hiển thị các ngày trong tháng (N1 đến N{trafficData?.dailyStats?.length || 31}), trục tung thể hiện tổng số lượt truy cập.
+                  {selectedWeekInfo
+                    ? `Hiển thị 7 ngày trong ${selectedWeekInfo.label.toLowerCase()} (từ ngày ${selectedWeekInfo.startDay} đến ngày ${selectedWeekInfo.endDay}/${trafficMonth}/${trafficYear}). Trục hoành thể hiện các ngày trong tuần, trục tung thể hiện tổng số lượt truy cập.`
+                    : `Hiển thị toàn bộ ${displayedTrafficDays.length} ngày trong tháng ${trafficMonth}/${trafficYear}.`}
                 </p>
               </div>
 
-              {/* Legend with Register button color note */}
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-semibold text-emerald-800 self-start sm:self-center">
-                <span className="w-3.5 h-3.5 rounded-sm bg-[#059669] shadow-xs" />
-                <span>Màu xanh nút đăng ký (#059669)</span>
+              {/* Quick Week Switcher Pills & Color Legend */}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center gap-1 p-1 bg-gray-100/90 rounded-2xl border border-gray-200/80">
+                  {trafficWeekOptions.map((w) => (
+                    <button
+                      key={w.id}
+                      type="button"
+                      onClick={() => setTrafficWeek(w.id)}
+                      className={`px-2.5 py-1 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                        trafficWeek === w.id
+                          ? 'bg-emerald-600 text-white shadow-xs'
+                          : 'text-gray-600 hover:text-gray-900 hover:bg-white'
+                      }`}
+                    >
+                      {w.shortLabel}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setTrafficWeek('all')}
+                    className={`px-2.5 py-1 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                      trafficWeek === 'all'
+                        ? 'bg-emerald-600 text-white shadow-xs'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-white'
+                    }`}
+                  >
+                    Cả tháng
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-semibold text-emerald-800">
+                  <span className="w-3.5 h-3.5 rounded-sm bg-[#059669] shadow-xs" />
+                  <span>Màu xanh (#059669)</span>
+                </div>
               </div>
             </div>
 
@@ -1966,7 +2096,7 @@ const AdminDashboard = () => {
               <div className="w-full h-80 sm:h-96">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
-                    data={trafficData?.dailyStats || []}
+                    data={displayedTrafficDays}
                     margin={{ top: 20, right: 15, left: -10, bottom: 25 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
@@ -1974,8 +2104,13 @@ const AdminDashboard = () => {
                       dataKey="day"
                       tickLine={false}
                       axisLine={{ stroke: '#e5e7eb' }}
-                      tick={{ fill: '#6b7280', fontSize: 11 }}
-                      tickFormatter={(d) => `N${d}`}
+                      tick={{ fill: '#374151', fontSize: 11, fontWeight: 600 }}
+                      tickFormatter={(d) => {
+                        const item = displayedTrafficDays.find((s: any) => s.day === d);
+                        if (!item) return `N${d}`;
+                        const shortDow = item.dayOfWeek ? item.dayOfWeek.replace('Thứ ', 'T.').replace('Chủ Nhật', 'CN') : '';
+                        return selectedWeekInfo ? `${shortDow} (N${d})` : `N${d}`;
+                      }}
                     />
                     <YAxis
                       allowDecimals={false}
@@ -1988,12 +2123,20 @@ const AdminDashboard = () => {
                       content={({ active, payload }) => {
                         if (active && payload && payload.length) {
                           const data = payload[0].payload;
+                          const isDayPeak = currentPeakDayItem && currentPeakDayItem.day === data.day && data.visits > 0;
                           return (
-                            <div className="bg-gray-900/95 backdrop-blur-md text-white p-3.5 rounded-2xl shadow-xl text-xs border border-gray-700 min-w-[210px] space-y-1.5">
+                            <div className="bg-gray-900/95 backdrop-blur-md text-white p-3.5 rounded-2xl shadow-xl text-xs border border-gray-700 min-w-[220px] space-y-1.5">
                               <div className="font-bold text-sm text-emerald-400 pb-1 border-b border-gray-700 flex justify-between items-center">
                                 <span>Ngày {data.day} ({data.date})</span>
-                                <span className="text-[10px] font-normal text-gray-400">{data.dayOfWeek}</span>
+                                <span className="text-[10px] font-semibold text-emerald-200 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800">
+                                  {data.dayOfWeek}
+                                </span>
                               </div>
+                              {isDayPeak && (
+                                <div className="text-[10px] text-amber-300 font-bold flex items-center gap-1">
+                                  <span>⭐ Ngày cao điểm nhất tuần</span>
+                                </div>
+                              )}
                               <p className="text-[11px] text-gray-300">
                                 Khung giờ: <strong className="text-white">00:00 - 24:00 (UTC+7)</strong>
                               </p>
@@ -2027,7 +2170,8 @@ const AdminDashboard = () => {
                       dataKey="visits"
                       name="Lượt truy cập"
                       fill="#059669"
-                      radius={[5, 5, 0, 0]}
+                      radius={[6, 6, 0, 0]}
+                      maxBarSize={selectedWeekInfo ? 54 : 32}
                     />
                   </BarChart>
                 </ResponsiveContainer>
@@ -2040,15 +2184,24 @@ const AdminDashboard = () => {
             <div className="p-6 sm:p-7 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50/50">
               <div>
                 <h3 className="text-lg font-extrabold text-gray-900 flex items-center gap-2">
-                  <span>📅 Danh Sách Chi Tiết Các Ngày Trong Tháng {trafficMonth}/{trafficYear}</span>
+                  <span>📅 Danh Sách Chi Tiết Theo Tuần {selectedWeekInfo ? `- ${selectedWeekInfo.label}` : `- Tháng ${trafficMonth}/${trafficYear}`}</span>
                 </h3>
                 <p className="text-xs text-gray-500 mt-1">
-                  Tổng số lượng truy cập được tính từ 0h00 ngày hôm trước đến 0h00 ngày hôm sau (chu kỳ 24 giờ).
+                  {selectedWeekInfo
+                    ? `Thống kê chi tiết ${displayedTrafficDays.length} ngày trong ${selectedWeekInfo.label.toLowerCase()} (từ ngày ${selectedWeekInfo.startDay} đến ngày ${selectedWeekInfo.endDay}/${trafficMonth}/${trafficYear}). Chu kỳ tính từ 0h00 ngày hôm trước đến 0h00 ngày hôm sau.`
+                    : 'Tổng số lượng truy cập được tính từ 0h00 ngày hôm trước đến 0h00 ngày hôm sau (chu kỳ 24 giờ).'}
                 </p>
               </div>
 
-              <div className="text-xs font-semibold text-gray-600 bg-white px-3 py-1.5 rounded-xl border border-gray-200 shadow-2xs self-start sm:self-auto">
-                Tổng số ngày: <strong className="text-emerald-700">{trafficData?.dailyStats?.length || 0} ngày</strong>
+              <div className="flex items-center gap-2 self-start sm:self-auto">
+                <div className="text-xs font-semibold text-gray-600 bg-white px-3 py-1.5 rounded-xl border border-gray-200 shadow-2xs">
+                  Số ngày: <strong className="text-emerald-700">{displayedTrafficDays.length} ngày</strong>
+                </div>
+                {selectedWeekInfo && (
+                  <div className="text-xs font-semibold text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200 shadow-2xs">
+                    Tổng tuần: <strong className="text-emerald-700">{currentVisits} lượt</strong>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -2075,7 +2228,7 @@ const AdminDashboard = () => {
                       Tổng Lượt Truy Cập
                     </th>
                     <th className="px-5 py-3.5 text-right font-bold text-gray-600 uppercase tracking-wider">
-                      Tỷ Trọng Tháng
+                      {selectedWeekInfo ? 'Tỷ Trọng Tuần' : 'Tỷ Trọng Tháng'}
                     </th>
                   </tr>
                 </thead>
@@ -2086,17 +2239,18 @@ const AdminDashboard = () => {
                         Đang tải danh sách ngày...
                       </td>
                     </tr>
-                  ) : (!trafficData?.dailyStats || trafficData.dailyStats.length === 0) ? (
+                  ) : displayedTrafficDays.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="px-6 py-12 text-center text-gray-400">
-                        Chưa có dữ liệu truy cập trong tháng này.
+                        Chưa có dữ liệu truy cập trong khoảng thời gian này.
                       </td>
                     </tr>
                   ) : (
-                    trafficData.dailyStats.map((item: any) => {
-                      const totalMonth = trafficData.totalVisits || 1;
-                      const percentage = totalMonth > 0 ? ((item.visits / totalMonth) * 100).toFixed(1) : '0';
-                      const isPeak = trafficData.peakDayVisits > 0 && item.visits === trafficData.peakDayVisits;
+                    displayedTrafficDays.map((item: any) => {
+                      const percentageOfWeek = currentVisits > 0 ? ((item.visits / currentVisits) * 100).toFixed(1) : '0';
+                      const totalMonth = trafficData?.totalVisits || 1;
+                      const percentageOfMonth = totalMonth > 0 ? ((item.visits / totalMonth) * 100).toFixed(1) : '0';
+                      const isPeak = currentPeakDayItem && item.visits > 0 && item.day === currentPeakDayItem.day;
 
                       return (
                         <tr
@@ -2113,7 +2267,7 @@ const AdminDashboard = () => {
                                   <span>{item.date}</span>
                                   {isPeak && (
                                     <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold">
-                                      ⭐ Cao nhất
+                                      ⭐ Cao nhất tuần
                                     </span>
                                   )}
                                 </div>
@@ -2158,10 +2312,15 @@ const AdminDashboard = () => {
                               <div className="w-16 bg-gray-100 rounded-full h-1.5 overflow-hidden hidden sm:block">
                                 <div
                                   className="bg-[#059669] h-1.5 rounded-full"
-                                  style={{ width: `${Math.min(100, Number(percentage))}%` }}
+                                  style={{ width: `${Math.min(100, Number(percentageOfWeek))}%` }}
                                 />
                               </div>
-                              <span className="font-semibold text-xs text-gray-700">{percentage}%</span>
+                              <div className="text-right">
+                                <span className="font-semibold text-xs text-gray-700">{percentageOfWeek}%</span>
+                                {selectedWeekInfo && (
+                                  <div className="text-[10px] text-gray-400">({percentageOfMonth}% tháng)</div>
+                                )}
+                              </div>
                             </div>
                           </td>
                         </tr>
@@ -2169,6 +2328,37 @@ const AdminDashboard = () => {
                     })
                   )}
                 </tbody>
+                {displayedTrafficDays.length > 0 && !loadingTraffic && (
+                  <tfoot className="bg-emerald-50/70 border-t-2 border-emerald-200 font-bold text-xs sm:text-sm text-gray-900">
+                    <tr>
+                      <td className="px-5 py-3.5">
+                        <span className="text-emerald-900 font-black">
+                          {selectedWeekInfo ? `TỔNG CỘNG ${selectedWeekInfo.shortLabel.toUpperCase()}` : 'TỔNG CỘNG CẢ THÁNG'}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5 text-xs text-gray-500 font-normal">
+                        {displayedTrafficDays.length} ngày
+                      </td>
+                      <td className="px-5 py-3.5 text-center text-blue-800">
+                        {currentByTime}
+                      </td>
+                      <td className="px-5 py-3.5 text-center text-indigo-800">
+                        {currentByPage}
+                      </td>
+                      <td className="px-5 py-3.5 text-center text-purple-800">
+                        {currentConversions}
+                      </td>
+                      <td className="px-5 py-3.5 text-center">
+                        <span className="inline-flex items-center justify-center min-w-[50px] px-3 py-1 rounded-xl bg-emerald-600 text-white font-black text-sm shadow-xs">
+                          {currentVisits}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5 text-right font-black text-emerald-800">
+                        100%
+                      </td>
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
           </div>
