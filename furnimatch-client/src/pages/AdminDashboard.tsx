@@ -774,6 +774,65 @@ const AdminDashboard = () => {
     return max;
   }, null as any);
 
+  // Fixed order of weekdays starting from Thứ Hai (1) to Chủ Nhật (7)
+  const DOW_ORDER: Record<string, number> = {
+    'Thứ Hai': 1,
+    'Thứ Ba': 2,
+    'Thứ Tư': 3,
+    'Thứ Năm': 4,
+    'Thứ Sáu': 5,
+    'Thứ Bảy': 6,
+    'Chủ Nhật': 7,
+  };
+
+  const DOW_LIST = [
+    { dow: 'Thứ Hai', shortDow: 'T.Hai', order: 1 },
+    { dow: 'Thứ Ba', shortDow: 'T.Ba', order: 2 },
+    { dow: 'Thứ Tư', shortDow: 'T.Tư', order: 3 },
+    { dow: 'Thứ Năm', shortDow: 'T.Năm', order: 4 },
+    { dow: 'Thứ Sáu', shortDow: 'T.Sáu', order: 5 },
+    { dow: 'Thứ Bảy', shortDow: 'T.Bảy', order: 6 },
+    { dow: 'Chủ Nhật', shortDow: 'CN', order: 7 },
+  ];
+
+  // For weekly chart: always arrange 7 columns from Thứ Hai (left) to Chủ Nhật (right)
+  const chartWeeklyData = selectedWeekInfo
+    ? DOW_LIST.map((slot) => {
+        const match = displayedTrafficDays.find((d: any) => d.dayOfWeek === slot.dow);
+        if (match) {
+          return {
+            ...match,
+            slotName: `${slot.shortDow} (N${match.day})`,
+            shortDow: slot.shortDow,
+          };
+        }
+        return {
+          day: null,
+          date: '-',
+          dayOfWeek: slot.dow,
+          shortDow: slot.shortDow,
+          slotName: `${slot.shortDow} (-)`,
+          visits: 0,
+          byTime: 0,
+          byPage: 0,
+          byConversion: 0,
+        };
+      })
+    : displayedTrafficDays.map((d: any) => ({
+        ...d,
+        slotName: `N${d.day}`,
+        shortDow: d.dayOfWeek ? d.dayOfWeek.replace('Thứ ', 'T.').replace('Chủ Nhật', 'CN') : '',
+      }));
+
+  // For weekly table: sort from Thứ Hai to Chủ Nhật
+  const tableWeeklyData = selectedWeekInfo
+    ? [...displayedTrafficDays].sort((a, b) => {
+        const orderA = DOW_ORDER[a.dayOfWeek] || 99;
+        const orderB = DOW_ORDER[b.dayOfWeek] || 99;
+        return orderA - orderB;
+      })
+    : displayedTrafficDays;
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* 1. Tiêu đề Quản Trị Hệ Thống ở trên */}
@@ -2096,21 +2155,15 @@ const AdminDashboard = () => {
               <div className="w-full h-80 sm:h-96">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
-                    data={displayedTrafficDays}
+                    data={chartWeeklyData}
                     margin={{ top: 20, right: 15, left: -10, bottom: 25 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
                     <XAxis
-                      dataKey="day"
+                      dataKey="slotName"
                       tickLine={false}
                       axisLine={{ stroke: '#e5e7eb' }}
                       tick={{ fill: '#374151', fontSize: 11, fontWeight: 600 }}
-                      tickFormatter={(d) => {
-                        const item = displayedTrafficDays.find((s: any) => s.day === d);
-                        if (!item) return `N${d}`;
-                        const shortDow = item.dayOfWeek ? item.dayOfWeek.replace('Thứ ', 'T.').replace('Chủ Nhật', 'CN') : '';
-                        return selectedWeekInfo ? `${shortDow} (N${d})` : `N${d}`;
-                      }}
                     />
                     <YAxis
                       allowDecimals={false}
@@ -2123,6 +2176,13 @@ const AdminDashboard = () => {
                       content={({ active, payload }) => {
                         if (active && payload && payload.length) {
                           const data = payload[0].payload;
+                          if (!data.day) {
+                            return (
+                              <div className="bg-gray-900/95 backdrop-blur-md text-white px-3 py-2 rounded-xl shadow-xl text-xs border border-gray-700">
+                                <span className="font-bold text-gray-300">{data.dayOfWeek}</span>: Không thuộc tháng {trafficMonth}/{trafficYear}
+                              </div>
+                            );
+                          }
                           const isDayPeak = currentPeakDayItem && currentPeakDayItem.day === data.day && data.visits > 0;
                           return (
                             <div className="bg-gray-900/95 backdrop-blur-md text-white p-3.5 rounded-2xl shadow-xl text-xs border border-gray-700 min-w-[220px] space-y-1.5">
@@ -2246,7 +2306,7 @@ const AdminDashboard = () => {
                       </td>
                     </tr>
                   ) : (
-                    displayedTrafficDays.map((item: any) => {
+                    tableWeeklyData.map((item: any) => {
                       const percentageOfWeek = currentVisits > 0 ? ((item.visits / currentVisits) * 100).toFixed(1) : '0';
                       const totalMonth = trafficData?.totalVisits || 1;
                       const percentageOfMonth = totalMonth > 0 ? ((item.visits / totalMonth) * 100).toFixed(1) : '0';
