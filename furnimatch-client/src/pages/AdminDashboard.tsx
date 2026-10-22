@@ -698,12 +698,16 @@ const AdminDashboard = () => {
   const [trafficYear, setTrafficYear] = useState<number>(new Date().getFullYear());
   const [trafficMonth, setTrafficMonth] = useState<number>(new Date().getMonth() + 1);
   const [trafficWeek, setTrafficWeek] = useState<number | 'all'>(() => {
-    const day = new Date().getDate();
-    if (day <= 7) return 1;
-    if (day <= 14) return 2;
-    if (day <= 21) return 3;
-    if (day <= 28) return 4;
-    return 5;
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+    const day = now.getDate();
+    // Calculate which real calendar week (Mon–Sun) the current day falls into
+    const firstDow = new Date(year, month - 1, 1).getDay(); // 0=Sun
+    const daysUntilMon = firstDow === 0 ? 1 : (8 - firstDow) % 7;
+    if (day <= daysUntilMon && daysUntilMon > 0) return 1; // partial first week
+    const offsetDay = daysUntilMon === 0 ? day : day - daysUntilMon;
+    return (daysUntilMon > 0 ? 1 : 0) + Math.ceil(offsetDay / 7);
   });
   const [trafficData, setTrafficData] = useState<any>(null);
   const [loadingTraffic, setLoadingTraffic] = useState<boolean>(false);
@@ -734,32 +738,51 @@ const AdminDashboard = () => {
     }
   }, [activeTab, trafficYear, trafficMonth, fetchTrafficStats]);
 
-  // Derived weekly traffic data
+  // Compute real calendar weeks (Mon–Sun) for the selected month
   const daysInTrafficMonth = new Date(trafficYear, trafficMonth, 0).getDate();
-  const trafficWeekOptions = [
-    { id: 1, label: 'Từ ngày 1 đến ngày 7 (Tuần 1)', shortLabel: 'Tuần 1 (01 - 07)', startDay: 1, endDay: 7 },
-    { id: 2, label: 'Từ ngày 8 đến ngày 14 (Tuần 2)', shortLabel: 'Tuần 2 (08 - 14)', startDay: 8, endDay: 14 },
-    { id: 3, label: 'Từ ngày 15 đến ngày 21 (Tuần 3)', shortLabel: 'Tuần 3 (15 - 21)', startDay: 15, endDay: 21 },
-    { id: 4, label: 'Từ ngày 22 đến ngày 28 (Tuần 4)', shortLabel: 'Tuần 4 (22 - 28)', startDay: 22, endDay: 28 },
-  ];
-  if (daysInTrafficMonth > 28) {
+
+  // dayOfWeekIndex: 0=Sun,1=Mon,...,6=Sat for the 1st of the month
+  const firstDayOfMonth = new Date(trafficYear, trafficMonth - 1, 1).getDay();
+  // daysUntilMonday: how many days before the first Monday (could be 0 if 1st is Mon)
+  const daysUntilMonday = firstDayOfMonth === 0 ? 1 : (8 - firstDayOfMonth) % 7;
+
+  const trafficWeekOptions: { id: number; label: string; shortLabel: string; startDay: number; endDay: number }[] = [];
+  let weekId = 1;
+  // First partial week: day 1 to day before first Monday (if 1st is not Monday)
+  if (daysUntilMonday > 0) {
+    const end = daysUntilMonday; // last day of partial first week
     trafficWeekOptions.push({
-      id: 5,
-      label: `Từ ngày 29 đến ngày ${daysInTrafficMonth} (Tuần 5)`,
-      shortLabel: `Tuần 5 (29 - ${daysInTrafficMonth})`,
-      startDay: 29,
-      endDay: daysInTrafficMonth
+      id: weekId++,
+      label: `Từ ngày 1 đến ngày ${end} (Tuần 1)`,
+      shortLabel: `Tuần 1 (01 - ${String(end).padStart(2, '0')})`,
+      startDay: 1,
+      endDay: end,
     });
+  }
+  // Full Mon–Sun weeks
+  let monday = daysUntilMonday === 0 ? 1 : daysUntilMonday + 1;
+  while (monday <= daysInTrafficMonth) {
+    const sunday = Math.min(monday + 6, daysInTrafficMonth);
+    const wNum = trafficWeekOptions.length + 1;
+    trafficWeekOptions.push({
+      id: weekId++,
+      label: `Từ ngày ${monday} đến ngày ${sunday} (Tuần ${wNum})`,
+      shortLabel: `Tuần ${wNum} (${String(monday).padStart(2, '0')} - ${String(sunday).padStart(2, '0')})`,
+      startDay: monday,
+      endDay: sunday,
+    });
+    monday += 7;
   }
 
   const selectedWeekInfo = trafficWeek === 'all'
     ? null
-    : trafficWeekOptions.find(w => w.id === trafficWeek) || trafficWeekOptions[0];
+    : (trafficWeekOptions.find(w => w.id === (trafficWeek as number)) || trafficWeekOptions[0]);
 
   const displayedTrafficDays: any[] = (trafficData?.dailyStats || []).filter((item: any) => {
     if (!selectedWeekInfo) return true;
     return item.day >= selectedWeekInfo.startDay && item.day <= selectedWeekInfo.endDay;
   });
+
 
   const currentVisits = displayedTrafficDays.reduce((sum: number, d: any) => sum + (d.visits || 0), 0);
   const currentConversions = displayedTrafficDays.reduce((sum: number, d: any) => sum + (d.byConversion || 0), 0);
