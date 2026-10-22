@@ -795,29 +795,18 @@ const AdminDashboard = () => {
     { dow: 'Chủ Nhật', shortDow: 'CN', order: 7 },
   ];
 
-  // For weekly chart: always arrange 7 columns from Thứ Hai (left) to Chủ Nhật (right)
+  // For weekly chart: sort by day number ascending (small to large), left to right
   const chartWeeklyData = selectedWeekInfo
-    ? DOW_LIST.map((slot) => {
-        const match = displayedTrafficDays.find((d: any) => d.dayOfWeek === slot.dow);
-        if (match) {
+    ? [...displayedTrafficDays]
+        .sort((a: any, b: any) => (a.day || 0) - (b.day || 0))
+        .map((d: any) => {
+          const dowInfo = DOW_LIST.find((slot) => slot.dow === d.dayOfWeek);
           return {
-            ...match,
-            slotName: `${slot.shortDow} (N${match.day})`,
-            shortDow: slot.shortDow,
+            ...d,
+            slotName: `${dowInfo?.shortDow ?? d.dayOfWeek} (N${d.day})`,
+            shortDow: dowInfo?.shortDow ?? d.dayOfWeek,
           };
-        }
-        return {
-          day: null,
-          date: '-',
-          dayOfWeek: slot.dow,
-          shortDow: slot.shortDow,
-          slotName: `${slot.shortDow} (-)`,
-          visits: 0,
-          byTime: 0,
-          byPage: 0,
-          byConversion: 0,
-        };
-      })
+        })
     : displayedTrafficDays.map((d: any) => ({
         ...d,
         slotName: `N${d.day}`,
