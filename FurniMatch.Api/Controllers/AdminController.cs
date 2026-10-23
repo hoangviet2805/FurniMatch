@@ -32,6 +32,7 @@ namespace FurniMatch.Api.Controllers
         {
             var query = _context.Users
                 .Include(u => u.Role)
+                .Where(u => u.Status != "PENDING")
                 .AsQueryable();
 
             if (!string.IsNullOrEmpty(role))
@@ -62,11 +63,11 @@ namespace FurniMatch.Api.Controllers
         {
             var customerCount = await _context.Users
                 .Include(u => u.Role)
-                .CountAsync(u => u.Role.RoleName.ToUpper() == "CUSTOMER");
+                .CountAsync(u => u.Role.RoleName.ToUpper() == "CUSTOMER" && u.Status != "PENDING");
 
             var sellerCount = await _context.Users
                 .Include(u => u.Role)
-                .CountAsync(u => u.Role.RoleName.ToUpper() == "SELLER");
+                .CountAsync(u => u.Role.RoleName.ToUpper() == "SELLER" && u.Status != "PENDING");
 
             return Ok(new
             {
