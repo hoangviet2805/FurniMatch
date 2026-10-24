@@ -1963,10 +1963,10 @@ const AdminDashboard = () => {
                 <span>0h00 - 24h00 (UTC+7)</span>
               </div>
               <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-                Báo Cáo Số Lượng Truy Cập
+                Báo Cáo Người Dùng Hoạt Động Hàng Ngày (DAU - Daily Active Users)
               </h2>
               <p className="text-emerald-100 text-xs sm:text-sm mt-2 leading-relaxed">
-                Thống kê số lượng lượt truy cập hợp lệ theo tuần (7 ngày) hoặc theo tháng. Lượt truy cập được tính từ 0h00 ngày hôm trước đến 0h00 ngày hôm sau theo múi giờ Việt Nam.
+                Thống kê số lượng Thiết bị Duy nhất (Unique Devices/IP) có phát sinh phiên tương tác hợp lệ trong 24h (tính từ 0h00 - 24h00 GMT+7).
               </p>
               <div className="flex flex-wrap items-center gap-2 mt-4 text-[11px] text-emerald-200">
                 <span className="bg-white/10 px-2.5 py-1 rounded-lg backdrop-blur-xs border border-white/10">⏱️ Ở lại web &gt; 10s: 1 lượt</span>
