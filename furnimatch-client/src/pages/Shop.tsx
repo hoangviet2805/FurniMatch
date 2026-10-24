@@ -581,27 +581,13 @@ const Shop: React.FC = () => {
               </h1>
 
               {/* Nút Tùy Chỉnh Gian Hàng hoặc Chat với Xưởng */}
-              {isOwner ? (
+              {isOwner && (
                 <button
                   onClick={() => setShowEditModal(true)}
                   className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-semibold text-sm rounded-xl shadow-md shadow-emerald-600/20 transition-all hover:shadow-lg cursor-pointer shrink-0"
                 >
                   <Settings className="w-4 h-4" />
                   <span>Tùy chỉnh gian hàng</span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => openChatWithSeller({
-                    sellerId: Number(id),
-                    sellerName: shop.shopName,
-                    shopName: shop.shopName,
-                    avatarUrl: shop.avatarUrl
-                  })}
-                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-semibold text-sm rounded-xl shadow-md shadow-emerald-600/20 transition-all hover:shadow-lg cursor-pointer shrink-0"
-                >
-                  <MessageCircle className="w-4 h-4" />
-                  <span>Chat với xưởng</span>
                 </button>
               )}
             </div>
