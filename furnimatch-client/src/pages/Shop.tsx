@@ -481,9 +481,8 @@ const Shop: React.FC = () => {
   const userStr = localStorage.getItem('user');
   const currentUser = userStr ? JSON.parse(userStr) : null;
   const isOwner = currentUser && (
-    Number(currentUser.userId) === Number(shop?.userId) || 
-    Number(currentUser.id) === Number(shop?.userId) || 
-    currentUser.role === 'ADMIN'
+    Number(currentUser.userId) === Number(shop?.userId) ||
+    Number(currentUser.id) === Number(shop?.userId)
   );
 
   useEffect(() => {
