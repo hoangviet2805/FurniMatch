@@ -4,9 +4,9 @@ import api, { getShopInfo, getShopProducts, getImageUrl } from '../utils/api';
 import { useProvinces } from '../hooks/useProvinces';
 import {
   Settings, Camera, MapPin, Package, Phone, CheckCircle,
-  X, Loader2, Sparkles, Image as ImageIcon, Star, MessageCircle
+  X, Loader2, Sparkles, Image as ImageIcon, Star
 } from 'lucide-react';
-import { openChatWithSeller } from '../utils/chat';
+
 
 interface ShopInfo {
   userId: number;
