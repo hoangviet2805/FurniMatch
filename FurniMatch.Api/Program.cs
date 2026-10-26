@@ -25,6 +25,9 @@ builder.Services.AddControllers().AddJsonOptions(options =>
     options.JsonSerializerOptions.Converters.Add(new NullableUtcDateTimeConverter());
 });
 
+// Add In-Memory Caching (for OTP registration, temporary tokens, etc.)
+builder.Services.AddMemoryCache();
+
 // Add DbContext (PostgreSQL / Supabase)
 builder.Services.AddDbContext<FurniMatchDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));

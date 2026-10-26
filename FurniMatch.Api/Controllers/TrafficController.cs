@@ -185,6 +185,46 @@ namespace FurniMatch.Api.Controllers
             int totalConversions = logs.Count(x => x.TriggerReason.Contains("CONVERSION", StringComparison.OrdinalIgnoreCase));
             double avgDaily = daysInMonth > 0 ? Math.Round((double)totalVisits / daysInMonth, 1) : 0;
 
+            // Tính thống kê theo các tuần trong tháng (Tuần 1: 01-07, Tuần 2: 08-14,...)
+            var weeklyStats = new List<WeeklyTrafficStatDto>();
+            int weekNumber = 1;
+            int peakWeek = 1;
+            int peakWeekVisits = 0;
+
+            for (int startDay = 1; startDay <= daysInMonth; startDay += 7)
+            {
+                int endDay = Math.Min(startDay + 6, daysInMonth);
+                var weekDays = dailyStats.Where(x => x.Day >= startDay && x.Day <= endDay).ToList();
+                int weekVisits = weekDays.Sum(x => x.Visits);
+                int weekByTime = weekDays.Sum(x => x.ByTime);
+                int weekByPage = weekDays.Sum(x => x.ByPage);
+                int weekByConversion = weekDays.Sum(x => x.ByConversion);
+                double weekAvg = weekDays.Count > 0 ? Math.Round((double)weekVisits / weekDays.Count, 1) : 0;
+
+                if (weekVisits > peakWeekVisits)
+                {
+                    peakWeekVisits = weekVisits;
+                    peakWeek = weekNumber;
+                }
+
+                weeklyStats.Add(new WeeklyTrafficStatDto
+                {
+                    WeekNumber = weekNumber,
+                    WeekLabel = $"Tuần {weekNumber} ({startDay:D2}/{targetMonth:D2} - {endDay:D2}/{targetMonth:D2})",
+                    ShortLabel = $"Tuần {weekNumber}",
+                    StartDay = startDay,
+                    EndDay = endDay,
+                    Visits = weekVisits,
+                    ByTime = weekByTime,
+                    ByPage = weekByPage,
+                    ByConversion = weekByConversion,
+                    AverageDailyVisits = weekAvg,
+                    Days = weekDays
+                });
+
+                weekNumber++;
+            }
+
             var report = new MonthlyTrafficReportDto
             {
                 Year = targetYear,
@@ -192,9 +232,12 @@ namespace FurniMatch.Api.Controllers
                 TotalVisits = totalVisits,
                 PeakDay = peakDay,
                 PeakDayVisits = peakVisits,
+                PeakWeek = peakWeek,
+                PeakWeekVisits = peakWeekVisits,
                 AverageDailyVisits = avgDaily,
                 TotalConversions = totalConversions,
-                DailyStats = dailyStats
+                DailyStats = dailyStats,
+                WeeklyStats = weeklyStats
             };
 
             return Ok(report);

@@ -1,12 +1,15 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import api, { verifyRegistration } from '../utils/api';
+import api, { verifyRegistration, resendRegistrationOtp } from '../utils/api';
 import { useProvinces } from '../hooks/useProvinces';
 
 const Register = () => {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [code, setCode] = useState('');
+  const [resendCountdown, setResendCountdown] = useState(0);
+  const [resending, setResending] = useState(false);
+  const [resendMessage, setResendMessage] = useState('');
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
@@ -56,6 +59,32 @@ const Register = () => {
     }
   };
 
+  useEffect(() => {
+    let timer: any;
+    if (resendCountdown > 0) {
+      timer = setInterval(() => {
+        setResendCountdown(prev => prev - 1);
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [resendCountdown]);
+
+  const handleResendOtp = async () => {
+    if (resendCountdown > 0 || resending) return;
+    setResending(true);
+    setError('');
+    setResendMessage('');
+    try {
+      const res = await resendRegistrationOtp({ email: formData.email });
+      setResendMessage(res.data?.message || 'Mã xác thực mới đã được gửi vào email.');
+      setResendCountdown(60);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Không thể gửi lại mã xác nhận.');
+    } finally {
+      setResending(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -88,6 +117,7 @@ const Register = () => {
         }
       });
       setCode('');
+      setResendCountdown(60);
       setStep(2);
     } catch (err: any) {
       const respData = err.response?.data;
@@ -521,13 +551,27 @@ const Register = () => {
               {loading ? 'Đang xác thực...' : 'Xác Nhận Kích Hoạt'}
             </button>
             
-            <div className="text-center pt-2">
+            {resendMessage && (
+              <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 py-2 px-3 rounded-xl text-center font-medium animate-fadeIn">
+                ✓ {resendMessage}
+              </div>
+            )}
+
+            <div className="flex items-center justify-between pt-2">
               <button 
                 type="button"
                 onClick={() => setStep(1)}
                 className="text-xs sm:text-sm text-emerald-700 hover:text-emerald-800 font-semibold hover:underline"
               >
-                ← Quay lại chỉnh sửa thông tin
+                ← Quay lại chỉnh sửa
+              </button>
+              <button
+                type="button"
+                onClick={handleResendOtp}
+                disabled={resendCountdown > 0 || resending}
+                className="text-xs sm:text-sm font-semibold text-emerald-700 hover:text-emerald-800 disabled:text-gray-400 hover:underline"
+              >
+                {resending ? 'Đang gửi...' : resendCountdown > 0 ? `Gửi lại mã (${resendCountdown}s)` : 'Gửi lại mã OTP'}
               </button>
             </div>
           </form>

@@ -14,6 +14,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using FurniMatch.Api.Services;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Caching.Memory;
 using BC = BCrypt.Net.BCrypt;
 
 namespace FurniMatch.Api.Controllers
@@ -27,71 +28,60 @@ namespace FurniMatch.Api.Controllers
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly IWebHostEnvironment _env;
         private readonly IPhotoService _photoService;
+        private readonly IMemoryCache _memoryCache;
 
-        public AuthController(FurniMatchDbContext context, IConfiguration configuration, IServiceScopeFactory scopeFactory, IWebHostEnvironment env, IPhotoService photoService)
+        public AuthController(
+            FurniMatchDbContext context, 
+            IConfiguration configuration, 
+            IServiceScopeFactory scopeFactory, 
+            IWebHostEnvironment env, 
+            IPhotoService photoService,
+            IMemoryCache memoryCache)
         {
             _context = context;
             _configuration = configuration;
             _scopeFactory = scopeFactory;
             _env = env;
             _photoService = photoService;
+            _memoryCache = memoryCache;
         }
 
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromForm] RegisterDto dto)
         {
-            var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.Email == dto.Email);
-            if (existingUser != null)
+            if (string.IsNullOrWhiteSpace(dto.Email))
             {
-                if (existingUser.Status == "ACTIVE")
-                {
-                    return BadRequest("Email already exists.");
-                }
-                
-                // If PENDING, allow re-registration by removing the old pending record
-                _context.Users.Remove(existingUser);
-                await _context.SaveChangesAsync();
+                return BadRequest(new { message = "Email không được để trống." });
             }
 
-            var role = await _context.Roles.FirstOrDefaultAsync(r => r.RoleName == dto.RoleName.ToUpper());
+            var normalizedEmail = dto.Email.Trim().ToLowerInvariant();
+            var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == normalizedEmail);
+            if (existingUser != null)
+            {
+                // Nếu là tài khoản PENDING cũ (chưa từng xác thực OTP trước đây) thì cho phép ghi đè/dọn dẹp để đăng ký lại
+                if (existingUser.Status == "PENDING")
+                {
+                    _context.Users.Remove(existingUser);
+                    await _context.SaveChangesAsync();
+                }
+                else
+                {
+                    return BadRequest(new { message = "Email này đã được đăng ký trong hệ thống." });
+                }
+            }
+
+            var roleName = string.IsNullOrWhiteSpace(dto.RoleName) ? "CUSTOMER" : dto.RoleName.Trim().ToUpper();
+            var role = await _context.Roles.FirstOrDefaultAsync(r => r.RoleName == roleName);
             if (role == null)
             {
-                // Create roles if they don't exist for the MVP
-                role = new Role { RoleName = dto.RoleName.ToUpper() };
+                role = new Role { RoleName = roleName };
                 _context.Roles.Add(role);
                 await _context.SaveChangesAsync();
             }
 
-            var user = new User
-            {
-                FullName = dto.FullName,
-                Email = dto.Email,
-                Phone = dto.Phone,
-                PasswordHash = BC.HashPassword(dto.Password),
-                RoleId = role.RoleId,
-                Status = "PENDING", // Set to PENDING until email is verified
-                ShopName = dto.ShopName,
-                ShopDescription = dto.ShopDescription,
-                IsCustomSizeSupported = dto.IsCustomSizeSupported,
-                Latitude = dto.Latitude,
-                Longitude = dto.Longitude,
-                Province = dto.Province,
-                District = dto.District,
-                Ward = dto.Ward,
-                AddressDetail = dto.AddressDetail
-            };
-
-            var random = new Random();
-            var code = random.Next(10000000, 99999999).ToString();
-            
-            user.ResetPasswordToken = code;
-            user.ResetPasswordTokenExpiry = DateTime.UtcNow.AddMinutes(15);
-            
-            _context.Users.Add(user);
-            await _context.SaveChangesAsync();
-
-            // Save uploaded documents for SELLER
-            if (dto.RoleName.ToUpper() == "SELLER" && dto.Documents != null && dto.Documents.Count > 0)
+            var documentUrls = new List<string>();
+            // Lưu các tài liệu tải lên nếu là SELLER
+            if (roleName == "SELLER" && dto.Documents != null && dto.Documents.Count > 0)
             {
                 if (dto.Documents.Count > 10)
                 {
@@ -105,17 +95,40 @@ namespace FurniMatch.Api.Controllers
                         var url = await _photoService.AddMediaAsync(file, "furnimatch_seller_docs");
                         if (!string.IsNullOrEmpty(url))
                         {
-                            var sellerDoc = new SellerDocument
-                            {
-                                UserId = user.UserId,
-                                ImageUrl = url
-                            };
-                            _context.SellerDocuments.Add(sellerDoc);
+                            documentUrls.Add(url);
                         }
                     }
                 }
-                await _context.SaveChangesAsync();
             }
+
+            var random = new Random();
+            var code = random.Next(10000000, 99999999).ToString();
+
+            // Lưu thông tin đăng ký vào IMemoryCache (TTL: 15 phút), KHÔNG ghi vào DB để tránh rác nếu user bỏ dở
+            var pending = new PendingRegistration
+            {
+                FullName = dto.FullName,
+                Email = normalizedEmail,
+                Phone = dto.Phone,
+                PasswordHash = BC.HashPassword(dto.Password),
+                RoleId = role.RoleId,
+                RoleName = role.RoleName,
+                ShopName = dto.ShopName,
+                ShopDescription = dto.ShopDescription,
+                IsCustomSizeSupported = dto.IsCustomSizeSupported,
+                Latitude = dto.Latitude,
+                Longitude = dto.Longitude,
+                Province = dto.Province,
+                District = dto.District,
+                Ward = dto.Ward,
+                AddressDetail = dto.AddressDetail,
+                DocumentUrls = documentUrls,
+                OtpCode = code,
+                ExpiryTime = DateTime.UtcNow.AddMinutes(15)
+            };
+
+            var cacheKey = $"pending_reg_{normalizedEmail}";
+            _memoryCache.Set(cacheKey, pending, TimeSpan.FromMinutes(15));
 
             var emailBody = $@"
                 <h2>Xác thực tài khoản FurniMatch</h2>
@@ -145,41 +158,190 @@ namespace FurniMatch.Api.Controllers
             return Ok(new { message = "Registration successful. Please verify OTP." });
         }
 
+        [HttpPost("resend-registration-otp")]
+        public IActionResult ResendRegistrationOtp([FromBody] ResendRegistrationOtpDto dto)
+        {
+            if (string.IsNullOrWhiteSpace(dto.Email))
+            {
+                return BadRequest(new { message = "Email không được để trống." });
+            }
+
+            var normalizedEmail = dto.Email.Trim().ToLowerInvariant();
+            var cacheKey = $"pending_reg_{normalizedEmail}";
+
+            if (!_memoryCache.TryGetValue<PendingRegistration>(cacheKey, out var pending) || pending == null)
+            {
+                return BadRequest(new { message = "Yêu cầu đăng ký đã hết hạn hoặc không tồn tại. Vui lòng quay lại đăng ký lại từ đầu." });
+            }
+
+            var random = new Random();
+            var code = random.Next(10000000, 99999999).ToString();
+            pending.OtpCode = code;
+            pending.ExpiryTime = DateTime.UtcNow.AddMinutes(15);
+            _memoryCache.Set(cacheKey, pending, TimeSpan.FromMinutes(15));
+
+            var emailBody = $@"
+                <h2>Xác thực tài khoản FurniMatch</h2>
+                <p>Mã xác nhận mới của bạn là:</p>
+                <h1 style='color: #4CAF50; font-size: 32px; letter-spacing: 5px;'>{code}</h1>
+                <p>Mã này sẽ hết hạn sau 15 phút.</p>
+            ";
+
+            var targetEmail = pending.Email;
+            _ = Task.Run(async () =>
+            {
+                using (var scope = _scopeFactory.CreateScope())
+                {
+                    var emailService = scope.ServiceProvider.GetRequiredService<IEmailService>();
+                    try
+                    {
+                        await emailService.SendEmailAsync(targetEmail, "Mã xác thực mới - FurniMatch", emailBody);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[EmailService] Failed to send email to {targetEmail}: {ex.Message}");
+                    }
+                }
+            });
+
+            return Ok(new { message = "Mã xác thực mới đã được gửi vào email của bạn." });
+        }
+
         [HttpPost("verify-registration")]
         public async Task<IActionResult> VerifyRegistration([FromBody] VerifyRegistrationDto dto)
         {
-            var user = await _context.Users
-                .Include(u => u.Role)
-                .FirstOrDefaultAsync(u => u.Email == dto.Email && u.Status == "PENDING");
-            if (user == null)
+            var normalizedEmail = dto.Email.Trim().ToLowerInvariant();
+            var cacheKey = $"pending_reg_{normalizedEmail}";
+
+            // 1. Kiểm tra trong IMemoryCache
+            if (!_memoryCache.TryGetValue<PendingRegistration>(cacheKey, out var pending) || pending == null)
             {
-                return BadRequest(new { message = "Không tìm thấy yêu cầu đăng ký cho email này hoặc tài khoản đã được kích hoạt." });
+                // Fallback hỗ trợ nếu có tài khoản PENDING từ hệ thống cũ trong DB
+                var legacyPendingUser = await _context.Users
+                    .Include(u => u.Role)
+                    .FirstOrDefaultAsync(u => u.Email.ToLower() == normalizedEmail && u.Status == "PENDING");
+
+                if (legacyPendingUser == null)
+                {
+                    return BadRequest(new { message = "Không tìm thấy yêu cầu đăng ký cho email này hoặc mã đã hết hạn. Vui lòng đăng ký lại." });
+                }
+
+                if (legacyPendingUser.ResetPasswordToken != dto.Code || legacyPendingUser.ResetPasswordTokenExpiry < DateTime.UtcNow)
+                {
+                    return BadRequest(new { message = "Mã xác thực không đúng hoặc đã hết hạn." });
+                }
+
+                if (legacyPendingUser.Role?.RoleName == "SELLER")
+                {
+                    legacyPendingUser.Status = "PENDING_APPROVAL";
+                }
+                else
+                {
+                    legacyPendingUser.Status = "ACTIVE";
+                }
+                legacyPendingUser.ResetPasswordToken = null;
+                legacyPendingUser.ResetPasswordTokenExpiry = null;
+                await _context.SaveChangesAsync();
+
+                if (legacyPendingUser.Status == "PENDING_APPROVAL")
+                {
+                    return Ok(new { message = "Xác thực email thành công! Đơn đăng ký nhà sản xuất của bạn đang chờ Admin phê duyệt.", isSeller = true });
+                }
+
+                var legacyToken = GenerateJwtToken(legacyPendingUser);
+                return Ok(new
+                {
+                    message = "Xác thực tài khoản thành công!",
+                    isSeller = false,
+                    token = legacyToken,
+                    userId = legacyPendingUser.UserId,
+                    fullName = legacyPendingUser.FullName,
+                    email = legacyPendingUser.Email,
+                    role = legacyPendingUser.Role!.RoleName,
+                    phone = legacyPendingUser.Phone,
+                    shopName = legacyPendingUser.ShopName,
+                    shopDescription = legacyPendingUser.ShopDescription,
+                    isCustomSizeSupported = legacyPendingUser.IsCustomSizeSupported,
+                    latitude = legacyPendingUser.Latitude,
+                    longitude = legacyPendingUser.Longitude,
+                    province = legacyPendingUser.Province,
+                    district = legacyPendingUser.District,
+                    ward = legacyPendingUser.Ward,
+                    addressDetail = legacyPendingUser.AddressDetail
+                });
             }
 
-            if (user.ResetPasswordToken != dto.Code || user.ResetPasswordTokenExpiry < DateTime.UtcNow)
+            // 2. Kiểm tra mã OTP và hạn dùng trong Cache
+            if (pending.OtpCode != dto.Code.Trim() || pending.ExpiryTime < DateTime.UtcNow)
             {
                 return BadRequest(new { message = "Mã xác thực không đúng hoặc đã hết hạn." });
             }
 
-            // Kích hoạt tài khoản
-            if (user.Role?.RoleName == "SELLER")
+            // 3. Kiểm tra lại phòng hờ trùng email
+            var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == normalizedEmail);
+            if (existingUser != null)
             {
-                user.Status = "PENDING_APPROVAL";
+                if (existingUser.Status == "PENDING")
+                {
+                    _context.Users.Remove(existingUser);
+                }
+                else
+                {
+                    _memoryCache.Remove(cacheKey);
+                    return BadRequest(new { message = "Email này đã được đăng ký bởi tài khoản khác." });
+                }
             }
-            else
-            {
-                user.Status = "ACTIVE";
-            }
-            user.ResetPasswordToken = null;
-            user.ResetPasswordTokenExpiry = null;
 
+            var userRole = await _context.Roles.FirstOrDefaultAsync(r => r.RoleId == pending.RoleId) 
+                ?? await _context.Roles.FirstOrDefaultAsync(r => r.RoleName == pending.RoleName);
+
+            // 4. CHÍNH THỨC TẠO TÀI KHOẢN VÀO CƠ SỞ DỮ LIỆU
+            var user = new User
+            {
+                FullName = pending.FullName,
+                Email = pending.Email,
+                Phone = pending.Phone,
+                PasswordHash = pending.PasswordHash,
+                RoleId = userRole?.RoleId ?? pending.RoleId,
+                Status = pending.RoleName == "SELLER" ? "PENDING_APPROVAL" : "ACTIVE",
+                ShopName = pending.ShopName,
+                ShopDescription = pending.ShopDescription,
+                IsCustomSizeSupported = pending.IsCustomSizeSupported,
+                Latitude = pending.Latitude,
+                Longitude = pending.Longitude,
+                Province = pending.Province,
+                District = pending.District,
+                Ward = pending.Ward,
+                AddressDetail = pending.AddressDetail,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.Users.Add(user);
             await _context.SaveChangesAsync();
+
+            // Lưu các tài liệu chứng minh xưởng (nếu là Seller)
+            if (pending.DocumentUrls != null && pending.DocumentUrls.Count > 0)
+            {
+                foreach (var url in pending.DocumentUrls)
+                {
+                    _context.SellerDocuments.Add(new SellerDocument
+                    {
+                        UserId = user.UserId,
+                        ImageUrl = url
+                    });
+                }
+                await _context.SaveChangesAsync();
+            }
+
+            // 5. Xóa dữ liệu tạm trong Cache
+            _memoryCache.Remove(cacheKey);
 
             if (user.Status == "PENDING_APPROVAL")
             {
                 return Ok(new { message = "Xác thực email thành công! Đơn đăng ký nhà sản xuất của bạn đang chờ Admin phê duyệt.", isSeller = true });
             }
 
+            user.Role = userRole;
             var token = GenerateJwtToken(user);
             return Ok(new
             {
@@ -189,7 +351,7 @@ namespace FurniMatch.Api.Controllers
                 userId = user.UserId,
                 fullName = user.FullName,
                 email = user.Email,
-                role = user.Role!.RoleName,
+                role = user.Role?.RoleName ?? "CUSTOMER",
                 phone = user.Phone,
                 shopName = user.ShopName,
                 shopDescription = user.ShopDescription,

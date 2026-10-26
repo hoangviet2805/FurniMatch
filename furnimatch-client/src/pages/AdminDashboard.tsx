@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import api, { API_BASE_URL } from '../utils/api';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
-import { ZoomIn, ZoomOut, RotateCcw, X, ExternalLink, RefreshCw, TrendingUp, Users, Activity, Clock, CheckCircle2, Calendar, ChevronRight, ArrowLeft } from 'lucide-react';
+import { ZoomIn, ZoomOut, RotateCcw, X, ExternalLink, RefreshCw, TrendingUp, Users, Activity, Clock, CheckCircle2, Calendar } from 'lucide-react';
 
 const AdminDashboard = () => {
   const [users, setUsers] = useState<any[]>([]);
@@ -697,81 +697,28 @@ const AdminDashboard = () => {
   // ========== TRAFFIC REPORT STATE ==========
   const [trafficYear, setTrafficYear] = useState<number>(new Date().getFullYear());
   const [trafficMonth, setTrafficMonth] = useState<number>(new Date().getMonth() + 1);
+  const [trafficWeek, setTrafficWeek] = useState<number | 'all'>(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+    const day = now.getDate();
+    // Calculate which real calendar week (Mon–Sun) the current day falls into
+    const firstDow = new Date(year, month - 1, 1).getDay(); // 0=Sun
+    const daysUntilMon = firstDow === 0 ? 1 : (8 - firstDow) % 7;
+    if (day <= daysUntilMon && daysUntilMon > 0) return 1; // partial first week
+    const offsetDay = daysUntilMon === 0 ? day : day - daysUntilMon;
+    return (daysUntilMon > 0 ? 1 : 0) + Math.ceil(offsetDay / 7);
+  });
   const [trafficData, setTrafficData] = useState<any>(null);
   const [loadingTraffic, setLoadingTraffic] = useState<boolean>(false);
-  // Chế độ xem biểu đồ: 'WEEKS' (Theo tuần trong tháng) | 'WEEK_DAYS' (Chi tiết 7 ngày trong tuần) | 'DAYS' (Toàn bộ ngày)
-  const [trafficViewMode, setTrafficViewMode] = useState<'WEEKS' | 'WEEK_DAYS' | 'DAYS'>('WEEKS');
-  const [selectedWeekIdx, setSelectedWeekIdx] = useState<number>(0);
 
-  // Tính toán dữ liệu theo tuần (dù backend đã trả về weeklyStats hay chỉ có dailyStats)
-  const computedWeeklyStats = useMemo(() => {
-    if (trafficData?.weeklyStats && trafficData.weeklyStats.length > 0) {
-      return trafficData.weeklyStats;
-    }
-    if (!trafficData?.dailyStats || trafficData.dailyStats.length === 0) {
-      return [];
-    }
-    const days = trafficData.dailyStats;
-    const totalDays = days.length;
-    const weeks: any[] = [];
-    let weekNum = 1;
-
-    for (let start = 1; start <= totalDays; start += 7) {
-      const end = Math.min(start + 6, totalDays);
-      const weekDays = days.filter((d: any) => d.day >= start && d.day <= end);
-      const visits = weekDays.reduce((sum: number, d: any) => sum + (d.visits || 0), 0);
-      const byTime = weekDays.reduce((sum: number, d: any) => sum + (d.byTime || 0), 0);
-      const byPage = weekDays.reduce((sum: number, d: any) => sum + (d.byPage || 0), 0);
-      const byConversion = weekDays.reduce((sum: number, d: any) => sum + (d.byConversion || 0), 0);
-      const avg = weekDays.length > 0 ? Number((visits / weekDays.length).toFixed(1)) : 0;
-
-      weeks.push({
-        weekNumber: weekNum,
-        weekLabel: `Tuần ${weekNum} (${String(start).padStart(2, '0')}/${String(trafficMonth).padStart(2, '0')} - ${String(end).padStart(2, '0')}/${String(trafficMonth).padStart(2, '0')})`,
-        shortLabel: `Tuần ${weekNum}`,
-        startDay: start,
-        endDay: end,
-        visits,
-        byTime,
-        byPage,
-        byConversion,
-        averageDailyVisits: avg,
-        days: weekDays,
-      });
-      weekNum++;
-    }
-    return weeks;
-  }, [trafficData, trafficMonth]);
-
-  const peakWeek = useMemo(() => {
-    if (computedWeeklyStats.length === 0) return null;
-    return [...computedWeeklyStats].sort((a: any, b: any) => b.visits - a.visits)[0];
-  }, [computedWeeklyStats]);
-
-  const currentSelectedWeek = useMemo(() => {
-    if (computedWeeklyStats.length === 0) return null;
-    return computedWeeklyStats[selectedWeekIdx] || computedWeeklyStats[0];
-  }, [computedWeeklyStats, selectedWeekIdx]);
-
-  // Tự động chọn tuần chứa ngày hiện tại khi đổi tháng / nạp dữ liệu
+  // Auto-adjust week if switching to month with fewer days (e.g. Feb)
   useEffect(() => {
-    if (computedWeeklyStats.length > 0) {
-      const today = new Date().getDate();
-      const currentMonth = new Date().getMonth() + 1;
-      const currentYear = new Date().getFullYear();
-
-      if (trafficYear === currentYear && trafficMonth === currentMonth) {
-        const foundIdx = computedWeeklyStats.findIndex(
-          (w: any) => today >= w.startDay && today <= w.endDay
-        );
-        if (foundIdx !== -1) {
-          setSelectedWeekIdx(foundIdx);
-          return;
-        }
-      }
-      setSelectedWeekIdx(0);
+    const daysInM = new Date(trafficYear, trafficMonth, 0).getDate();
+    if (trafficWeek === 5 && daysInM <= 28) {
+      setTrafficWeek(4);
     }
-  }, [computedWeeklyStats, trafficYear, trafficMonth]);
+  }, [trafficYear, trafficMonth, trafficWeek]);
 
   const fetchTrafficStats = useCallback(async (year: number, month: number) => {
     setLoadingTraffic(true);
@@ -790,6 +737,124 @@ const AdminDashboard = () => {
       fetchTrafficStats(trafficYear, trafficMonth);
     }
   }, [activeTab, trafficYear, trafficMonth, fetchTrafficStats]);
+
+  // Compute real calendar weeks (Mon–Sun) for the selected month
+  const daysInTrafficMonth = new Date(trafficYear, trafficMonth, 0).getDate();
+
+  // dayOfWeekIndex: 0=Sun,1=Mon,...,6=Sat for the 1st of the month
+  const firstDayOfMonth = new Date(trafficYear, trafficMonth - 1, 1).getDay();
+  // daysUntilMonday: how many days before the first Monday (could be 0 if 1st is Mon)
+  const daysUntilMonday = firstDayOfMonth === 0 ? 1 : (8 - firstDayOfMonth) % 7;
+
+  const trafficWeekOptions: { id: number; label: string; shortLabel: string; startDay: number; endDay: number }[] = [];
+  let weekId = 1;
+  // First partial week: day 1 to day before first Monday (if 1st is not Monday)
+  if (daysUntilMonday > 0) {
+    const end = daysUntilMonday; // last day of partial first week
+    trafficWeekOptions.push({
+      id: weekId++,
+      label: `Từ ngày 1 đến ngày ${end} (Tuần 1)`,
+      shortLabel: `Tuần 1 (01 - ${String(end).padStart(2, '0')})`,
+      startDay: 1,
+      endDay: end,
+    });
+  }
+  // Full Mon–Sun weeks
+  let monday = daysUntilMonday === 0 ? 1 : daysUntilMonday + 1;
+  while (monday <= daysInTrafficMonth) {
+    const sunday = Math.min(monday + 6, daysInTrafficMonth);
+    const wNum = trafficWeekOptions.length + 1;
+    trafficWeekOptions.push({
+      id: weekId++,
+      label: `Từ ngày ${monday} đến ngày ${sunday} (Tuần ${wNum})`,
+      shortLabel: `Tuần ${wNum} (${String(monday).padStart(2, '0')} - ${String(sunday).padStart(2, '0')})`,
+      startDay: monday,
+      endDay: sunday,
+    });
+    monday += 7;
+  }
+
+  const selectedWeekInfo = trafficWeek === 'all'
+    ? null
+    : (trafficWeekOptions.find(w => w.id === (trafficWeek as number)) || trafficWeekOptions[0]);
+
+  const displayedTrafficDays: any[] = (trafficData?.dailyStats || []).filter((item: any) => {
+    if (!selectedWeekInfo) return true;
+    return item.day >= selectedWeekInfo.startDay && item.day <= selectedWeekInfo.endDay;
+  });
+
+
+  const currentVisits = displayedTrafficDays.reduce((sum: number, d: any) => sum + (d.visits || 0), 0);
+  const currentConversions = displayedTrafficDays.reduce((sum: number, d: any) => sum + (d.byConversion || 0), 0);
+  const currentByTime = displayedTrafficDays.reduce((sum: number, d: any) => sum + (d.byTime || 0), 0);
+  const currentByPage = displayedTrafficDays.reduce((sum: number, d: any) => sum + (d.byPage || 0), 0);
+  const currentAvgDaily = displayedTrafficDays.length > 0 
+    ? (currentVisits / displayedTrafficDays.length).toFixed(1) 
+    : '0';
+
+  const currentPeakDayItem = displayedTrafficDays.reduce((max: any, d: any) => {
+    if (!max || (d.visits || 0) > (max.visits || 0)) return d;
+    return max;
+  }, null as any);
+
+  // Fixed order of weekdays starting from Thứ Hai (1) to Chủ Nhật (7)
+  const DOW_ORDER: Record<string, number> = {
+    'Thứ Hai': 1,
+    'Thứ Ba': 2,
+    'Thứ Tư': 3,
+    'Thứ Năm': 4,
+    'Thứ Sáu': 5,
+    'Thứ Bảy': 6,
+    'Chủ Nhật': 7,
+  };
+
+  const DOW_LIST = [
+    { dow: 'Thứ Hai', shortDow: 'T.Hai', order: 1 },
+    { dow: 'Thứ Ba', shortDow: 'T.Ba', order: 2 },
+    { dow: 'Thứ Tư', shortDow: 'T.Tư', order: 3 },
+    { dow: 'Thứ Năm', shortDow: 'T.Năm', order: 4 },
+    { dow: 'Thứ Sáu', shortDow: 'T.Sáu', order: 5 },
+    { dow: 'Thứ Bảy', shortDow: 'T.Bảy', order: 6 },
+    { dow: 'Chủ Nhật', shortDow: 'CN', order: 7 },
+  ];
+
+  // For weekly chart: always 7 fixed columns Mon→Sun (left to right), each matched by dayOfWeek
+  const chartWeeklyData = selectedWeekInfo
+    ? DOW_LIST.map((slot) => {
+        const match = displayedTrafficDays.find((d: any) => d.dayOfWeek === slot.dow);
+        if (match) {
+          return {
+            ...match,
+            slotName: `${slot.shortDow} (N${match.day})`,
+            shortDow: slot.shortDow,
+          };
+        }
+        return {
+          day: null,
+          date: '-',
+          dayOfWeek: slot.dow,
+          shortDow: slot.shortDow,
+          slotName: `${slot.shortDow} (-)`,
+          visits: 0,
+          byTime: 0,
+          byPage: 0,
+          byConversion: 0,
+        };
+      })
+    : displayedTrafficDays.map((d: any) => ({
+        ...d,
+        slotName: `N${d.day}`,
+        shortDow: d.dayOfWeek ? d.dayOfWeek.replace('Thứ ', 'T.').replace('Chủ Nhật', 'CN') : '',
+      }));
+
+  // For weekly table: sort from Thứ Hai to Chủ Nhật
+  const tableWeeklyData = selectedWeekInfo
+    ? [...displayedTrafficDays].sort((a, b) => {
+        const orderA = DOW_ORDER[a.dayOfWeek] || 99;
+        const orderB = DOW_ORDER[b.dayOfWeek] || 99;
+        return orderA - orderB;
+      })
+    : displayedTrafficDays;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -1898,10 +1963,10 @@ const AdminDashboard = () => {
                 <span>0h00 - 24h00 (UTC+7)</span>
               </div>
               <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-                Báo Cáo Số Lượng Truy Cập
+                Báo Cáo Người Dùng Hoạt Động Hàng Ngày (DAU - Daily Active Users)
               </h2>
               <p className="text-emerald-100 text-xs sm:text-sm mt-2 leading-relaxed">
-                Thống kê số lượng lượt truy cập hợp lệ theo ngày trong tháng. Lượt truy cập được tính từ 0h00 ngày hôm trước đến 0h00 ngày hôm sau theo múi giờ Việt Nam.
+                Thống kê số lượng Thiết bị Duy nhất (Unique Devices/IP) có phát sinh phiên tương tác hợp lệ trong 24h (tính từ 0h00 - 24h00 GMT+7).
               </p>
               <div className="flex flex-wrap items-center gap-2 mt-4 text-[11px] text-emerald-200">
                 <span className="bg-white/10 px-2.5 py-1 rounded-lg backdrop-blur-xs border border-white/10">⏱️ Ở lại web &gt; 10s: 1 lượt</span>
@@ -1943,6 +2008,26 @@ const AdminDashboard = () => {
                 </select>
               </div>
 
+              {/* Week dropdown filter */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-emerald-100 whitespace-nowrap flex items-center gap-1">
+                  <Calendar className="w-3.5 h-3.5" />
+                  <span>Khoảng tuần:</span>
+                </span>
+                <select
+                  value={trafficWeek}
+                  onChange={(e) => setTrafficWeek(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+                  className="bg-white text-gray-900 text-xs font-bold px-3 py-2 rounded-xl outline-none border border-emerald-300 shadow-sm cursor-pointer min-w-[210px]"
+                >
+                  {trafficWeekOptions.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.label}
+                    </option>
+                  ))}
+                  <option value="all">Toàn bộ tháng (Tất cả các tuần)</option>
+                </select>
+              </div>
+
               <button
                 type="button"
                 onClick={() => fetchTrafficStats(trafficYear, trafficMonth)}
@@ -1959,11 +2044,17 @@ const AdminDashboard = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex items-center justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Tổng Lượt Truy Cập</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  {selectedWeekInfo ? `Tổng Lượt Truy Cập (${selectedWeekInfo.shortLabel})` : 'Tổng Lượt Truy Cập (Cả Tháng)'}
+                </p>
                 <h3 className="text-2xl sm:text-3xl font-black text-gray-900 mt-1">
-                  {loadingTraffic ? '...' : (trafficData?.totalVisits ?? 0)}
+                  {loadingTraffic ? '...' : currentVisits}
                 </h3>
-                <p className="text-[11px] text-emerald-600 font-semibold mt-1">Trong Tháng {trafficMonth}/{trafficYear}</p>
+                <p className="text-[11px] text-emerald-600 font-semibold mt-1">
+                  {selectedWeekInfo 
+                    ? `Ngày ${selectedWeekInfo.startDay} - ${selectedWeekInfo.endDay}/${trafficMonth} • Tháng: ${trafficData?.totalVisits ?? 0}` 
+                    : `Trong Tháng ${trafficMonth}/${trafficYear}`}
+                </p>
               </div>
               <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center border border-emerald-100">
                 <Users className="w-6 h-6" />
@@ -1973,21 +2064,15 @@ const AdminDashboard = () => {
             <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex items-center justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-                  {trafficViewMode === 'WEEKS' ? 'Tuần Cao Điểm Nhất' : 'Ngày Cao Điểm Nhất'}
+                  {selectedWeekInfo ? 'Ngày Cao Điểm Trong Tuần' : 'Ngày Cao Điểm Nhất'}
                 </p>
                 <h3 className="text-2xl sm:text-3xl font-black text-emerald-700 mt-1">
-                  {loadingTraffic
-                    ? '...'
-                    : trafficViewMode === 'WEEKS'
-                    ? (peakWeek ? peakWeek.shortLabel : '-')
-                    : (trafficData?.peakDay ? `Ngày ${trafficData.peakDay}` : '-')}
+                  {loadingTraffic ? '...' : (currentPeakDayItem && currentPeakDayItem.visits > 0 ? `Ngày ${currentPeakDayItem.day}` : '-')}
                 </h3>
                 <p className="text-[11px] text-gray-500 mt-1">
-                  {loadingTraffic
-                    ? '...'
-                    : trafficViewMode === 'WEEKS'
-                    ? (peakWeek?.visits ? `${peakWeek.visits} lượt (${peakWeek.weekLabel})` : 'Chưa có dữ liệu')
-                    : (trafficData?.peakDayVisits ? `${trafficData.peakDayVisits} lượt truy cập` : 'Chưa có dữ liệu')}
+                  {currentPeakDayItem && currentPeakDayItem.visits > 0 
+                    ? `${currentPeakDayItem.visits} lượt (${currentPeakDayItem.dayOfWeek})` 
+                    : 'Chưa có dữ liệu'}
                 </p>
               </div>
               <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center border border-amber-100">
@@ -1997,11 +2082,15 @@ const AdminDashboard = () => {
 
             <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex items-center justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Trung Bình Mỗi Ngày</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  {selectedWeekInfo ? 'Trung Bình / Ngày (Tuần)' : 'Trung Bình Mỗi Ngày'}
+                </p>
                 <h3 className="text-2xl sm:text-3xl font-black text-gray-900 mt-1">
-                  {loadingTraffic ? '...' : (trafficData?.averageDailyVisits ?? 0)}
+                  {loadingTraffic ? '...' : currentAvgDaily}
                 </h3>
-                <p className="text-[11px] text-gray-500 mt-1">Lượt truy cập / ngày</p>
+                <p className="text-[11px] text-gray-500 mt-1">
+                  {selectedWeekInfo ? `${displayedTrafficDays.length} ngày trong tuần` : 'Lượt truy cập / ngày'}
+                </p>
               </div>
               <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-700 flex items-center justify-center border border-blue-100">
                 <Activity className="w-6 h-6" />
@@ -2010,11 +2099,17 @@ const AdminDashboard = () => {
 
             <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex items-center justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Lượt Chuyển Hóa</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  {selectedWeekInfo ? 'Chuyển Hóa Trong Tuần' : 'Lượt Chuyển Hóa'}
+                </p>
                 <h3 className="text-2xl sm:text-3xl font-black text-purple-700 mt-1">
-                  {loadingTraffic ? '...' : (trafficData?.totalConversions ?? 0)}
+                  {loadingTraffic ? '...' : currentConversions}
                 </h3>
-                <p className="text-[11px] text-gray-500 mt-1">Đăng nhập & giao dịch ví</p>
+                <p className="text-[11px] text-gray-500 mt-1">
+                  {selectedWeekInfo 
+                    ? `Đăng nhập & GD ví (Tháng: ${trafficData?.totalConversions ?? 0})` 
+                    : 'Đăng nhập & giao dịch ví'}
+                </p>
               </div>
               <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-700 flex items-center justify-center border border-purple-100">
                 <CheckCircle2 className="w-6 h-6" />
@@ -2024,102 +2119,56 @@ const AdminDashboard = () => {
 
           {/* Bar Chart Section */}
           <div className="bg-white rounded-3xl p-6 sm:p-7 border border-gray-100 shadow-sm">
-            {/* Top Toolbar: Mode Switcher & Filter Info */}
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between pb-5 border-b border-gray-100 gap-4 mb-6">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between pb-4 border-b border-gray-100 gap-4 mb-6">
               <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-lg font-extrabold text-gray-900">
-                    {trafficViewMode === 'WEEKS' && `📊 Biểu Đồ Lượng Truy Cập Theo Tuần - Tháng ${trafficMonth}/${trafficYear}`}
-                    {trafficViewMode === 'WEEK_DAYS' && `📊 Chi Tiết 7 Ngày Trong ${currentSelectedWeek?.weekLabel || 'Tuần'} - Tháng ${trafficMonth}/${trafficYear}`}
-                    {trafficViewMode === 'DAYS' && `📊 Biểu Đồ Lượng Truy Cập Theo Ngày - Tháng ${trafficMonth}/${trafficYear}`}
-                  </h3>
-                </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  {trafficViewMode === 'WEEKS' && `Trục hoành hiển thị các tuần trong tháng (Tuần 1 đến Tuần ${computedWeeklyStats.length}), trục tung thể hiện tổng số lượt truy cập.`}
-                  {trafficViewMode === 'WEEK_DAYS' && `Trục hoành hiển thị các ngày từ Thứ Hai đến Chủ Nhật trong tuần được chọn, trục tung thể hiện số lượt truy cập.`}
-                  {trafficViewMode === 'DAYS' && `Trục hoành hiển thị tất cả các ngày trong tháng (N1 đến N${trafficData?.dailyStats?.length || 31}), trục tung thể hiện tổng số lượt truy cập.`}
+                <h3 className="text-lg font-extrabold text-gray-900 flex items-center gap-2">
+                  <span>
+                    📊 Biểu Đồ Lượng Truy Cập Theo Tuần: {selectedWeekInfo ? selectedWeekInfo.label : `Toàn Bộ Tháng ${trafficMonth}/${trafficYear}`}
+                  </span>
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {selectedWeekInfo
+                    ? `Hiển thị 7 ngày trong ${selectedWeekInfo.label.toLowerCase()} (từ ngày ${selectedWeekInfo.startDay} đến ngày ${selectedWeekInfo.endDay}/${trafficMonth}/${trafficYear}). Trục hoành thể hiện các ngày trong tuần, trục tung thể hiện tổng số lượt truy cập.`
+                    : `Hiển thị toàn bộ ${displayedTrafficDays.length} ngày trong tháng ${trafficMonth}/${trafficYear}.`}
                 </p>
               </div>
 
-              {/* View Mode Toggle Buttons */}
+              {/* Quick Week Switcher Pills & Color Legend */}
               <div className="flex flex-wrap items-center gap-2">
-                <div className="inline-flex p-1 bg-gray-100 rounded-2xl border border-gray-200">
+                <div className="flex flex-wrap items-center gap-1 p-1 bg-gray-100/90 rounded-2xl border border-gray-200/80">
+                  {trafficWeekOptions.map((w) => (
+                    <button
+                      key={w.id}
+                      type="button"
+                      onClick={() => setTrafficWeek(w.id)}
+                      className={`px-2.5 py-1 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                        trafficWeek === w.id
+                          ? 'bg-emerald-600 text-white shadow-xs'
+                          : 'text-gray-600 hover:text-gray-900 hover:bg-white'
+                      }`}
+                    >
+                      {w.shortLabel}
+                    </button>
+                  ))}
                   <button
                     type="button"
-                    onClick={() => setTrafficViewMode('WEEKS')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                      trafficViewMode === 'WEEKS'
-                        ? 'bg-[#059669] text-white shadow-xs'
-                        : 'text-gray-600 hover:text-gray-900 hover:bg-white/60'
+                    onClick={() => setTrafficWeek('all')}
+                    className={`px-2.5 py-1 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                      trafficWeek === 'all'
+                        ? 'bg-emerald-600 text-white shadow-xs'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-white'
                     }`}
                   >
-                    <Calendar className="w-3.5 h-3.5" />
-                    <span>Theo Tuần Trong Tháng</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setTrafficViewMode('WEEK_DAYS')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                      trafficViewMode === 'WEEK_DAYS'
-                        ? 'bg-[#059669] text-white shadow-xs'
-                        : 'text-gray-600 hover:text-gray-900 hover:bg-white/60'
-                    }`}
-                  >
-                    <Clock className="w-3.5 h-3.5" />
-                    <span>Chi Tiết 7 Ngày / Tuần</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setTrafficViewMode('DAYS')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                      trafficViewMode === 'DAYS'
-                        ? 'bg-[#059669] text-white shadow-xs'
-                        : 'text-gray-600 hover:text-gray-900 hover:bg-white/60'
-                    }`}
-                  >
-                    <Activity className="w-3.5 h-3.5" />
-                    <span>Toàn Bộ Ngày (N1-N31)</span>
+                    Cả tháng
                   </button>
                 </div>
 
-                {/* Legend indicator */}
-                <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-semibold text-emerald-800">
-                  <span className="w-3 h-3 rounded-sm bg-[#059669]" />
-                  <span>#059669</span>
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-semibold text-emerald-800">
+                  <span className="w-3.5 h-3.5 rounded-sm bg-[#059669] shadow-xs" />
+                  <span>Màu xanh (#059669)</span>
                 </div>
               </div>
             </div>
-
-            {/* Sub-toolbar when in WEEK_DAYS mode: Select Week to view */}
-            {trafficViewMode === 'WEEK_DAYS' && (
-              <div className="mb-6 p-3.5 bg-emerald-50/70 rounded-2xl border border-emerald-200/80 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-emerald-900">Chọn tuần cần xem:</span>
-                  <select
-                    value={selectedWeekIdx}
-                    onChange={(e) => setSelectedWeekIdx(Number(e.target.value))}
-                    className="bg-white text-gray-900 text-xs font-bold px-3 py-1.5 rounded-xl outline-none border border-emerald-300 shadow-2xs cursor-pointer"
-                  >
-                    {computedWeeklyStats.map((w: any, idx: number) => (
-                      <option key={idx} value={idx}>
-                        {w.weekLabel} — ({w.visits} lượt truy cập)
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="text-xs text-emerald-800 font-medium">
-                  Tổng lượt tuần này: <strong className="font-bold text-emerald-950">{currentSelectedWeek?.visits || 0} lượt</strong>
-                  {currentSelectedWeek && (
-                    <span className="ml-2 text-emerald-700">
-                      (TB: {currentSelectedWeek.averageDailyVisits} lượt/ngày)
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
 
             {loadingTraffic ? (
               <div className="h-80 flex items-center justify-center text-gray-400 text-sm">
@@ -2128,518 +2177,272 @@ const AdminDashboard = () => {
             ) : (
               <div className="w-full h-80 sm:h-96">
                 <ResponsiveContainer width="100%" height="100%">
-                  {trafficViewMode === 'WEEKS' ? (
-                    <BarChart
-                      data={computedWeeklyStats}
-                      margin={{ top: 20, right: 15, left: -10, bottom: 25 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                      <XAxis
-                        dataKey="shortLabel"
-                        tickLine={false}
-                        axisLine={{ stroke: '#e5e7eb' }}
-                        tick={{ fill: '#374151', fontSize: 12, fontWeight: 600 }}
-                      />
-                      <YAxis
-                        allowDecimals={false}
-                        tickLine={false}
-                        axisLine={false}
-                        tick={{ fill: '#6b7280', fontSize: 11 }}
-                      />
-                      <Tooltip
-                        cursor={{ fill: 'rgba(5, 150, 105, 0.08)' }}
-                        content={({ active, payload }) => {
-                          if (active && payload && payload.length) {
-                            const data = payload[0].payload;
+                  <BarChart
+                    data={chartWeeklyData}
+                    margin={{ top: 20, right: 15, left: -10, bottom: 25 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                    <XAxis
+                      dataKey="slotName"
+                      tickLine={false}
+                      axisLine={{ stroke: '#e5e7eb' }}
+                      tick={{ fill: '#374151', fontSize: 11, fontWeight: 600 }}
+                    />
+                    <YAxis
+                      allowDecimals={false}
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fill: '#6b7280', fontSize: 11 }}
+                    />
+                    <Tooltip
+                      cursor={{ fill: 'rgba(5, 150, 105, 0.08)' }}
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0].payload;
+                          if (!data.day) {
                             return (
-                              <div className="bg-gray-900/95 backdrop-blur-md text-white p-3.5 rounded-2xl shadow-xl text-xs border border-gray-700 min-w-[220px] space-y-1.5">
-                                <div className="font-bold text-sm text-emerald-400 pb-1 border-b border-gray-700 flex justify-between items-center">
-                                  <span>{data.weekLabel}</span>
-                                </div>
-                                <p className="text-[11px] text-gray-300">
-                                  Gồm: <strong className="text-white">{data.days?.length || 7} ngày</strong> trong tháng {trafficMonth}/{trafficYear}
-                                </p>
-                                <div className="pt-1 flex justify-between items-center text-xs font-bold">
-                                  <span>Tổng lượt truy cập:</span>
-                                  <span className="text-emerald-300 text-sm font-black bg-emerald-950/80 px-2 py-0.5 rounded-lg border border-emerald-500/40">
-                                    {data.visits} lượt
-                                  </span>
-                                </div>
-                                <div className="text-[11px] text-gray-300 flex justify-between">
-                                  <span>Trung bình:</span>
-                                  <strong className="text-white">{data.averageDailyVisits} lượt / ngày</strong>
-                                </div>
-                                <div className="pt-1.5 border-t border-gray-800 space-y-1 text-[11px] text-gray-300">
-                                  <div className="flex justify-between">
-                                    <span>⏱️ Ở lại &gt; 10s:</span>
-                                    <strong className="text-white">{data.byTime}</strong>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span>📄 Xem ≥ 2 trang:</span>
-                                    <strong className="text-white">{data.byPage}</strong>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span>🎯 Chuyển hóa (đăng nhập/tiền):</span>
-                                    <strong className="text-emerald-400">{data.byConversion}</strong>
-                                  </div>
-                                </div>
+                              <div className="bg-gray-900/95 backdrop-blur-md text-white px-3 py-2 rounded-xl shadow-xl text-xs border border-gray-700">
+                                <span className="font-bold text-gray-300">{data.dayOfWeek}</span>: Không thuộc tháng {trafficMonth}/{trafficYear}
                               </div>
                             );
                           }
-                          return null;
-                        }}
-                      />
-                      <Bar
-                        dataKey="visits"
-                        name="Lượt truy cập"
-                        fill="#059669"
-                        radius={[6, 6, 0, 0]}
-                        maxBarSize={65}
-                      />
-                    </BarChart>
-                  ) : trafficViewMode === 'WEEK_DAYS' ? (
-                    <BarChart
-                      data={(currentSelectedWeek?.days || []).map((d: any) => ({
-                        ...d,
-                        chartLabel: `${d.dayOfWeek.replace('Thứ ', 'T.')} (${d.day < 10 ? '0' + d.day : d.day})`
-                      }))}
-                      margin={{ top: 20, right: 15, left: -10, bottom: 25 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                      <XAxis
-                        dataKey="chartLabel"
-                        tickLine={false}
-                        axisLine={{ stroke: '#e5e7eb' }}
-                        tick={{ fill: '#374151', fontSize: 12, fontWeight: 600 }}
-                      />
-                      <YAxis
-                        allowDecimals={false}
-                        tickLine={false}
-                        axisLine={false}
-                        tick={{ fill: '#6b7280', fontSize: 11 }}
-                      />
-                      <Tooltip
-                        cursor={{ fill: 'rgba(5, 150, 105, 0.08)' }}
-                        content={({ active, payload }) => {
-                          if (active && payload && payload.length) {
-                            const data = payload[0].payload;
-                            return (
-                              <div className="bg-gray-900/95 backdrop-blur-md text-white p-3.5 rounded-2xl shadow-xl text-xs border border-gray-700 min-w-[210px] space-y-1.5">
-                                <div className="font-bold text-sm text-emerald-400 pb-1 border-b border-gray-700 flex justify-between items-center">
-                                  <span>{data.dayOfWeek} ({data.date})</span>
+                          const isDayPeak = currentPeakDayItem && currentPeakDayItem.day === data.day && data.visits > 0;
+                          return (
+                            <div className="bg-gray-900/95 backdrop-blur-md text-white p-3.5 rounded-2xl shadow-xl text-xs border border-gray-700 min-w-[220px] space-y-1.5">
+                              <div className="font-bold text-sm text-emerald-400 pb-1 border-b border-gray-700 flex justify-between items-center">
+                                <span>Ngày {data.day} ({data.date})</span>
+                                <span className="text-[10px] font-semibold text-emerald-200 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800">
+                                  {data.dayOfWeek}
+                                </span>
+                              </div>
+                              {isDayPeak && (
+                                <div className="text-[10px] text-amber-300 font-bold flex items-center gap-1">
+                                  <span>⭐ Ngày cao điểm nhất tuần</span>
                                 </div>
-                                <p className="text-[11px] text-gray-300">
-                                  Khung giờ: <strong className="text-white">00:00 - 24:00 (UTC+7)</strong>
-                                </p>
-                                <div className="pt-1 flex justify-between items-center text-xs font-bold">
-                                  <span>Tổng lượt truy cập:</span>
-                                  <span className="text-emerald-300 text-sm font-black bg-emerald-950/80 px-2 py-0.5 rounded-lg border border-emerald-500/40">
-                                    {data.visits} lượt
-                                  </span>
+                              )}
+                              <p className="text-[11px] text-gray-300">
+                                Khung giờ: <strong className="text-white">00:00 - 24:00 (UTC+7)</strong>
+                              </p>
+                              <div className="pt-1 flex justify-between items-center text-xs font-bold">
+                                <span>Tổng lượt truy cập:</span>
+                                <span className="text-emerald-300 text-sm font-black bg-emerald-950/80 px-2 py-0.5 rounded-lg border border-emerald-500/40">
+                                  {data.visits} lượt
+                                </span>
+                              </div>
+                              <div className="pt-1.5 border-t border-gray-800 space-y-1 text-[11px] text-gray-300">
+                                <div className="flex justify-between">
+                                  <span>⏱️ Ở lại &gt; 10s:</span>
+                                  <strong className="text-white">{data.byTime}</strong>
                                 </div>
-                                <div className="pt-1.5 border-t border-gray-800 space-y-1 text-[11px] text-gray-300">
-                                  <div className="flex justify-between">
-                                    <span>⏱️ Ở lại &gt; 10s:</span>
-                                    <strong className="text-white">{data.byTime}</strong>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span>📄 Xem ≥ 2 trang:</span>
-                                    <strong className="text-white">{data.byPage}</strong>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span>🎯 Chuyển hóa:</span>
-                                    <strong className="text-emerald-400">{data.byConversion}</strong>
-                                  </div>
+                                <div className="flex justify-between">
+                                  <span>📄 Xem ≥ 2 trang:</span>
+                                  <strong className="text-white">{data.byPage}</strong>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>🎯 Chuyển hóa (đăng nhập/tiền):</span>
+                                  <strong className="text-emerald-400">{data.byConversion}</strong>
                                 </div>
                               </div>
-                            );
-                          }
-                          return null;
-                        }}
-                      />
-                      <Bar
-                        dataKey="visits"
-                        name="Lượt truy cập"
-                        fill="#059669"
-                        radius={[6, 6, 0, 0]}
-                        maxBarSize={50}
-                      />
-                    </BarChart>
-                  ) : (
-                    <BarChart
-                      data={trafficData?.dailyStats || []}
-                      margin={{ top: 20, right: 15, left: -10, bottom: 25 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                      <XAxis
-                        dataKey="day"
-                        tickLine={false}
-                        axisLine={{ stroke: '#e5e7eb' }}
-                        tick={{ fill: '#6b7280', fontSize: 11 }}
-                        tickFormatter={(d) => `N${d}`}
-                      />
-                      <YAxis
-                        allowDecimals={false}
-                        tickLine={false}
-                        axisLine={false}
-                        tick={{ fill: '#6b7280', fontSize: 11 }}
-                      />
-                      <Tooltip
-                        cursor={{ fill: 'rgba(5, 150, 105, 0.08)' }}
-                        content={({ active, payload }) => {
-                          if (active && payload && payload.length) {
-                            const data = payload[0].payload;
-                            return (
-                              <div className="bg-gray-900/95 backdrop-blur-md text-white p-3.5 rounded-2xl shadow-xl text-xs border border-gray-700 min-w-[210px] space-y-1.5">
-                                <div className="font-bold text-sm text-emerald-400 pb-1 border-b border-gray-700 flex justify-between items-center">
-                                  <span>Ngày {data.day} ({data.date})</span>
-                                  <span className="text-[10px] font-normal text-gray-400">{data.dayOfWeek}</span>
-                                </div>
-                                <p className="text-[11px] text-gray-300">
-                                  Khung giờ: <strong className="text-white">00:00 - 24:00 (UTC+7)</strong>
-                                </p>
-                                <div className="pt-1 flex justify-between items-center text-xs font-bold">
-                                  <span>Tổng lượt truy cập:</span>
-                                  <span className="text-emerald-300 text-sm font-black bg-emerald-950/80 px-2 py-0.5 rounded-lg border border-emerald-500/40">
-                                    {data.visits} lượt
-                                  </span>
-                                </div>
-                                <div className="pt-1.5 border-t border-gray-800 space-y-1 text-[11px] text-gray-300">
-                                  <div className="flex justify-between">
-                                    <span>⏱️ Ở lại &gt; 10s:</span>
-                                    <strong className="text-white">{data.byTime}</strong>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span>📄 Xem ≥ 2 trang:</span>
-                                    <strong className="text-white">{data.byPage}</strong>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span>🎯 Chuyển hóa (đăng nhập/tiền):</span>
-                                    <strong className="text-emerald-400">{data.byConversion}</strong>
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          }
-                          return null;
-                        }}
-                      />
-                      <Bar
-                        dataKey="visits"
-                        name="Lượt truy cập"
-                        fill="#059669"
-                        radius={[5, 5, 0, 0]}
-                      />
-                    </BarChart>
-                  )}
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Bar
+                      dataKey="visits"
+                      name="Lượt truy cập"
+                      fill="#059669"
+                      radius={[6, 6, 0, 0]}
+                      maxBarSize={selectedWeekInfo ? 54 : 32}
+                    />
+                  </BarChart>
                 </ResponsiveContainer>
               </div>
             )}
           </div>
 
-          {/* Detailed Table Section: Adapts to Active Mode */}
+          {/* Detailed Days Table */}
           <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="p-6 sm:p-7 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50/50">
               <div>
                 <h3 className="text-lg font-extrabold text-gray-900 flex items-center gap-2">
-                  {trafficViewMode === 'WEEKS' && <span>📅 Danh Sách Tổng Hợp Theo Tuần - Tháng {trafficMonth}/{trafficYear}</span>}
-                  {trafficViewMode === 'WEEK_DAYS' && (
-                    <span>
-                      📅 Chi Tiết 7 Ngày Trong {currentSelectedWeek?.weekLabel || 'Tuần'}
-                    </span>
-                  )}
-                  {trafficViewMode === 'DAYS' && <span>📅 Danh Sách Chi Tiết Toàn Bộ Ngày Trong Tháng {trafficMonth}/{trafficYear}</span>}
+                  <span>📅 Danh Sách Chi Tiết Theo Tuần {selectedWeekInfo ? `- ${selectedWeekInfo.label}` : `- Tháng ${trafficMonth}/${trafficYear}`}</span>
                 </h3>
                 <p className="text-xs text-gray-500 mt-1">
-                  {trafficViewMode === 'WEEKS' && 'Tổng hợp số liệu lượt truy cập hợp lệ theo từng tuần trong tháng.'}
-                  {trafficViewMode === 'WEEK_DAYS' && 'Chi tiết từng ngày từ Thứ Hai đến Chủ Nhật của tuần đang chọn.'}
-                  {trafficViewMode === 'DAYS' && 'Tổng số lượng truy cập được tính từ 0h00 ngày hôm trước đến 0h00 ngày hôm sau.'}
+                  {selectedWeekInfo
+                    ? `Thống kê chi tiết ${displayedTrafficDays.length} ngày trong ${selectedWeekInfo.label.toLowerCase()} (từ ngày ${selectedWeekInfo.startDay} đến ngày ${selectedWeekInfo.endDay}/${trafficMonth}/${trafficYear}). Chu kỳ tính từ 0h00 ngày hôm trước đến 0h00 ngày hôm sau.`
+                    : 'Tổng số lượng truy cập được tính từ 0h00 ngày hôm trước đến 0h00 ngày hôm sau (chu kỳ 24 giờ).'}
                 </p>
               </div>
 
-              {trafficViewMode === 'WEEK_DAYS' ? (
-                <button
-                  type="button"
-                  onClick={() => setTrafficViewMode('WEEKS')}
-                  className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer self-start sm:self-auto"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                  <span>Quay lại xem theo tuần</span>
-                </button>
-              ) : (
-                <div className="text-xs font-semibold text-gray-600 bg-white px-3 py-1.5 rounded-xl border border-gray-200 shadow-2xs self-start sm:self-auto">
-                  {trafficViewMode === 'WEEKS'
-                    ? `Tổng số tuần: ${computedWeeklyStats.length} tuần`
-                    : `Tổng số ngày: ${trafficData?.dailyStats?.length || 0} ngày`}
+              <div className="flex items-center gap-2 self-start sm:self-auto">
+                <div className="text-xs font-semibold text-gray-600 bg-white px-3 py-1.5 rounded-xl border border-gray-200 shadow-2xs">
+                  Số ngày: <strong className="text-emerald-700">{displayedTrafficDays.length} ngày</strong>
                 </div>
-              )}
+                {selectedWeekInfo && (
+                  <div className="text-xs font-semibold text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200 shadow-2xs">
+                    Tổng tuần: <strong className="text-emerald-700">{currentVisits} lượt</strong>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="overflow-x-auto">
-              {trafficViewMode === 'WEEKS' ? (
-                /* WEEKLY TABLE */
-                <table className="min-w-full divide-y divide-gray-200 text-xs sm:text-sm">
-                  <thead className="bg-gray-50/80">
+              <table className="min-w-full divide-y divide-gray-200 text-xs sm:text-sm">
+                <thead className="bg-gray-50/80">
+                  <tr>
+                    <th className="px-5 py-3.5 text-left font-bold text-gray-600 uppercase tracking-wider">
+                      Thời Gian (Ngày / Tháng / Năm)
+                    </th>
+                    <th className="px-5 py-3.5 text-left font-bold text-gray-600 uppercase tracking-wider">
+                      Khung Giờ Tính Toán
+                    </th>
+                    <th className="px-5 py-3.5 text-center font-bold text-gray-600 uppercase tracking-wider">
+                      Ở Lại &gt; 10s
+                    </th>
+                    <th className="px-5 py-3.5 text-center font-bold text-gray-600 uppercase tracking-wider">
+                      Xem ≥ 2 Trang
+                    </th>
+                    <th className="px-5 py-3.5 text-center font-bold text-gray-600 uppercase tracking-wider">
+                      Chuyển Hóa
+                    </th>
+                    <th className="px-5 py-3.5 text-center font-bold text-gray-600 uppercase tracking-wider">
+                      Tổng Lượt Truy Cập
+                    </th>
+                    <th className="px-5 py-3.5 text-right font-bold text-gray-600 uppercase tracking-wider">
+                      {selectedWeekInfo ? 'Tỷ Trọng Tuần' : 'Tỷ Trọng Tháng'}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-100">
+                  {loadingTraffic ? (
                     <tr>
-                      <th className="px-5 py-3.5 text-left font-bold text-gray-600 uppercase tracking-wider">
-                        Tuần & Khoảng Thời Gian
-                      </th>
-                      <th className="px-5 py-3.5 text-center font-bold text-gray-600 uppercase tracking-wider">
-                        Số Ngày
-                      </th>
-                      <th className="px-5 py-3.5 text-center font-bold text-gray-600 uppercase tracking-wider">
-                        Ở Lại &gt; 10s
-                      </th>
-                      <th className="px-5 py-3.5 text-center font-bold text-gray-600 uppercase tracking-wider">
-                        Xem ≥ 2 Trang
-                      </th>
-                      <th className="px-5 py-3.5 text-center font-bold text-gray-600 uppercase tracking-wider">
-                        Chuyển Hóa
-                      </th>
-                      <th className="px-5 py-3.5 text-center font-bold text-gray-600 uppercase tracking-wider">
-                        Tổng Lượt Truy Cập
-                      </th>
-                      <th className="px-5 py-3.5 text-center font-bold text-gray-600 uppercase tracking-wider">
-                        TB / Ngày
-                      </th>
-                      <th className="px-5 py-3.5 text-right font-bold text-gray-600 uppercase tracking-wider">
-                        Tỷ Trọng
-                      </th>
-                      <th className="px-5 py-3.5 text-center font-bold text-gray-600 uppercase tracking-wider">
-                        Thao Tác
-                      </th>
+                      <td colSpan={7} className="px-6 py-12 text-center text-gray-400">
+                        Đang tải danh sách ngày...
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-100">
-                    {loadingTraffic ? (
-                      <tr>
-                        <td colSpan={9} className="px-6 py-12 text-center text-gray-400">
-                          Đang tải danh sách tuần...
-                        </td>
-                      </tr>
-                    ) : computedWeeklyStats.length === 0 ? (
-                      <tr>
-                        <td colSpan={9} className="px-6 py-12 text-center text-gray-400">
-                          Chưa có dữ liệu truy cập trong tháng này.
-                        </td>
-                      </tr>
-                    ) : (
-                      computedWeeklyStats.map((item: any, idx: number) => {
-                        const totalMonth = trafficData?.totalVisits || 1;
-                        const percentage = totalMonth > 0 ? ((item.visits / totalMonth) * 100).toFixed(1) : '0';
-                        const isPeak = peakWeek && item.visits > 0 && item.visits === peakWeek.visits;
-
-                        return (
-                          <tr
-                            key={idx}
-                            className={`hover:bg-gray-50/80 transition-colors ${isPeak ? 'bg-emerald-50/40 font-semibold' : ''}`}
-                          >
-                            <td className="px-5 py-4 whitespace-nowrap">
-                              <div className="flex items-center gap-2.5">
-                                <span className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-xs shrink-0">
-                                  W{item.weekNumber}
-                                </span>
-                                <div>
-                                  <div className="font-bold text-gray-900 flex items-center gap-1.5">
-                                    <span>{item.weekLabel}</span>
-                                    {isPeak && (
-                                      <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold">
-                                        ⭐ Cao nhất
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div className="text-xs text-gray-500">
-                                    Từ ngày {item.startDay < 10 ? '0' + item.startDay : item.startDay} đến ngày {item.endDay < 10 ? '0' + item.endDay : item.endDay}
-                                  </div>
-                                </div>
-                              </div>
-                            </td>
-
-                            <td className="px-5 py-4 whitespace-nowrap text-center text-gray-600 font-medium">
-                              {item.days?.length || 7} ngày
-                            </td>
-
-                            <td className="px-5 py-4 whitespace-nowrap text-center text-gray-700">
-                              <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-semibold text-xs border border-blue-200">
-                                {item.byTime}
-                              </span>
-                            </td>
-
-                            <td className="px-5 py-4 whitespace-nowrap text-center text-gray-700">
-                              <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-semibold text-xs border border-indigo-200">
-                                {item.byPage}
-                              </span>
-                            </td>
-
-                            <td className="px-5 py-4 whitespace-nowrap text-center text-gray-700">
-                              <span className="px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 font-semibold text-xs border border-purple-200">
-                                {item.byConversion}
-                              </span>
-                            </td>
-
-                            <td className="px-5 py-4 whitespace-nowrap text-center">
-                              <span className="inline-flex items-center justify-center min-w-[50px] px-3 py-1 rounded-xl bg-emerald-50 text-[#059669] font-black text-sm border border-emerald-200 shadow-2xs">
-                                {item.visits}
-                              </span>
-                            </td>
-
-                            <td className="px-5 py-4 whitespace-nowrap text-center text-gray-700 font-semibold">
-                              {item.averageDailyVisits}
-                            </td>
-
-                            <td className="px-5 py-4 whitespace-nowrap text-right">
-                              <div className="flex items-center justify-end gap-2">
-                                <div className="w-16 bg-gray-100 rounded-full h-1.5 overflow-hidden hidden sm:block">
-                                  <div
-                                    className="bg-[#059669] h-1.5 rounded-full"
-                                    style={{ width: `${Math.min(100, Number(percentage))}%` }}
-                                  />
-                                </div>
-                                <span className="font-semibold text-xs text-gray-700">{percentage}%</span>
-                              </div>
-                            </td>
-
-                            <td className="px-5 py-4 whitespace-nowrap text-center">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setSelectedWeekIdx(idx);
-                                  setTrafficViewMode('WEEK_DAYS');
-                                }}
-                                className="px-2.5 py-1 text-xs font-bold text-emerald-700 hover:text-white bg-emerald-50 hover:bg-emerald-600 rounded-lg border border-emerald-200 transition cursor-pointer flex items-center gap-1 mx-auto"
-                              >
-                                <span>Xem 7 ngày</span>
-                                <ChevronRight className="w-3.5 h-3.5" />
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              ) : (
-                /* DAILY TABLE (FOR EITHER WEEK_DAYS OR DAYS MODE) */
-                <table className="min-w-full divide-y divide-gray-200 text-xs sm:text-sm">
-                  <thead className="bg-gray-50/80">
+                  ) : displayedTrafficDays.length === 0 ? (
                     <tr>
-                      <th className="px-5 py-3.5 text-left font-bold text-gray-600 uppercase tracking-wider">
-                        Thời Gian (Ngày / Tháng / Năm)
-                      </th>
-                      <th className="px-5 py-3.5 text-left font-bold text-gray-600 uppercase tracking-wider">
-                        Khung Giờ Tính Toán
-                      </th>
-                      <th className="px-5 py-3.5 text-center font-bold text-gray-600 uppercase tracking-wider">
-                        Ở Lại &gt; 10s
-                      </th>
-                      <th className="px-5 py-3.5 text-center font-bold text-gray-600 uppercase tracking-wider">
-                        Xem ≥ 2 Trang
-                      </th>
-                      <th className="px-5 py-3.5 text-center font-bold text-gray-600 uppercase tracking-wider">
-                        Chuyển Hóa
-                      </th>
-                      <th className="px-5 py-3.5 text-center font-bold text-gray-600 uppercase tracking-wider">
-                        Tổng Lượt Truy Cập
-                      </th>
-                      <th className="px-5 py-3.5 text-right font-bold text-gray-600 uppercase tracking-wider">
-                        Tỷ Trọng
-                      </th>
+                      <td colSpan={7} className="px-6 py-12 text-center text-gray-400">
+                        Chưa có dữ liệu truy cập trong khoảng thời gian này.
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-100">
-                    {loadingTraffic ? (
-                      <tr>
-                        <td colSpan={7} className="px-6 py-12 text-center text-gray-400">
-                          Đang tải danh sách ngày...
-                        </td>
-                      </tr>
-                    ) : (
-                      (trafficViewMode === 'WEEK_DAYS' ? (currentSelectedWeek?.days || []) : (trafficData?.dailyStats || [])).length === 0 ? (
-                        <tr>
-                          <td colSpan={7} className="px-6 py-12 text-center text-gray-400">
-                            Chưa có dữ liệu truy cập trong khoảng thời gian này.
+                  ) : (
+                    tableWeeklyData.map((item: any) => {
+                      const percentageOfWeek = currentVisits > 0 ? ((item.visits / currentVisits) * 100).toFixed(1) : '0';
+                      const totalMonth = trafficData?.totalVisits || 1;
+                      const percentageOfMonth = totalMonth > 0 ? ((item.visits / totalMonth) * 100).toFixed(1) : '0';
+                      const isPeak = currentPeakDayItem && item.visits > 0 && item.day === currentPeakDayItem.day;
+
+                      return (
+                        <tr
+                          key={item.day}
+                          className={`hover:bg-gray-50/80 transition-colors ${isPeak ? 'bg-emerald-50/40 font-semibold' : ''}`}
+                        >
+                          <td className="px-5 py-4 whitespace-nowrap">
+                            <div className="flex items-center gap-2.5">
+                              <span className="w-7 h-7 rounded-lg bg-gray-100 text-gray-700 flex items-center justify-center font-bold text-xs shrink-0">
+                                {item.day}
+                              </span>
+                              <div>
+                                <div className="font-bold text-gray-900 flex items-center gap-1.5">
+                                  <span>{item.date}</span>
+                                  {isPeak && (
+                                    <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold">
+                                      ⭐ Cao nhất tuần
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-xs text-gray-500">{item.dayOfWeek}</div>
+                              </div>
+                            </div>
+                          </td>
+
+                          <td className="px-5 py-4 whitespace-nowrap text-xs text-gray-600">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-gray-100 text-gray-700 font-mono text-[11px]">
+                              <Clock className="w-3 h-3 text-gray-400" />
+                              00:00:00 - 24:00:00
+                            </span>
+                          </td>
+
+                          <td className="px-5 py-4 whitespace-nowrap text-center text-gray-700">
+                            <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-semibold text-xs border border-blue-200">
+                              {item.byTime}
+                            </span>
+                          </td>
+
+                          <td className="px-5 py-4 whitespace-nowrap text-center text-gray-700">
+                            <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-semibold text-xs border border-indigo-200">
+                              {item.byPage}
+                            </span>
+                          </td>
+
+                          <td className="px-5 py-4 whitespace-nowrap text-center text-gray-700">
+                            <span className="px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 font-semibold text-xs border border-purple-200">
+                              {item.byConversion}
+                            </span>
+                          </td>
+
+                          <td className="px-5 py-4 whitespace-nowrap text-center">
+                            <span className="inline-flex items-center justify-center min-w-[50px] px-3 py-1 rounded-xl bg-emerald-50 text-[#059669] font-black text-sm border border-emerald-200 shadow-2xs">
+                              {item.visits}
+                            </span>
+                          </td>
+
+                          <td className="px-5 py-4 whitespace-nowrap text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <div className="w-16 bg-gray-100 rounded-full h-1.5 overflow-hidden hidden sm:block">
+                                <div
+                                  className="bg-[#059669] h-1.5 rounded-full"
+                                  style={{ width: `${Math.min(100, Number(percentageOfWeek))}%` }}
+                                />
+                              </div>
+                              <div className="text-right">
+                                <span className="font-semibold text-xs text-gray-700">{percentageOfWeek}%</span>
+                                {selectedWeekInfo && (
+                                  <div className="text-[10px] text-gray-400">({percentageOfMonth}% tháng)</div>
+                                )}
+                              </div>
+                            </div>
                           </td>
                         </tr>
-                      ) : (
-                        (trafficViewMode === 'WEEK_DAYS' ? (currentSelectedWeek?.days || []) : (trafficData?.dailyStats || [])).map((item: any) => {
-                          const totalBase = trafficViewMode === 'WEEK_DAYS' ? (currentSelectedWeek?.visits || 1) : (trafficData?.totalVisits || 1);
-                          const percentage = totalBase > 0 ? ((item.visits / totalBase) * 100).toFixed(1) : '0';
-                          const isPeak = trafficData?.peakDayVisits > 0 && item.visits === trafficData.peakDayVisits;
-
-                          return (
-                            <tr
-                              key={item.day}
-                              className={`hover:bg-gray-50/80 transition-colors ${isPeak ? 'bg-emerald-50/40 font-semibold' : ''}`}
-                            >
-                              <td className="px-5 py-4 whitespace-nowrap">
-                                <div className="flex items-center gap-2.5">
-                                  <span className="w-7 h-7 rounded-lg bg-gray-100 text-gray-700 flex items-center justify-center font-bold text-xs shrink-0">
-                                    {item.day}
-                                  </span>
-                                  <div>
-                                    <div className="font-bold text-gray-900 flex items-center gap-1.5">
-                                      <span>{item.date}</span>
-                                      {isPeak && (
-                                        <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold">
-                                          ⭐ Cao nhất
-                                        </span>
-                                      )}
-                                    </div>
-                                    <div className="text-xs text-gray-500">{item.dayOfWeek}</div>
-                                  </div>
-                                </div>
-                              </td>
-
-                              <td className="px-5 py-4 whitespace-nowrap text-xs text-gray-600">
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-gray-100 text-gray-700 font-mono text-[11px]">
-                                  <Clock className="w-3 h-3 text-gray-400" />
-                                  00:00:00 - 24:00:00
-                                </span>
-                              </td>
-
-                              <td className="px-5 py-4 whitespace-nowrap text-center text-gray-700">
-                                <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-semibold text-xs border border-blue-200">
-                                  {item.byTime}
-                                </span>
-                              </td>
-
-                              <td className="px-5 py-4 whitespace-nowrap text-center text-gray-700">
-                                <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-semibold text-xs border border-indigo-200">
-                                  {item.byPage}
-                                </span>
-                              </td>
-
-                              <td className="px-5 py-4 whitespace-nowrap text-center text-gray-700">
-                                <span className="px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 font-semibold text-xs border border-purple-200">
-                                  {item.byConversion}
-                                </span>
-                              </td>
-
-                              <td className="px-5 py-4 whitespace-nowrap text-center">
-                                <span className="inline-flex items-center justify-center min-w-[50px] px-3 py-1 rounded-xl bg-emerald-50 text-[#059669] font-black text-sm border border-emerald-200 shadow-2xs">
-                                  {item.visits}
-                                </span>
-                              </td>
-
-                              <td className="px-5 py-4 whitespace-nowrap text-right">
-                                <div className="flex items-center justify-end gap-2">
-                                  <div className="w-16 bg-gray-100 rounded-full h-1.5 overflow-hidden hidden sm:block">
-                                    <div
-                                      className="bg-[#059669] h-1.5 rounded-full"
-                                      style={{ width: `${Math.min(100, Number(percentage))}%` }}
-                                    />
-                                  </div>
-                                  <span className="font-semibold text-xs text-gray-700">{percentage}%</span>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })
-                      )
-                    )}
-                  </tbody>
-                </table>
-              )}
+                      );
+                    })
+                  )}
+                </tbody>
+                {displayedTrafficDays.length > 0 && !loadingTraffic && (
+                  <tfoot className="bg-emerald-50/70 border-t-2 border-emerald-200 font-bold text-xs sm:text-sm text-gray-900">
+                    <tr>
+                      <td className="px-5 py-3.5">
+                        <span className="text-emerald-900 font-black">
+                          {selectedWeekInfo ? `TỔNG CỘNG ${selectedWeekInfo.shortLabel.toUpperCase()}` : 'TỔNG CỘNG CẢ THÁNG'}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5 text-xs text-gray-500 font-normal">
+                        {displayedTrafficDays.length} ngày
+                      </td>
+                      <td className="px-5 py-3.5 text-center text-blue-800">
+                        {currentByTime}
+                      </td>
+                      <td className="px-5 py-3.5 text-center text-indigo-800">
+                        {currentByPage}
+                      </td>
+                      <td className="px-5 py-3.5 text-center text-purple-800">
+                        {currentConversions}
+                      </td>
+                      <td className="px-5 py-3.5 text-center">
+                        <span className="inline-flex items-center justify-center min-w-[50px] px-3 py-1 rounded-xl bg-emerald-600 text-white font-black text-sm shadow-xs">
+                          {currentVisits}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5 text-right font-black text-emerald-800">
+                        100%
+                      </td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
             </div>
           </div>
         </div>

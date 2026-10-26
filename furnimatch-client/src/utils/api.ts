@@ -47,6 +47,7 @@ api.interceptors.response.use((response) => {
 export default api;
 
 export const verifyRegistration = (data: { email: string; code: string }) => api.post('/auth/verify-registration', data);
+export const resendRegistrationOtp = (data: { email: string }) => api.post('/auth/resend-registration-otp', data);
 
 export const getShopInfo = (sellerId: string) => api.get(`/shops/${sellerId}`);
 export const getShopProducts = (sellerId: string) => api.get(`/shops/${sellerId}/products`);
