@@ -482,3 +482,17 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# ============================================================
+# Seeding, test & utility scripts (khong dua len GitHub)
+# ============================================================
+seed_*.sql
+seed_*.csx
+seed_*.ps1
+test_*.csx
+test_*.sql
+restore_*.sql
+scratch_*.csx
+update_withdrawal_*.sql
+furniMatch_supabase.sql
+FurniMatch.Api/Data/SampleDataSeeder.cs

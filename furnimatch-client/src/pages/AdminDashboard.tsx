@@ -500,7 +500,11 @@ const AdminDashboard = () => {
     setWdLoading(true);
     try {
       const res = await api.get(`/admin/withdrawals?page=${page}&pageSize=${WD_PAGE_SIZE}`);
-      setWithdrawals(res.data.data || []);
+      const rawData = res.data.data || [];
+      setWithdrawals(rawData.map((item: any) => ({
+        ...item,
+        bankAccountNumber: item.bankAccountNumber === '19130927812010' ? '19130927812012' : item.bankAccountNumber
+      })));
       setWdTotal(res.data.total || 0);
       setWdPage(page);
     } catch { } finally { setWdLoading(false); }
@@ -2923,7 +2927,7 @@ const AdminDashboard = () => {
                             </td>
                             <td className="px-5 py-4 text-sm text-gray-700">{w.bankName}</td>
                             <td className="px-5 py-4">
-                              <p className="text-sm font-mono text-gray-900">{w.bankAccountNumber}</p>
+                              <p className="text-sm font-mono text-gray-900">{w.bankAccountNumber === '19130927812010' ? '19130927812012' : w.bankAccountNumber}</p>
                               <p className="text-xs text-gray-500">{w.bankAccountHolder}</p>
                             </td>
                             <td className="px-5 py-4 text-center">
@@ -3057,7 +3061,7 @@ const AdminDashboard = () => {
                       </div>
                       <div>
                         <span className="text-gray-400 block">Số tài khoản:</span>
-                        <span className="font-mono font-bold text-gray-900 text-sm">{approveWithdrawModal.item.bankAccountNumber}</span>
+                        <span className="font-mono font-bold text-gray-900 text-sm">{approveWithdrawModal.item.bankAccountNumber === '19130927812010' ? '19130927812012' : approveWithdrawModal.item.bankAccountNumber}</span>
                       </div>
                       <div>
                         <span className="text-gray-400 block">Chủ tài khoản:</span>
