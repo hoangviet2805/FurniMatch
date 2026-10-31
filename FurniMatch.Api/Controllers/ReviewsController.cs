@@ -125,6 +125,43 @@ public class ReviewsController : ControllerBase
         });
     }
 
+    // ─── UPDATE REVIEW ────────────────────────────────────────────────────────
+    /// <summary>Chỉnh sửa đánh giá đã có của khách hàng.</summary>
+    [HttpPut("{id:int}"), Authorize(Roles = "CUSTOMER")]
+    public async Task<IActionResult> Update(int id, [FromBody] UpdateReviewRequest request)
+    {
+        if (request.Rating < 1 || request.Rating > 5)
+            return BadRequest(new { message = "Số sao phải từ 1 đến 5." });
+        if (request.Comment?.Length > 300)
+            return BadRequest(new { message = "Nhận xét tối đa 300 ký tự." });
+
+        var review = await _db.OrderReviews.FirstOrDefaultAsync(r => r.ReviewId == id && r.CustomerId == UserId);
+        if (review == null)
+            return NotFound(new { message = "Không tìm thấy đánh giá hoặc bạn không có quyền sửa đánh giá này." });
+
+        // Cập nhật thông tin đánh giá
+        review.Rating = request.Rating;
+        review.Comment = request.Comment?.Trim();
+        review.MediaJson = request.MediaUrls?.Count > 0
+            ? JsonSerializer.Serialize(request.MediaUrls)
+            : null;
+
+        await _db.SaveChangesAsync();
+
+        return Ok(new
+        {
+            review.ReviewId,
+            review.OrderId,
+            review.ProductId,
+            review.ProductName,
+            review.Rating,
+            review.Comment,
+            review.MediaJson,
+            review.CreatedAt,
+            message = "Đánh giá của bạn đã được cập nhật thành công!"
+        });
+    }
+
     // ─── GET REVIEWS BY ORDER ────────────────────────────────────────────────
     /// <summary>Lấy tất cả reviews của một đơn hàng (dùng trong tracking modal).</summary>
     [HttpGet("order/{orderId:int}"), Authorize]
@@ -176,6 +213,7 @@ public class ReviewsController : ControllerBase
             {
                 r.ReviewId,
                 r.OrderId,
+                r.CustomerId,
                 r.Rating,
                 r.Comment,
                 r.MediaJson,
@@ -248,5 +286,13 @@ public sealed class CreateReviewRequest
     public int Rating       { get; set; }
     public string? Comment  { get; set; }
     /// <summary>Danh sách URL trả về từ /api/reviews/upload-media</summary>
+    public List<string>? MediaUrls { get; set; }
+}
+
+public sealed class UpdateReviewRequest
+{
+    public int Rating { get; set; }
+    public string? Comment { get; set; }
+    /// <summary>Danh sách URL ảnh/video sau khi chỉnh sửa</summary>
     public List<string>? MediaUrls { get; set; }
 }

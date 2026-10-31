@@ -7,7 +7,7 @@ import { addToCart, type CartItem } from '../utils/cart';
 import { openChatWithSeller } from '../utils/chat';
 import { 
   MessageCircle, ChevronRight, ShieldCheck, Truck, RotateCcw, 
-  Share2, Copy, GitCompare 
+  Share2, Copy, GitCompare, Edit3 
 } from 'lucide-react';
 
 const imageUrl = getImageUrl;
@@ -942,6 +942,16 @@ const ProductDetail = () => {
                       <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-100">
                         <span>✓</span> Đã mua hàng tại FurniMatch
                       </span>
+                      {user?.userId && rev.customerId === user.userId && (
+                        <Link
+                          to="/orders"
+                          className="inline-flex items-center gap-1 text-[11px] font-semibold bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800 px-2.5 py-0.5 rounded-full border border-amber-200 transition-colors"
+                          title="Đến trang Quản lý đơn hàng để chỉnh sửa đánh giá này"
+                        >
+                          <Edit3 className="w-3 h-3 text-amber-600" />
+                          <span>Sửa đánh giá</span>
+                        </Link>
+                      )}
                     </div>
 
                     {/* Star Rating & Label */}

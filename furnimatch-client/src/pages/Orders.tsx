@@ -83,6 +83,7 @@ export default function Orders() {
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const [reviewUploading, setReviewUploading] = useState(false);
   const [orderReviews, setOrderReviews] = useState<Record<number, any[]>>({}); // orderId → reviews array
+  const [editingReviewId, setEditingReviewId] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── Dispute states ──
@@ -226,12 +227,53 @@ export default function Orders() {
     const reviewedProductIds = reviews.map((r: any) => r.productId);
     const unreviewedItems = items.filter((item: any) => !reviewedProductIds.includes(item.productId || item.ProductId));
 
+    setEditingReviewId(null);
     setReviewOrder(order);
     setReviewItems(unreviewedItems);
     setReviewStep(0);
     setReviewRating(0);
     setReviewComment('');
     setReviewMedia([]);
+  };
+
+  const openEditReviewModal = (order: any, targetReviewId?: number) => {
+    const reviews = orderReviews[order.orderId] || [];
+    if (reviews.length === 0) return;
+
+    let items: any[] = [];
+    try { items = JSON.parse(order.itemsJson); } catch {}
+
+    const itemsToEdit = reviews.map((rv: any) => {
+      const matchedItem = items.find((it: any) => (it.productId || it.ProductId) === rv.productId) || {};
+      return {
+        ...matchedItem,
+        productId: rv.productId,
+        name: rv.productName || matchedItem.name || matchedItem.Name,
+        reviewId: rv.reviewId,
+        existingRating: rv.rating,
+        existingComment: rv.comment,
+        existingMediaJson: rv.mediaJson
+      };
+    });
+
+    const initialIndex = targetReviewId
+      ? Math.max(0, itemsToEdit.findIndex((it: any) => it.reviewId === targetReviewId))
+      : 0;
+
+    const currentToEdit = itemsToEdit[initialIndex] || itemsToEdit[0];
+    let initialMedia: { url: string; isVideo: boolean; name: string }[] = [];
+    try {
+      const urls: string[] = JSON.parse(currentToEdit.existingMediaJson || '[]');
+      initialMedia = urls.map(u => ({ url: u, isVideo: Boolean(isVideoFile(u)), name: 'media' }));
+    } catch {}
+
+    setEditingReviewId(currentToEdit.reviewId);
+    setReviewOrder(order);
+    setReviewItems(itemsToEdit);
+    setReviewStep(initialIndex);
+    setReviewRating(currentToEdit.existingRating || 5);
+    setReviewComment(currentToEdit.existingComment || '');
+    setReviewMedia(initialMedia);
   };
 
   const handleMediaUpload = async (files: FileList | null) => {
@@ -266,7 +308,14 @@ export default function Orders() {
       }
       setReviewSubmitting(true);
       try {
-        await api.post('/reviews', {
+        if (editingReviewId) {
+          await api.put(`/reviews/${editingReviewId}`, {
+            rating: reviewRating,
+            comment: reviewComment.trim() || null,
+            mediaUrls: reviewMedia.map(m => m.url)
+          });
+        } else {
+          await api.post('/reviews', {
           orderId: reviewOrder.orderId,
           productId: currentItem.productId || currentItem.ProductId,
           productName: currentItem.name || currentItem.Name || '',
@@ -274,6 +323,7 @@ export default function Orders() {
           comment: reviewComment.trim() || null,
           mediaUrls: reviewMedia.map(m => m.url)
         });
+        }
         // Refresh reviews for this order
         const res = await api.get(`/reviews/order/${reviewOrder.orderId}`);
         setOrderReviews(prev => ({ ...prev, [reviewOrder.orderId]: res.data }));
@@ -287,14 +337,36 @@ export default function Orders() {
 
     // Sang item tiếp theo hoặc đóng
     if (reviewStep < reviewItems.length - 1) {
-      setReviewStep(prev => prev + 1);
+      const nextStep = reviewStep + 1;
+      setReviewStep(nextStep);
+      const nextItem = reviewItems[nextStep];
+      if (editingReviewId && nextItem) {
+        setEditingReviewId(nextItem.reviewId);
+        setReviewRating(nextItem.existingRating || 5);
+        setReviewComment(nextItem.existingComment || '');
+        let media: { url: string; isVideo: boolean; name: string }[] = [];
+        try {
+          const urls: string[] = JSON.parse(nextItem.existingMediaJson || '[]');
+          media = urls.map(u => ({ url: u, isVideo: Boolean(isVideoFile(u)), name: 'media' }));
+        } catch {}
+        setReviewMedia(media);
+        return;
+      }
       setReviewRating(0);
       setReviewComment('');
       setReviewMedia([]);
     } else {
+      const wasEdit = Boolean(editingReviewId);
       setReviewOrder(null);
+      setEditingReviewId(null);
       if (!skip) {
-        setAlertModal({ type: 'success', title: 'Cảm ơn bạn!', message: 'Đánh giá của bạn đã được ghi nhận thành công.' });
+        setAlertModal({
+          type: 'success',
+          title: 'Cảm ơn bạn!',
+          message: wasEdit
+            ? 'Đánh giá của bạn đã được cập nhật thành công.'
+            : 'Đánh giá của bạn đã được ghi nhận thành công.'
+        });
       }
     }
   };
@@ -699,10 +771,21 @@ export default function Orders() {
                       </button>
                     )}
                     {reviewStatus === 'all_reviewed' && (
-                      <span className="flex-1 sm:flex-none rounded-xl bg-emerald-50 border border-emerald-200 px-5 py-2.5 text-sm font-semibold text-emerald-700 flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="rounded-xl bg-emerald-50 border border-emerald-200 px-3.5 py-2.5 text-xs sm:text-sm font-semibold text-emerald-700 flex items-center gap-1.5">
                         <CheckCircle2 className="w-4 h-4" />
-                        Đã đánh giá
-                      </span>
+                          Đã đánh giá
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => openEditReviewModal(o)}
+                          className="rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-300 px-3.5 py-2.5 text-xs sm:text-sm font-semibold text-amber-900 transition-colors shadow-2xs cursor-pointer flex items-center gap-1.5"
+                          title="Chỉnh sửa đánh giá của bạn"
+                        >
+                          <Edit3 className="w-3.5 h-3.5 text-amber-600" />
+                          <span>Sửa đánh giá</span>
+                        </button>
+                      </div>
                     )}
                     {reviewStatus === 'expired' && (
                       <button
@@ -825,7 +908,14 @@ export default function Orders() {
             {/* Header */}
             <div className="px-7 pt-7 pb-5 border-b border-gray-100">
               <div className="flex items-center justify-between mb-1">
-                <h2 className="text-xl font-bold text-gray-900">Viết đánh giá</h2>
+                <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                  {editingReviewId ? 'Chỉnh sửa đánh giá' : 'Viết đánh giá'}
+                  {editingReviewId && (
+                    <span className="text-xs bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full font-medium">
+                      Đang sửa
+                    </span>
+                  )}
+                </h2>
                 <button onClick={() => setReviewOrder(null)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors cursor-pointer">
                   <X className="w-5 h-5" />
                 </button>
@@ -958,10 +1048,10 @@ export default function Orders() {
                 className="flex-2 flex-1 rounded-2xl bg-amber-400 hover:bg-amber-500 disabled:bg-gray-200 disabled:text-gray-400 px-4 py-3.5 text-sm font-bold text-amber-900 disabled:cursor-not-allowed transition-colors shadow-sm flex items-center justify-center gap-2 cursor-pointer"
               >
                 {reviewSubmitting
-                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Đang gửi...</>
+                  ? <><Loader2 className="w-4 h-4 animate-spin" /> {editingReviewId ? 'Đang lưu...' : 'Đang gửi...'}</>
                   : reviewStep < reviewItems.length - 1
-                    ? <><span>Gửi & tiếp theo</span><ChevronRight className="w-4 h-4" /></>
-                    : 'Gửi đánh giá'}
+                    ? <><span>{editingReviewId ? 'Lưu & tiếp theo' : 'Gửi & tiếp theo'}</span><ChevronRight className="w-4 h-4" /></>
+                    : editingReviewId ? 'Cập nhật đánh giá' : 'Gửi đánh giá'}
               </button>
             </div>
           </div>
@@ -1039,7 +1129,22 @@ export default function Orders() {
                         <div key={rv.reviewId} className="bg-gray-50 rounded-2xl p-4">
                           <div className="flex items-center justify-between mb-2">
                             <p className="font-semibold text-sm text-gray-800">{rv.productName}</p>
-                            <StarDisplay rating={rv.rating} />
+                            <div className="flex items-center gap-2.5">
+                              <StarDisplay rating={rv.rating} />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const ord = trackingOrder;
+                                  setTrackingOrder(null);
+                                  openEditReviewModal(ord, rv.reviewId);
+                                }}
+                                className="text-xs font-semibold text-amber-700 hover:text-amber-800 flex items-center gap-1 bg-amber-100/70 hover:bg-amber-100 px-2 py-0.5 rounded-lg border border-amber-300 transition-colors cursor-pointer"
+                                title="Chỉnh sửa đánh giá này"
+                              >
+                                <Edit3 className="w-3 h-3 text-amber-600" />
+                                <span>Sửa</span>
+                              </button>
+                            </div>
                           </div>
                           {rv.comment && <p className="text-sm text-gray-600 leading-relaxed">{rv.comment}</p>}
                           {mediaUrls.length > 0 && (
