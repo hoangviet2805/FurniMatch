@@ -38,7 +38,20 @@ namespace FurniMatch.Api.Controllers
                 return BadRequest(new { message = "SessionId không được để trống." });
             }
 
-            var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
+            string? ip = null;
+            if (Request.Headers.TryGetValue("CF-Connecting-IP", out var cfIp) && !string.IsNullOrWhiteSpace(cfIp))
+            {
+                ip = cfIp.ToString();
+            }
+            else if (Request.Headers.TryGetValue("X-Forwarded-For", out var forwardedFor) && !string.IsNullOrWhiteSpace(forwardedFor))
+            {
+                ip = forwardedFor.ToString().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault();
+            }
+
+            if (string.IsNullOrWhiteSpace(ip))
+            {
+                ip = HttpContext.Connection.RemoteIpAddress?.ToString();
+            }
             var userAgent = Request.Headers.ContainsKey("User-Agent") ? Request.Headers["User-Agent"].ToString() : null;
             if (userAgent != null && userAgent.Length > 255)
             {
@@ -124,6 +137,7 @@ namespace FurniMatch.Api.Controllers
         /// Tính từ 0h00 ngày hôm trước đến 0h00 ngày hôm sau theo múi giờ Việt Nam (UTC+7)
         /// </summary>
         [HttpGet("monthly-stats")]
+        [Authorize(Roles = "ADMIN")]
         public async Task<IActionResult> GetMonthlyStats([FromQuery] int? year, [FromQuery] int? month)
         {
             var nowVn = DateTime.UtcNow.AddHours(7);

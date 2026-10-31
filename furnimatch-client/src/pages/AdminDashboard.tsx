@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api, { API_BASE_URL } from '../utils/api';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
@@ -6,6 +7,37 @@ import {
 import { ZoomIn, ZoomOut, RotateCcw, X, ExternalLink, RefreshCw, TrendingUp, Users, Activity, Clock, CheckCircle2, Calendar } from 'lucide-react';
 
 const AdminDashboard = () => {
+  const navigate = useNavigate();
+  const [isAuthorized, setIsAuthorized] = useState<boolean>(() => {
+    try {
+      const token = localStorage.getItem('token');
+      const userStr = localStorage.getItem('user');
+      if (!token || !userStr) return false;
+      const user = JSON.parse(userStr);
+      return user?.role === 'ADMIN';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const userStr = localStorage.getItem('user');
+    if (!token || !userStr) {
+      navigate('/login', { replace: true });
+      return;
+    }
+    try {
+      const user = JSON.parse(userStr);
+      if (user?.role !== 'ADMIN') {
+        navigate('/', { replace: true });
+        return;
+      }
+      setIsAuthorized(true);
+    } catch {
+      navigate('/login', { replace: true });
+    }
+  }, [navigate]);
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterRole, setFilterRole] = useState('');
@@ -859,6 +891,10 @@ const AdminDashboard = () => {
         return orderA - orderB;
       })
     : displayedTrafficDays;
+
+  if (!isAuthorized) {
+    return null;
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

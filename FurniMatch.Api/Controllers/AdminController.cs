@@ -13,7 +13,7 @@ namespace FurniMatch.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    // [Authorize(Roles = "ADMIN")] // Uncomment when auth is fully strictly tested from UI
+    [Authorize(Roles = "ADMIN")]
     public class AdminController : ControllerBase
     {
         private readonly FurniMatchDbContext _context;

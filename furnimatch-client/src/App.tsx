@@ -22,6 +22,7 @@ import Checkout from './pages/Checkout';
 import Orders from './pages/Orders';
 import Wallet from './pages/Wallet';
 import ChatWidget from './components/ChatWidget';
+import ProtectedRoute from './components/ProtectedRoute';
 import { useTrafficTracker } from './utils/trafficTracker';
 
 function TrafficTrackerWrapper() {
@@ -54,9 +55,30 @@ function App() {
             <Route path="/wallet" element={<Wallet />} />
             <Route path="/request-quotation" element={<RequestQuotation />} />
             <Route path="/my-requests" element={<MyRequests />} />
-            <Route path="/admin/dashboard" element={<AdminDashboard />} />
-            <Route path="/seller/dashboard" element={<SellerDashboard />} />
-            <Route path="/seller/products" element={<ManageProducts />} />
+            <Route
+              path="/admin/dashboard"
+              element={
+                <ProtectedRoute allowedRoles={['ADMIN']}>
+                  <AdminDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/seller/dashboard"
+              element={
+                <ProtectedRoute allowedRoles={['SELLER']}>
+                  <SellerDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/seller/products"
+              element={
+                <ProtectedRoute allowedRoles={['SELLER']}>
+                  <ManageProducts />
+                </ProtectedRoute>
+              }
+            />
             <Route path="/profile" element={<Profile />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/shop/:id" element={<Shop />} />
