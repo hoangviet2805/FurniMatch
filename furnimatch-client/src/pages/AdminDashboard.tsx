@@ -747,6 +747,7 @@ const AdminDashboard = () => {
   });
   const [trafficData, setTrafficData] = useState<any>(null);
   const [loadingTraffic, setLoadingTraffic] = useState<boolean>(false);
+  const [prevMonthTrafficData, setPrevMonthTrafficData] = useState<any>(null);
 
   // Auto-adjust week if switching to month with fewer days (e.g. Feb)
   useEffect(() => {
@@ -768,11 +769,28 @@ const AdminDashboard = () => {
     }
   }, []);
 
+  const fetchPrevMonthTrafficStats = useCallback(async (year: number, month: number) => {
+    try {
+      const res = await api.get(`/traffic/monthly-stats?year=${year}&month=${month}`);
+      setPrevMonthTrafficData(res.data);
+    } catch { }
+  }, []);
+
   useEffect(() => {
     if (activeTab === 'TRAFFIC_REPORT') {
       fetchTrafficStats(trafficYear, trafficMonth);
+      // Fetch previous month data if week 1 crosses month boundary
+      const fdm = new Date(trafficYear, trafficMonth - 1, 1).getDay();
+      const dum = fdm === 0 ? 1 : (8 - fdm) % 7;
+      if (dum > 0) {
+        const pm = trafficMonth === 1 ? 12 : trafficMonth - 1;
+        const py = trafficMonth === 1 ? trafficYear - 1 : trafficYear;
+        fetchPrevMonthTrafficStats(py, pm);
+      } else {
+        setPrevMonthTrafficData(null);
+      }
     }
-  }, [activeTab, trafficYear, trafficMonth, fetchTrafficStats]);
+  }, [activeTab, trafficYear, trafficMonth, fetchTrafficStats, fetchPrevMonthTrafficStats]);
 
   // Compute real calendar weeks (Mon–Sun) for the selected month
   const daysInTrafficMonth = new Date(trafficYear, trafficMonth, 0).getDate();
@@ -782,15 +800,30 @@ const AdminDashboard = () => {
   // daysUntilMonday: how many days before the first Monday (could be 0 if 1st is Mon)
   const daysUntilMonday = firstDayOfMonth === 0 ? 1 : (8 - firstDayOfMonth) % 7;
 
+  // Cross-month week 1: when month doesn't start on Monday, Tuáº§n 1 is a partial week
+  // The missing Mon-Sat days belong to the previous month
+  const isCrossMonthWeek1 = daysUntilMonday > 0;
+  const prevMonthForChart = trafficMonth === 1 ? 12 : trafficMonth - 1;
+  const prevYearForChart = trafficMonth === 1 ? trafficYear - 1 : trafficYear;
+  const daysInPrevMonth = new Date(prevYearForChart, prevMonthForChart, 0).getDate();
+  const prevMonthDaysInWeek1 = isCrossMonthWeek1 ? 7 - daysUntilMonday : 0;
+  const prevMonthWeek1StartDay = daysInPrevMonth - prevMonthDaysInWeek1 + 1;
+
   const trafficWeekOptions: { id: number; label: string; shortLabel: string; startDay: number; endDay: number }[] = [];
   let weekId = 1;
   // First partial week: day 1 to day before first Monday (if 1st is not Monday)
   if (daysUntilMonday > 0) {
-    const end = daysUntilMonday; // last day of partial first week
+    const end = daysUntilMonday; // last day of partial first week (in current month)
+    const crossLabel = prevMonthDaysInWeek1 > 0
+      ? `Tu\u1ea7n 1: ${prevMonthWeek1StartDay}/${prevMonthForChart} \u2192 ${end}/${trafficMonth} (xuy\u00ean th\u00e1ng)`
+      : `T\u1eeb ng\u00e0y 1 \u0111\u1ebfn ng\u00e0y ${end} (Tu\u1ea7n 1)`;
+    const crossShortLabel = prevMonthDaysInWeek1 > 0
+      ? `Tu\u1ea7n 1 (${String(prevMonthWeek1StartDay).padStart(2,'0')}/${prevMonthForChart} - ${String(end).padStart(2,'0')}/${trafficMonth})`
+      : `Tu\u1ea7n 1 (01 - ${String(end).padStart(2, '0')})`;
     trafficWeekOptions.push({
       id: weekId++,
-      label: `Từ ngày 1 đến ngày ${end} (Tuần 1)`,
-      shortLabel: `Tuần 1 (01 - ${String(end).padStart(2, '0')})`,
+      label: crossLabel,
+      shortLabel: crossShortLabel,
       startDay: 1,
       endDay: end,
     });
@@ -814,10 +847,25 @@ const AdminDashboard = () => {
     ? null
     : (trafficWeekOptions.find(w => w.id === (trafficWeek as number)) || trafficWeekOptions[0]);
 
-  const displayedTrafficDays: any[] = (trafficData?.dailyStats || []).filter((item: any) => {
-    if (!selectedWeekInfo) return true;
-    return item.day >= selectedWeekInfo.startDay && item.day <= selectedWeekInfo.endDay;
-  });
+  // Build displayed days: for cross-month Tuan 1, also include prev month days in same Mon-Sun week
+  const displayedTrafficDays: any[] = (() => {
+    const currentDays = (trafficData?.dailyStats || []).filter((item: any) => {
+      if (!selectedWeekInfo) return true;
+      return item.day >= selectedWeekInfo.startDay && item.day <= selectedWeekInfo.endDay;
+    });
+    // Cross-month: Tuan 1 selected AND prev month has days in same week
+    if (isCrossMonthWeek1 && selectedWeekInfo?.id === 1 && prevMonthDaysInWeek1 > 0 && prevMonthTrafficData) {
+      const crossDays = (prevMonthTrafficData.dailyStats || [])
+        .filter((d: any) => d.day >= prevMonthWeek1StartDay)
+        .map((d: any) => ({
+          ...d,
+          isCrossMonth: true,
+          date: `${String(d.day).padStart(2,'0')}/${String(prevMonthForChart).padStart(2,'0')}/${prevYearForChart}`,
+        }));
+      return [...crossDays, ...currentDays];
+    }
+    return currentDays;
+  })();
 
 
   const currentVisits = displayedTrafficDays.reduce((sum: number, d: any) => sum + (d.visits || 0), 0);
@@ -2250,7 +2298,10 @@ const AdminDashboard = () => {
                           return (
                             <div className="bg-gray-900/95 backdrop-blur-md text-white p-3.5 rounded-2xl shadow-xl text-xs border border-gray-700 min-w-[220px] space-y-1.5">
                               <div className="font-bold text-sm text-emerald-400 pb-1 border-b border-gray-700 flex justify-between items-center">
-                                <span>Ngày {data.day} ({data.date})</span>
+                                <span>
+                                  Ng\u00e0y {data.day} ({data.date})
+                                  {data.isCrossMonth && <span className="ml-1 text-[10px] text-amber-300 font-bold bg-amber-900/60 px-1.5 py-0.5 rounded">T/{prevMonthForChart}</span>}
+                                </span>
                                 <span className="text-[10px] font-semibold text-emerald-200 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800">
                                   {data.dayOfWeek}
                                 </span>
