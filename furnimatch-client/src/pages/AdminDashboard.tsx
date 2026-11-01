@@ -815,11 +815,11 @@ const AdminDashboard = () => {
   if (daysUntilMonday > 0) {
     const end = daysUntilMonday; // last day of partial first week (in current month)
     const crossLabel = prevMonthDaysInWeek1 > 0
-      ? `Tu\u1ea7n 1: ${prevMonthWeek1StartDay}/${prevMonthForChart} \u2192 ${end}/${trafficMonth} (xuy\u00ean th\u00e1ng)`
-      : `T\u1eeb ng\u00e0y 1 \u0111\u1ebfn ng\u00e0y ${end} (Tu\u1ea7n 1)`;
+      ? `Tuần 1: ${prevMonthWeek1StartDay}/${prevMonthForChart} → ${end}/${trafficMonth} (xuyên tháng)`
+      : `Từ ngày 1 đến ngày ${end} (Tuần 1)`;
     const crossShortLabel = prevMonthDaysInWeek1 > 0
-      ? `Tu\u1ea7n 1 (${String(prevMonthWeek1StartDay).padStart(2,'0')}/${prevMonthForChart} - ${String(end).padStart(2,'0')}/${trafficMonth})`
-      : `Tu\u1ea7n 1 (01 - ${String(end).padStart(2, '0')})`;
+      ? `Tuần 1 (${String(prevMonthWeek1StartDay).padStart(2,'0')}/${prevMonthForChart} - ${String(end).padStart(2,'0')}/${trafficMonth})`
+      : `Tuần 1 (01 - ${String(end).padStart(2, '0')})`;
     trafficWeekOptions.push({
       id: weekId++,
       label: crossLabel,
@@ -2299,7 +2299,7 @@ const AdminDashboard = () => {
                             <div className="bg-gray-900/95 backdrop-blur-md text-white p-3.5 rounded-2xl shadow-xl text-xs border border-gray-700 min-w-[220px] space-y-1.5">
                               <div className="font-bold text-sm text-emerald-400 pb-1 border-b border-gray-700 flex justify-between items-center">
                                 <span>
-                                  Ng\u00e0y {data.day} ({data.date})
+                                  Ngày {data.day} ({data.date})
                                   {data.isCrossMonth && <span className="ml-1 text-[10px] text-amber-300 font-bold bg-amber-900/60 px-1.5 py-0.5 rounded">T/{prevMonthForChart}</span>}
                                 </span>
                                 <span className="text-[10px] font-semibold text-emerald-200 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800">
